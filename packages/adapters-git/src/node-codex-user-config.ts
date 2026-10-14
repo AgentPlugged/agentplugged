@@ -1,7 +1,8 @@
-import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { CodexUserConfig } from "@agentplugged/core";
+import { renameWithRetry } from "./atomic-rename.js";
 
 /**
  * The user's `config.toml` of Codex (`$CODEX_HOME/config.toml`, `~/.codex/config.toml` by default),
@@ -43,7 +44,7 @@ export class NodeCodexUserConfig implements CodexUserConfig {
     const temporary = `${target}.agentplugged-${process.pid}.tmp`;
     try {
       await writeFile(temporary, text, { encoding: "utf8", mode: 0o600 });
-      await rename(temporary, target);
+      await renameWithRetry(temporary, target);
     } finally {
       // Gone after a rename; left behind when the rename was refused (the file is held open).
       await rm(temporary, { force: true }).catch(() => undefined);

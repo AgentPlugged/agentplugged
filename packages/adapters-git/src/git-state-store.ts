@@ -57,6 +57,7 @@ import {
   journalSeenRef,
   parseEventEnvelope,
 } from "@agentplugged/protocol";
+import { renameWithRetry } from "./atomic-rename.js";
 import { GitBatch, type GitRun, runGit, treeFiles } from "./git-process.js";
 import { probeExposure } from "./git-remote-exposure.js";
 import { acquireJournalLock, type HeldLock, JOURNAL_LOCK_NAME } from "./journal-lock.js";
@@ -697,7 +698,7 @@ export class GitStateStore implements StateStore, JournalSync, JournalBackupPort
     this.#memoryWrites += 1;
     const temporary = `${target}.${process.pid}.${this.#memoryWrites}.tmp`;
     await writeFile(temporary, `${text}\n`, "utf8");
-    await rename(temporary, target);
+    await renameWithRetry(temporary, target);
   }
 
   async backupRemote(options: {

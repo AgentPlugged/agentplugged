@@ -307,6 +307,8 @@ export const en = {
   "error.unknown_command": 'Unknown command "{command}".',
   "error.invalid_arguments": "Invalid arguments: {reason}",
   "error.unexpected": "Unexpected error: {reason}",
+  "error.file_in_use":
+    "{path} is held open by another program (your AI tool, your editor or your antivirus): nothing was changed. Close it or wait a moment, then run the command again.",
   "error.engine_version_mismatch":
     "{path} pins engine {pinned}, and this engine is {engine_version}: nothing was written. Run `npx agentplugged@{pinned} {command}`, or `npx agentplugged init --upgrade-engine` to pin {engine_version}, or add `--engine-any` to run anyway.",
   "error.upgrade_required":

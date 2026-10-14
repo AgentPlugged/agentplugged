@@ -14,9 +14,28 @@ beforeEach(async () => {
   home = await mkdtemp(join(tmpdir(), "agentplugged-home-"));
 });
 
+/**
+ * Removes a temporary folder. On Windows a program the real probe stopped (its tree is killed
+ * without being waited for) may still hold the folder for a moment: wait for it, and never fail a
+ * test over a leftover temporary folder.
+ */
+async function removeFolder(folder: string): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await rm(folder, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "EBUSY" && code !== "EPERM" && code !== "ENOTEMPTY") throw error;
+      if (attempt >= 10) return;
+      await new Promise((done) => setTimeout(done, 1_000));
+    }
+  }
+}
+
 afterEach(async () => {
-  await rm(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
-  await rm(home, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+  await removeFolder(cwd);
+  await removeFolder(home);
 });
 
 /** A Linux machine where everything is fine and the folder is a repository. */

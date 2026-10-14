@@ -237,6 +237,17 @@ describe("sync to Claude Code", () => {
     );
     const deny: string[] = settings.permissions.deny;
     expect(deny.some((rule) => /docs|epics|stories/.test(rule))).toBe(false);
+    // A backslash before the closing parenthesis would escape it: Claude Code warns of a malformed
+    // rule. The root of a Windows disk stays denied, in its other spelling.
+    const written: string[] = [
+      ...deny,
+      ...(settings.permissions.allow ?? []),
+      ...(settings.permissions.ask ?? []),
+    ];
+    expect(written.filter((rule) => rule.endsWith("\\)"))).toEqual([]);
+    expect(deny).toEqual(
+      expect.arrayContaining(["Bash(rd /s* C:/)", "Bash(Remove-Item *-r* C:/)"]),
+    );
     expect(files.files.has(".claude/settings.local.json")).toBe(false);
 
     const manifest = JSON.parse(files.files.get(SYNC_MANIFEST_PATH) ?? "{}");

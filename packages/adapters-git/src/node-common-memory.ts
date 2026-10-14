@@ -1,8 +1,9 @@
-import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { CommonMemory } from "@agentplugged/core";
 import { randomBytes, toHex } from "@agentplugged/crypto";
+import { renameWithRetry } from "./atomic-rename.js";
 
 /**
  * The common memory of the creator's products: `~/.agentplugged/memory/<C-id>.json`,
@@ -68,7 +69,7 @@ export class NodeCommonMemory implements CommonMemory {
     const temporary = join(this.#dir, `.${id}.${toHex(randomBytes(8))}.tmp`);
     try {
       await writeFile(temporary, text, { encoding: "utf8", mode: 0o600, flag: "wx" });
-      await rename(temporary, target);
+      await renameWithRetry(temporary, target);
     } catch (error) {
       await rm(temporary, { force: true });
       throw error;

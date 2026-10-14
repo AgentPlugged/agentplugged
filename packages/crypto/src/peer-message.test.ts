@@ -313,7 +313,9 @@ describe("sequence per pair, in a sliding window", () => {
     expect(await accept(one)).toBe("duplicate");
     expect(await accept(three)).toBe("duplicate");
     // A forged envelope with a huge number never moves the window.
-    const forged = { ...three, ciphertext: three.ciphertext.replace(/.$/, "A") };
+    // Change the first character, which is never a padding bit, so the forgery is guaranteed.
+    const first = three.ciphertext[0] === "A" ? "B" : "A";
+    const forged = { ...three, ciphertext: first + three.ciphertext.slice(1) };
     expect(await accept(forged)).toBe("rejected");
     expect(window.state().highest).toBe(3);
   });

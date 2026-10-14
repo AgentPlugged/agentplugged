@@ -313,6 +313,8 @@ export const fr: Catalog = {
   "error.unknown_command": "Commande inconnue « {command} ».",
   "error.invalid_arguments": "Arguments invalides : {reason}",
   "error.unexpected": "Erreur inattendue : {reason}",
+  "error.file_in_use":
+    "{path} est tenu ouvert par un autre programme (ton outil d'IA, ton éditeur ou ton antivirus) : rien n'a été modifié. Ferme-le ou attends un instant, puis relance la commande.",
   "error.engine_version_mismatch":
     "{path} épingle le moteur {pinned}, et ce moteur est en {engine_version} : rien n'a été écrit. Lance `npx agentplugged@{pinned} {command}`, ou `npx agentplugged init --upgrade-engine` pour épingler {engine_version}, ou ajoute `--engine-any` pour passer outre.",
   "error.upgrade_required":

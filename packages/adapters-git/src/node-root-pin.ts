@@ -1,4 +1,4 @@
-import { mkdir, open, readFile, rename, rm } from "node:fs/promises";
+import { mkdir, open, readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
@@ -9,6 +9,7 @@ import {
 } from "@agentplugged/core";
 import { randomBytes, toHex } from "@agentplugged/crypto";
 import { ErrorCode, type RootPin, ULID_PATTERN } from "@agentplugged/protocol";
+import { renameWithRetry } from "./atomic-rename.js";
 
 /** The pin is there and cannot be used: an error, never "no pin". */
 function unreadable(reason: string): AgentPluggedError {
@@ -83,7 +84,7 @@ export class NodeRootPinStore implements RootPinStore {
       } finally {
         await handle.close();
       }
-      await rename(temporary, target);
+      await renameWithRetry(temporary, target);
       await syncFolder(folder);
       this.#onFlush?.("folder");
     } catch (error) {

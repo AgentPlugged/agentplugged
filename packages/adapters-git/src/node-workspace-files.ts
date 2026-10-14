@@ -6,7 +6,6 @@ import {
   readdir,
   readFile,
   realpath,
-  rename,
   rm,
   rmdir,
   stat,
@@ -15,6 +14,7 @@ import {
 } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { WorkspaceFiles } from "@agentplugged/core";
+import { renameWithRetry } from "./atomic-rename.js";
 
 let tempCounter = 0;
 
@@ -89,7 +89,7 @@ export class NodeWorkspaceFiles implements WorkspaceFiles {
         content,
         typeof content === "string" ? { encoding: "utf8", flag: "wx" } : { flag: "wx" },
       );
-      await rename(temp, target);
+      await renameWithRetry(temp, target);
     } catch (error) {
       await rm(temp, { force: true });
       throw error;

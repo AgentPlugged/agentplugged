@@ -1063,9 +1063,9 @@ export const syncCommand = defineCommand<SyncResult>({
       },
       has("claude-code")
         ? {
-            deny: unique([...denyRules(permissionInputs), ...claudeRules.deny]),
-            allow: claudeRules.allow,
-            ask: claudeRules.ask,
+            deny: claudeWritable(unique([...denyRules(permissionInputs), ...claudeRules.deny])),
+            allow: claudeWritable(claudeRules.allow),
+            ask: claudeWritable(claudeRules.ask),
           }
         : {},
       { deny: manifest.permissions, ...previousLists[CLAUDE_SETTINGS_PATH] },
@@ -1210,6 +1210,15 @@ const CODEX_HOME_DENY = [
 
 function unique(rules: readonly string[]): string[] {
   return [...new Set(rules)];
+}
+
+/**
+ * The rules Claude Code's settings can hold: a backslash before the closing parenthesis escapes it
+ * there, so such a rule would be malformed (the `C:/` spelling of the same root stays). The
+ * engine's own guards keep them: they read the rules themselves.
+ */
+function claudeWritable(rules: readonly string[]): string[] {
+  return rules.filter((rule) => !rule.endsWith("\\)"));
 }
 
 /** The tool a generated path belongs to, for the summary. */

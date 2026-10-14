@@ -338,8 +338,16 @@ describe("agentplugged mcp moves to the version the product pins, between two ca
       );
 
       // The next call is the new engine's: it says so, with no reconnection and no EBUSY.
-      const after = await server.tool("get_state");
-      expect(after.engine_version).toBe(MOVED_TO);
+      // A loaded machine (a shared CI runner) may start the new engine slowly: the launcher tries again
+      // at each call it finds idle, so the first answers are given time, and a failure shows what the
+      // launcher said instead of a bare version mismatch.
+      let after = await server.tool("get_state");
+      for (let attempt = 0; attempt < 20 && after.engine_version !== MOVED_TO; attempt++) {
+        if (/did not answer/.test(server.stderr.join(""))) break;
+        await new Promise((done) => setTimeout(done, 1_000));
+        after = await server.tool("get_state");
+      }
+      expect(after.engine_version, server.stderr.join("")).toBe(MOVED_TO);
       expect((after.update_available as { running: string }).running).toBe(MOVED_TO);
       expect(after.engine_update).toBeUndefined();
       expect(server.stderr.join("")).toContain(`engine ${VERSION} replaced by ${MOVED_TO}`);

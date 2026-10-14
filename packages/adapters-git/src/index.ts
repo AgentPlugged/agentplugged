@@ -1,5 +1,6 @@
 export const packageName = "@agentplugged/adapters-git";
 
+export { type RenameOptions, renameWithRetry } from "./atomic-rename.js";
 export { NodeEnvironmentProbe, type NodeEnvironmentProbeOptions } from "./environment-probe.js";
 export {
   CI_TOOL_TIMEOUT_MS,
