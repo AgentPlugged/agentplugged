@@ -53,9 +53,13 @@ describe("NodeKeyStore", () => {
   });
 
   it("keeps the machine key in the system keychain", async (context) => {
-    // The native module itself must load on every supported system: never skipped.
-    const keyring = await import("@napi-rs/keyring");
-    expect(typeof keyring.AsyncEntry).toBe("function");
+    // Outside Windows, the native module itself must load on every supported system: never
+    // skipped. Windows reaches the keychain through PowerShell, the module being only a fallback
+    // that Smart App Control may refuse to load.
+    if (process.platform !== "win32") {
+      const keyring = await import("@napi-rs/keyring");
+      expect(typeof keyring.AsyncEntry).toBe("function");
+    }
     const store = new NodeKeyStore({ service, account: "machine" });
     created.push(store);
     try {

@@ -2,6 +2,12 @@
 
 All notable changes to `agentplugged`, newest first. Versions follow semantic versioning.
 
+## 1.0.2 - 2026-10-14
+
+### Fixes
+
+- Reach the Windows Credential Manager through PowerShell so Smart App Control no longer blocks the keys, and say clearly what blocks when the keychain cannot be used.
+
 ## 1.0.1 - 2026-10-14
 
 ### Fixes

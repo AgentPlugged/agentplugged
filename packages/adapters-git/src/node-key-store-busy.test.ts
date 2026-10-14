@@ -52,7 +52,11 @@ const PRODUCT = "01JZ0000000000000000000000";
 
 /** The store as on Windows: the re-reads of `KEYCHAIN_SETTLE_DELAYS_MS`. */
 const busy = () =>
-  new NodeKeyStore({ service: "agentplugged-fake", settleDelays: KEYCHAIN_SETTLE_DELAYS_MS });
+  new NodeKeyStore({
+    service: "agentplugged-fake",
+    settleDelays: KEYCHAIN_SETTLE_DELAYS_MS,
+    engine: "native",
+  });
 
 beforeEach(() => {
   fake.entries.clear();

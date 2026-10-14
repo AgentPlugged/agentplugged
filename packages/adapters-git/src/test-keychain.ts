@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { KEYCHAIN_ENTRY_OPTIONS } from "./node-key-store.js";
+import { systemCredentials } from "./node-key-store.js";
 
 /**
  * Test support, never used by the product: keeps the system keychain clean of the keys the tests
@@ -157,15 +157,8 @@ export function servicesFromSecretTool(text: string): string[] {
   );
 }
 
-type Keyring = typeof import("@napi-rs/keyring");
-
-/** The real system keychain, through `@napi-rs/keyring`; the platform's own tool lists the services. */
+/** The real system keychain, reached as the product reaches it; the platform's own tool lists the services. */
 export function systemKeychain(platform: NodeJS.Platform = process.platform): KeychainAccess {
-  let keyring: Promise<Keyring> | undefined;
-  const load = () => {
-    keyring ??= import("@napi-rs/keyring");
-    return keyring;
-  };
   return {
     async listServices() {
       if (platform === "win32") return servicesFromCmdkey(await output("cmdkey", ["/list"]));
@@ -181,12 +174,10 @@ export function systemKeychain(platform: NodeJS.Platform = process.platform): Ke
       );
     },
     async listAccounts(service) {
-      const { findCredentialsAsync } = await load();
-      return (await findCredentialsAsync(service)).map((entry) => entry.account);
+      return (await systemCredentials()).accounts(service);
     },
     async deleteEntry(service, account) {
-      const { AsyncEntry } = await load();
-      return new AsyncEntry(service, account, KEYCHAIN_ENTRY_OPTIONS).deleteCredential();
+      return (await systemCredentials()).remove(service, account);
     },
   };
 }

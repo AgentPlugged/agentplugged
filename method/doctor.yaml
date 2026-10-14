@@ -454,10 +454,12 @@ checks:
       - steps:
           en:
             - "On Linux, install and unlock a secret service (GNOME Keyring or KWallet), then run: npx agentplugged doctor"
-            - "On Windows or macOS, the system keychain is part of the system: restart the session and try again."
+            - "On Windows, if the message says Smart App Control or an application control policy blocked a file: turn off Smart App Control (Windows Security, App & browser control) or allow that file in your policy, check that Windows PowerShell is not in constrained language mode, then run: npx agentplugged doctor"
+            - "On Windows or macOS otherwise, the system keychain is part of the system: restart the session and try again."
           fr:
             - "Sous Linux, installe et déverrouille un service de secrets (GNOME Keyring ou KWallet), puis lance : npx agentplugged doctor"
-            - "Sous Windows ou macOS, le trousseau fait partie du système : redémarre la session et réessaie."
+            - "Sous Windows, si le message dit que Smart App Control ou une stratégie de contrôle des applications a bloqué un fichier : désactive Smart App Control (Sécurité Windows, Contrôle des applications et du navigateur) ou autorise ce fichier, vérifie que Windows PowerShell n'est pas en mode de langage restreint, puis lance : npx agentplugged doctor"
+            - "Sous Windows ou macOS sinon, le trousseau fait partie du système : redémarre la session et réessaie."
 
   - id: presence
     group: keys
@@ -1027,3 +1029,17 @@ signatures:
       en: "A write failed for lack of room"
       fr: "Une écriture a échoué faute de place"
     read: [disk.space]
+  - id: keychain-blocked
+    when:
+      output:
+        - "smart app control"
+        - "application control policy"
+        - "blocked the system keychain module"
+        - "stratégie de contrôle d'application"
+    say:
+      en: "Windows refused to load the keychain's module (Smart App Control or an application control policy)"
+      fr: "Windows a refusé de charger le module du trousseau (Smart App Control ou une stratégie de contrôle des applications)"
+    read: [keychain]
+    assumed:
+      en: "The message names the blocked file; whether turning off Smart App Control or adding an allow rule is right for this machine is your call, I only checked that the keychain does not answer"
+      fr: "Le message nomme le fichier bloqué ; désactiver Smart App Control ou ajouter une règle d'autorisation, c'est à toi de décider pour cette machine, je n'ai vérifié que le fait que le trousseau ne répond pas"

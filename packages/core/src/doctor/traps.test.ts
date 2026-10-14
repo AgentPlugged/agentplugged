@@ -498,6 +498,10 @@ describe("what a failure is allowed to do", () => {
       "path-too-long": { output: "The specified path, file name, or both are too long" },
       network: { output: "getaddrinfo ENOTFOUND registry.npmjs.org" },
       "disk-full": { output: "No space left on device" },
+      "keychain-blocked": {
+        output:
+          "Windows blocked the system keychain module (C:\\x\\keyring.win32-x64-msvc.node): Smart App Control",
+      },
     };
     expect(Object.keys(examples).sort()).toEqual(
       catalog.signatures.map((entry) => entry.id).sort(),

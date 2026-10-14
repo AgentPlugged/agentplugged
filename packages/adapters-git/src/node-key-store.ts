@@ -1,5 +1,6 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import { type KeyStore, keychainFull } from "@agentplugged/core";
+import { type CredentialBackend, PowerShellCredentials } from "./windows-credentials.js";
 
 /**
  * Keychain entries: service `agentplugged`, accounts `machine`, `human`, `human-presence` and
@@ -79,6 +80,103 @@ export function explainKeychainError(
   );
 }
 
+/** What Windows says when it refuses a file under Smart App Control or an application control policy. */
+const BLOCKED_BY_POLICY =
+  /application control|blocked this file|smart app control|signing level|code integrity|contr.le d.application|bloqu. ce fichier|error 4551|0x800711c7/i;
+
+/** The message of `error` and of the errors under its `cause`, outermost first. */
+function messageChain(error: unknown): string[] {
+  const messages: string[] = [];
+  let current: unknown = error;
+  for (let depth = 0; depth < 20 && current !== undefined && current !== null; depth += 1) {
+    messages.push(current instanceof Error ? current.message : String(current));
+    current = current instanceof Error ? current.cause : undefined;
+  }
+  return messages;
+}
+
+/**
+ * The error for a keychain that cannot be reached at all: `native` is why `@napi-rs/keyring` did
+ * not load and, on Windows, `powershell` why the PowerShell helper could not be used. Says what
+ * blocks, in plain words: the generic "npm has a bug" of the module's loader never stands alone,
+ * and a Windows policy blocking the module is named, with the file.
+ */
+export function unavailableKeychainError(native: unknown, powershell?: unknown): Error {
+  const real = messageChain(native).filter(
+    (message) => !/cannot find native binding|npm has a bug/i.test(message),
+  );
+  const blocked = real.find((message) => BLOCKED_BY_POLICY.test(message));
+  const file =
+    blocked === undefined ? undefined : /[A-Za-z]:\\[^\r\n"']*?\.node/.exec(blocked)?.[0];
+  const viaPowerShell =
+    powershell === undefined
+      ? ""
+      : ` The keys could not be reached through Windows PowerShell either (${messageChain(powershell)[0]}).`;
+  if (blocked !== undefined) {
+    const said = blocked.split(/\r?\n/).find((line) => line.trim() !== "") ?? blocked;
+    return new Error(
+      `Windows blocked the system keychain module${file === undefined ? "" : ` (${file})`}: Smart App Control or an application control policy refuses this unsigned file ("${said.trim()}").${viaPowerShell} Turn off Smart App Control (Windows Security, App & browser control) or allow this file in your application control policy, make sure Windows PowerShell can run in full language mode, then run the command again.`,
+      { cause: native },
+    );
+  }
+  const why = real.length > 0 ? real.join("; ") : "Node gave no further reason";
+  return new Error(`the system keychain module could not be loaded: ${why}.${viaPowerShell}`, {
+    cause: native,
+  });
+}
+
+/** The keychain through `@napi-rs/keyring`. */
+async function nativeBackend(): Promise<CredentialBackend> {
+  const { AsyncEntry, findCredentialsAsync } = await load().catch((error: unknown) => {
+    throw unavailableKeychainError(error);
+  });
+  const entry = (service: string, account: string) =>
+    new AsyncEntry(service, account, KEYCHAIN_ENTRY_OPTIONS);
+  return {
+    read: async (service, account) => (await entry(service, account).getPassword()) ?? undefined,
+    write: (service, account, secret) => entry(service, account).setPassword(secret),
+    remove: (service, account) => entry(service, account).deleteCredential(),
+    accounts: async (service) =>
+      (await findCredentialsAsync(service)).map((found) => found.account),
+  };
+}
+
+let system: Promise<CredentialBackend> | undefined;
+
+/**
+ * The system keychain of this machine. On Windows, the PowerShell helper first (no native module
+ * to load, which Smart App Control may refuse), then `@napi-rs/keyring` when PowerShell cannot be
+ * used; elsewhere `@napi-rs/keyring`. Chosen once per process, kept once it works.
+ */
+export function systemCredentials(): Promise<CredentialBackend> {
+  system ??= (async () => {
+    let powershell: unknown;
+    if (process.platform === "win32") {
+      try {
+        return await PowerShellCredentials.open();
+      } catch (error) {
+        powershell = error;
+      }
+    }
+    try {
+      return await nativeBackend();
+    } catch (error) {
+      throw powershell === undefined
+        ? error
+        : unavailableKeychainError(nativeCause(error), powershell);
+    }
+  })().catch((error: unknown) => {
+    system = undefined;
+    throw error;
+  });
+  return system;
+}
+
+/** The error `@napi-rs/keyring` failed with, under the explained one `nativeBackend` throws. */
+function nativeCause(error: unknown): unknown {
+  return error instanceof Error && error.cause !== undefined ? error.cause : error;
+}
+
 /** `operation`, its failure explained by `explainKeychainError`. */
 async function explained<T>(operation: () => Promise<T>): Promise<T> {
   try {
@@ -90,8 +188,9 @@ async function explained<T>(operation: () => Promise<T>): Promise<T> {
 
 /**
  * `KeyStore` in the system keychain (Windows Credential Manager, macOS Keychain, the Secret
- * Service on Linux), through `@napi-rs/keyring`. Tests pass their own service name
- * and delete their entries afterwards: the machine's real entries are never touched.
+ * Service on Linux): through a PowerShell helper on Windows (`systemCredentials`) and
+ * `@napi-rs/keyring` elsewhere, or when PowerShell cannot be used. Tests pass their own service
+ * name and delete their entries afterwards: the machine's real entries are never touched.
  */
 export class NodeKeyStore implements KeyStore {
   readonly service: string;
@@ -104,6 +203,7 @@ export class NodeKeyStore implements KeyStore {
    * answering empty under concurrent access: elsewhere, none (no wait added to a first `init`).
    */
   readonly settleDelays: readonly number[];
+  readonly #engine: "system" | "native";
   constructor(
     options: {
       service?: string;
@@ -112,12 +212,15 @@ export class NodeKeyStore implements KeyStore {
       presenceAccount?: string;
       /** The waits of `settle`: `KEYCHAIN_SETTLE_DELAYS_MS` on Windows, none elsewhere. */
       settleDelays?: readonly number[];
+      /** How the keychain is reached: the system's choice (default), or `@napi-rs/keyring` only. */
+      engine?: "system" | "native";
     } = {},
   ) {
     this.service = options.service ?? KEYCHAIN_SERVICE;
     this.account = options.account ?? KEYCHAIN_ACCOUNT;
     this.humanAccount = options.humanAccount ?? KEYCHAIN_HUMAN_ACCOUNT;
     this.presenceAccount = options.presenceAccount ?? KEYCHAIN_PRESENCE_ACCOUNT;
+    this.#engine = options.engine ?? "system";
     this.settleDelays =
       options.settleDelays ?? (process.platform === "win32" ? KEYCHAIN_SETTLE_DELAYS_MS : []);
   }
@@ -130,24 +233,19 @@ export class NodeKeyStore implements KeyStore {
     return true;
   }
 
-  /** The entry of `account`; on Linux, in the Secret Service only (`KEYCHAIN_ENTRY_OPTIONS`). */
-  async #entry(account: string) {
-    const { AsyncEntry } = await load();
-    return new AsyncEntry(this.service, account, KEYCHAIN_ENTRY_OPTIONS);
+  #backend(): Promise<CredentialBackend> {
+    return this.#engine === "native" ? nativeBackend() : systemCredentials();
   }
 
   #read(account: string): Promise<string | undefined> {
-    return explained(async () => {
-      const secret = await (await this.#entry(account)).getPassword();
-      return secret ?? undefined;
-    });
+    return explained(async () => (await this.#backend()).read(this.service, account));
   }
 
   /** A full keychain gives `KEYCHAIN_FULL`; any other failure is thrown, explained. */
   async #write(account: string, value: string): Promise<void> {
-    const entry = await explained(() => this.#entry(account));
+    const backend = await explained(() => this.#backend());
     try {
-      await entry.setPassword(value);
+      await backend.write(this.service, account, value);
     } catch (error) {
       if (isKeychainFullError(error)) {
         throw keychainFull(error instanceof Error ? error.message : String(error));
@@ -194,7 +292,7 @@ export class NodeKeyStore implements KeyStore {
 
   /** Deletes the machine key's entry; true when there was one. */
   deleteMachineSecret(): Promise<boolean> {
-    return explained(async () => (await this.#entry(this.account)).deleteCredential());
+    return explained(async () => (await this.#backend()).remove(this.service, this.account));
   }
 
   /**
@@ -207,14 +305,13 @@ export class NodeKeyStore implements KeyStore {
       throw new Error(`deleteAll refuses the real keychain service ${KEYCHAIN_SERVICE}`);
     }
     let deleted = false;
-    const products = await load()
-      .then(({ findCredentialsAsync }) => findCredentialsAsync(this.service))
-      .then((found) =>
-        found.map((entry) => entry.account).filter((name) => name.startsWith(PRODUCT_ACCOUNT)),
-      )
+    const backend = await explained(() => this.#backend());
+    const products = await backend
+      .accounts(this.service)
+      .then((found) => found.filter((name) => name.startsWith(PRODUCT_ACCOUNT)))
       .catch(() => [] as string[]);
     for (const account of [this.account, this.humanAccount, this.presenceAccount, ...products]) {
-      deleted = (await (await this.#entry(account)).deleteCredential()) || deleted;
+      deleted = (await backend.remove(this.service, account)) || deleted;
     }
     return deleted;
   }

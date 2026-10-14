@@ -1,6 +1,6 @@
 {
   "name": "@agentplugged/core",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "license": "FSL-1.1-MIT",
   "type": "module",
