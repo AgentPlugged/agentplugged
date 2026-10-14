@@ -48,7 +48,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  await rm(cwd, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });
 
 /** An agent that writes the note, costs what it is told, and is judged as it is told. */

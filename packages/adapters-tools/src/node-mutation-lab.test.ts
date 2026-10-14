@@ -65,7 +65,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });
 
 const lab = (options: Partial<ConstructorParameters<typeof NodeMutationLab>[0]> = {}) =>

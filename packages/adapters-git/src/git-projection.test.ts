@@ -82,7 +82,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   for (const opened of stores.splice(0)) opened.close();
-  await rm(base, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  await rm(base, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
 });
 
 /** Machine A (a repository with `.agentplugged/`, pushed to the remote) and B (a clone). */
