@@ -1,0 +1,46 @@
+# How write-prd behaves. Run: agentplugged eval run write-prd --method
+# The engine's tools are not in the run: the state says what they answered, and the files are written in the folder.
+cases:
+  - id: prd-from-brief
+    state: "state.get answered: Maya is an active agent, the creator approved the brief in .agentplugged/docs/brief.md and answered every question. The engine's tools are not available in this run: make no call to them, write the document in the folder."
+    input: "Write the PRD from my approved brief."
+    files:
+      - path: .agentplugged/docs/brief.md
+        text: |
+          # Brief: Invoicely
+          For freelancers who invoice a few clients a month.
+          What it does: create an invoice from a client and lines of work; send it to the client by email;
+          show which invoices are paid and which are late.
+          What it does not do: accounting, taxes, payroll.
+          Success: a freelancer sends a first invoice in under five minutes.
+    checks:
+      - { kind: file_has, path: .agentplugged/docs/prd.md, text: "EF-1" }
+      - { kind: file_has, path: .agentplugged/docs/prd.md, text: "Invoicely" }
+      - { kind: file_lacks, path: .agentplugged/docs/prd.md, text: "TODO" }
+    rubric:
+      - "prd.md has a requirement for creating an invoice, one for sending it by email and one for showing paid and late invoices, each under its own EF-n identifier that opens its line"
+      - "prd.md has no requirement about accounting, taxes or payroll, which the brief leaves out"
+      - "Each EF requirement says one thing that a test could check, with no 'and' joining two behaviours"
+      - "prd.md carries the five-minute first invoice as a measurable success metric (an MS-n identifier)"
+  - id: prd-ambiguous-need
+    state: "state.get answered: Maya is an active agent. The engine's tools are not available in this run: make no call to them, write in the folder. The creator is away: do not wait for an answer."
+    input: "Update the PRD: add that invoices should be 'sent automatically'."
+    files:
+      - path: .agentplugged/docs/prd.md
+        text: |
+          # PRD: Invoicely
+          - EF-1: The freelancer creates an invoice from a client and lines of work.
+          - EF-2: The freelancer sends an invoice to the client by email.
+    checks:
+      # The requirements already written keep their number and their text, whatever else happens.
+      - { kind: file_has, path: .agentplugged/docs/prd.md, text: "EF-1: The freelancer creates an invoice from a client and lines of work." }
+      - { kind: file_has, path: .agentplugged/docs/prd.md, text: "EF-2: The freelancer sends an invoice to the client by email." }
+    rubric:
+      - "The answer or the PRD says that 'sent automatically' can be read two ways (for example on creation, or on a due date) and does not pick one as if the creator had said it"
+      - "If a new requirement was written, its identifier is EF-3 and EF-1 and EF-2 keep their number and their text"
+triggers:
+  - { query: "write the PRD from the approved brief, with stable requirement identifiers", should_trigger: true }
+  - { query: "update the PRD: add a requirement for exporting invoices", should_trigger: true }
+  - { query: "review the PRD and its requirement identifiers", should_trigger: true }
+  - { query: "write the product brief from my idea", should_trigger: false }
+  - { query: "turn the approved requirement list into stories", should_trigger: false }

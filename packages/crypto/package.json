@@ -1,0 +1,55 @@
+{
+  "name": "@agentplugged/crypto",
+  "version": "1.0.0",
+  "private": true,
+  "license": "FSL-1.1-MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "@agentplugged/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./webauthn-verify": {
+      "@agentplugged/source": "./src/webauthn-verify.ts",
+      "types": "./dist/webauthn-verify.d.ts",
+      "default": "./dist/webauthn-verify.js"
+    },
+    "./webauthn-software": {
+      "@agentplugged/source": "./src/webauthn-software.ts",
+      "types": "./dist/webauthn-software.d.ts",
+      "default": "./dist/webauthn-software.js"
+    },
+    "./testing": {
+      "@agentplugged/source": "./src/testing.ts",
+      "types": "./dist/testing.d.ts",
+      "default": "./dist/testing.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check .",
+    "test": "vitest run && npm run --silent vectors:check",
+    "vectors": "tsc -p tsconfig.build.json && node scripts/generate-vectors.mjs && node scripts/generate-product-key-vectors.mjs",
+    "vectors:check": "tsc -p tsconfig.build.json && node scripts/generate-vectors.mjs --check && node scripts/generate-product-key-vectors.mjs --check"
+  },
+  "dependencies": {
+    "@agentplugged/protocol": "workspace:*",
+    "@noble/hashes": "catalog:",
+    "@simplewebauthn/server": "catalog:",
+    "canonicalize": "catalog:",
+    "libsodium-wrappers": "catalog:",
+    "libsodium-wrappers-sumo": "catalog:"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "catalog:",
+    "@noble/curves": "catalog:",
+    "@types/node": "catalog:",
+    "@typescript/native": "catalog:",
+    "vitest": "catalog:"
+  }
+}

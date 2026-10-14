@@ -1,0 +1,32 @@
+{
+  "name": "@agentplugged/workspace",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.8.1",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint && pnpm run lint:boundaries",
+    "lint:boundaries": "depcruise apps packages method --config .dependency-cruiser.cjs --output-type err-long",
+    "test": "turbo run test && pnpm run test:boundaries",
+    "test:boundaries": "vitest run --root tooling/boundaries",
+    "smoke": "node tooling/pack-smoke/smoke.mjs",
+    "smoke:guard": "node tooling/pack-smoke/guard-selftest.mjs",
+    "trials": "node tooling/install-trials/local.mjs",
+    "test:trials": "node --test tooling/install-trials/install-trials.test.mjs"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "catalog:",
+    "@types/node": "catalog:",
+    "@typescript/native": "catalog:",
+    "dependency-cruiser": "^18.5.0",
+    "turbo": "~2.11.7",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "vite": "~8.3.2",
+    "vitest": "catalog:"
+  }
+}

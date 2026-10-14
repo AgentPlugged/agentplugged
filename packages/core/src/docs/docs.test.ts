@@ -1,0 +1,561 @@
+import { ErrorCode } from "@agentplugged/protocol";
+import { describe, expect, it } from "vitest";
+import {
+  type CommandContext,
+  checkDocuments,
+  createCommandRegistry,
+  type DocsBase,
+  type DocsBaseRead,
+  type DocsCheckResult,
+  type DocumentFile,
+  parseDefinitionLine,
+  parseDefinitions,
+  parseDocumentFile,
+  renderConstitution,
+  renderConstitutionReference,
+  type ToolProbe,
+} from "../index.js";
+import { MemoryFiles, shippedMethod } from "../testing/memory-files.js";
+
+const PRD = ".agentplugged/docs/prd.md";
+const owners = new Set(["iris"]);
+
+const noTools: ToolProbe = {
+  which: async () => undefined,
+  version: async () => undefined,
+  extensions: async () => [],
+};
+
+function doc(lines: readonly string[], header = "id: prd\nkind: prd\nowner: iris\n"): string {
+  return `---\n${header}---\n# PRD\n\n${lines.join("\n")}\n`;
+}
+
+const VALID = doc([
+  "EF-1 [É1] : Ada signs in with a passkey.",
+  "EF-2 : Ada signs out of every device.",
+  "EF-3 : Ada exports her data as CSV.",
+]);
+
+function check(current: Record<string, string>, base?: Record<string, string>) {
+  const files = (record: Record<string, string>): DocumentFile[] =>
+    Object.entries(record).map(([path, text]) => ({ path, text }));
+  return checkDocuments({
+    current: files(current),
+    base: base === undefined ? undefined : files(base),
+    baseRef: "HEAD",
+    owners,
+  });
+}
+
+const codes = (problems: ReturnType<typeof check>) => problems.map((problem) => problem.code);
+
+describe("parseDefinitionLine", () => {
+  it.each([
+    ["EF-12 [É1] : Sign in", "EF-12", "Sign in"],
+    ["EF-12 : Sign in", "EF-12", "Sign in"],
+    ["EF-12: Sign in", "EF-12", "Sign in"],
+    ["EF-12 : Sign in", "EF-12", "Sign in"],
+    ["- EF-12 : Sign in", "EF-12", "Sign in"],
+    ["* ENF-4 : Fast", "ENF-4", "Fast"],
+    ["### AD-3 — Git as the journal", "AD-3", "Git as the journal"],
+    ["## MS-2 - Retention", "MS-2", "Retention"],
+    ["### PU-1", "PU-1", ""],
+    ["- **EF-7** : Bold", "EF-7", "Bold"],
+    ["**EF-7:** Bold separator", "EF-7", "Bold separator"],
+    ["- **EF-7 :** **Bold** text", "EF-7", "Bold text"],
+    ["1. EF-3 : Ordered", "EF-3", "Ordered"],
+    ["12) EF-3 : Ordered", "EF-3", "Ordered"],
+    ["> EF-1 : Quoted", "EF-1", "Quoted"],
+    ["> > - EF-1 : Quoted list", "EF-1", "Quoted list"],
+    ["| EF-1 | Sign in | Must |", "EF-1", "Sign in | Must"],
+    ["| **EF-1** | Sign in |", "EF-1", "Sign in"],
+  ])("finds a definition in %j", (line, id, text) => {
+    expect(parseDefinitionLine(line)).toEqual({ id, text, retired: false });
+  });
+
+  it.each([
+    "See EF-12 : sign in",
+    "EF-12 covers sign in",
+    "EF-012 : leading zero",
+    "EF-0 : zero",
+    "EF-12a : suffix",
+    "XX-1 : unknown prefix",
+    "ef-1 : lowercase",
+    "EF-12",
+    "  - EF-12 : indented list item",
+    "| See EF-1 | text |",
+    "| Id | Text |",
+    "1. See EF-3 : ordered mention",
+  ])("sees a mention, not a definition, in %j", (line) => {
+    expect(parseDefinitionLine(line)).toBeUndefined();
+  });
+
+  it.each([
+    "EF-2 : (retirée) Ada signs out of every device.",
+    "EF-2 : (retired) Ada signs out of every device.",
+    "EF-2 : ~~Ada signs out of every device.~~",
+    "EF-2 : (retire\u0301e) decomposed accent",
+  ])("recognises a retired definition in %j", (line) => {
+    expect(parseDefinitionLine(line)?.retired).toBe(true);
+  });
+});
+
+describe("parseDocumentFile", () => {
+  it("numbers the lines of the file, and skips fenced code", () => {
+    const text = doc(["EF-1 : One.", "```", "EF-2 : in code", "```", "EF-3 : Three."]);
+    const parsed = parseDocumentFile(PRD, text);
+    expect(parsed.issues).toEqual([]);
+    expect(parsed.definitions.map((d) => [d.id, d.line])).toEqual([
+      ["EF-1", 8],
+      ["EF-3", 12],
+    ]);
+  });
+
+  it("reports an unclosed code fence, and reads nothing after it", () => {
+    const parsed = parseDefinitions(PRD, "EF-1 : One.\n~~~~\nEF-2 : Two.\n```\n", 7);
+    expect(parsed.definitions.map((d) => d.id)).toEqual(["EF-1"]);
+    expect(parsed.unclosedFence).toBe(8);
+    expect(check({ [PRD]: doc(["```", "EF-1 : One."]) })).toEqual([
+      {
+        code: ErrorCode.DOC_UNCLOSED_FENCE,
+        message_key: "error.doc_unclosed_fence",
+        details: { path: PRD, line: 8 },
+      },
+    ]);
+  });
+
+  it("accepts CRLF line endings and a byte-order mark", () => {
+    const parsed = parseDocumentFile(PRD, `﻿${VALID.replaceAll("\n", "\r\n")}`);
+    expect(parsed.issues).toEqual([]);
+    expect(parsed.definitions).toHaveLength(3);
+  });
+
+  it("reports a missing header", () => {
+    const parsed = parseDocumentFile(PRD, "# PRD\n\nEF-1 : One.\n");
+    expect(parsed.issues).toEqual([
+      {
+        field: "(root)",
+        line: 1,
+        details: expect.objectContaining({ reason_key: "reason.doc_header_missing" }),
+      },
+    ]);
+    expect(parsed.definitions).toHaveLength(1);
+  });
+
+  it("reports the generated marker left by a copied template, after the header or first", () => {
+    const marker = "<!-- Generated by agentplugged. Do not edit: changes are overwritten. -->";
+    const end = VALID.indexOf("\n---\n") + "\n---\n".length;
+    const header = VALID.slice(0, end);
+    const body = VALID.slice(end);
+    const after = parseDocumentFile(PRD, `${header}${marker}\n${body}`);
+    expect(after.header).toBeDefined();
+    expect(after.issues).toEqual([
+      {
+        field: "(root)",
+        line: header.split("\n").length,
+        details: expect.objectContaining({ reason_key: "reason.doc_generated_marker" }),
+      },
+    ]);
+    const first = parseDocumentFile(PRD, `${marker}\n${VALID}`);
+    expect(first.issues.map((issue) => issue.details.reason_key)).toEqual([
+      "reason.doc_header_missing",
+      "reason.doc_generated_marker",
+    ]);
+    expect(codes(check({ [PRD]: `${header}${marker}\n${body}` }))).toEqual([
+      ErrorCode.DOC_HEADER_INVALID,
+    ]);
+  });
+
+  it("reports a YAML syntax error and a duplicate key", () => {
+    expect(parseDocumentFile(PRD, doc([], "id: [\n")).issues[0]?.field).toBe("(root)");
+    expect(
+      parseDocumentFile(PRD, doc([], "id: a\nid: b\nkind: prd\nowner: iris\n")).issues,
+    ).toEqual([expect.objectContaining({ field: "(root)" })]);
+  });
+
+  it("reports every field at fault, with its line", () => {
+    const parsed = parseDocumentFile(PRD, doc([], "kind: plan\nowner: iris\nstatus: done\n"));
+    expect(
+      parsed.issues.map((issue) => [issue.field, issue.line, issue.details.reason_key]),
+    ).toEqual([
+      ["id", 1, "reason.required"],
+      ["kind", 2, "reason.docKind"],
+      ["status", 4, "reason.docStateKey"],
+    ]);
+  });
+});
+
+describe("checkDocuments", () => {
+  it("finds nothing in a valid document (matrix: valid document)", () => {
+    expect(check({ [PRD]: VALID }, { [PRD]: VALID })).toEqual([]);
+  });
+
+  it("refuses a status in the header (matrix: header with status)", () => {
+    const text = doc(["EF-1 : One."], "id: prd\nkind: prd\nowner: iris\nstatus: done\n");
+    expect(check({ [PRD]: text })).toEqual([
+      {
+        code: ErrorCode.DOC_HEADER_INVALID,
+        message_key: "error.doc_header_invalid",
+        details: expect.objectContaining({ path: PRD, line: 5, field: "status" }),
+      },
+    ]);
+  });
+
+  it("checks the owner even when another field is at fault", () => {
+    const text = doc([], "id: Bad\nkind: prd\nowner: nobody\n");
+    expect(check({ [PRD]: text }).map((p) => p.details.field)).toEqual(["id", "owner"]);
+  });
+
+  it("refuses a kind that does not fit its folder", () => {
+    const story = ".agentplugged/stories/1-1.md";
+    const epic = ".agentplugged/epics/e1.md";
+    expect(
+      check({
+        [story]: doc([], "id: s-1\nkind: note\nowner: iris\n"),
+        [epic]: doc([], "id: epic-1\nkind: epic\nowner: iris\n"),
+      }),
+    ).toEqual([
+      {
+        code: ErrorCode.DOC_KIND_MISMATCH,
+        message_key: "error.doc_kind_mismatch",
+        details: {
+          path: story,
+          line: 3,
+          kind: "note",
+          expected: "story",
+          folder: ".agentplugged/stories/",
+        },
+      },
+    ]);
+  });
+
+  it("refuses links to no document, or to an undefined or retired requirement", () => {
+    const text = doc(
+      ["EF-1 : One.", "EF-2 : (retired) Two."],
+      "id: prd\nkind: prd\nowner: iris\nlinks: [brief, prd, EF-1, EF-2, EF-9]\n",
+    );
+    expect(check({ [PRD]: text }).map((p) => [p.code, p.message_key, p.details.link])).toEqual([
+      [ErrorCode.DOC_LINK_DANGLING, "error.doc_link_dangling.document", "brief"],
+      [ErrorCode.DOC_LINK_DANGLING, "error.doc_link_dangling.requirement", "EF-2"],
+      [ErrorCode.DOC_LINK_DANGLING, "error.doc_link_dangling.requirement", "EF-9"],
+    ]);
+  });
+
+  it("refuses an owner that names no agent, and accepts creator", () => {
+    const unknown = doc([], "id: prd\nkind: prd\nowner: nobody\n");
+    expect(check({ [PRD]: unknown })).toEqual([
+      expect.objectContaining({
+        code: ErrorCode.DOC_HEADER_INVALID,
+        details: expect.objectContaining({ field: "owner", line: 4, owner: "nobody" }),
+      }),
+    ]);
+    expect(check({ [PRD]: doc([], "id: prd\nkind: prd\nowner: creator\n") })).toEqual([]);
+  });
+
+  it("reports a removed identifier at its place in the base (matrix: removal)", () => {
+    const now = doc([
+      "EF-1 [É1] : Ada signs in with a passkey.",
+      "EF-3 : Ada exports her data as CSV.",
+    ]);
+    expect(check({ [PRD]: now }, { [PRD]: VALID })).toEqual([
+      {
+        code: ErrorCode.REQ_ID_REMOVED,
+        message_key: "error.req_id_removed",
+        details: { path: PRD, line: 9, id: "EF-2", base: "HEAD" },
+      },
+    ]);
+  });
+
+  it("accepts an identifier marked retired (matrix: correct retirement)", () => {
+    const now = doc([
+      "EF-1 [É1] : Ada signs in with a passkey.",
+      "EF-2 : (retirée) Ada signs out of every device.",
+      "EF-3 : Ada exports her data as CSV.",
+    ]);
+    expect(check({ [PRD]: now }, { [PRD]: VALID })).toEqual([]);
+  });
+
+  it("names both identifiers of a renumbering (matrix: renumbering)", () => {
+    const now = doc([
+      "EF-1 [É1] : Ada signs in with a passkey.",
+      "EF-2 : Ada signs out of every device.",
+      "EF-4 :  ada   EXPORTS her data  as CSV.",
+    ]);
+    const problems = check({ [PRD]: now }, { [PRD]: VALID });
+    expect(codes(problems)).toEqual([ErrorCode.REQ_ID_REMOVED, ErrorCode.REQ_ID_RENUMBERED]);
+    expect(problems[0]?.details).toMatchObject({ id: "EF-3", line: 10 });
+    expect(problems[1]?.details).toEqual({
+      path: PRD,
+      line: 10,
+      from: "EF-3",
+      to: "EF-4",
+      base: "HEAD",
+      base_path: PRD,
+      base_line: 10,
+    });
+  });
+
+  it("sees a swap of two texts as two renumberings", () => {
+    const now = doc([
+      "EF-1 [É1] : Ada signs in with a passkey.",
+      "EF-2 : Ada exports her data as CSV.",
+      "EF-3 : Ada signs out of every device.",
+    ]);
+    const problems = check({ [PRD]: now }, { [PRD]: VALID });
+    expect(problems.map((p) => [p.details.from, p.details.to])).toEqual([
+      ["EF-3", "EF-2"],
+      ["EF-2", "EF-3"],
+    ]);
+  });
+
+  it("does not report retiring an identifier and adding its text under a new one", () => {
+    const now = doc([
+      "EF-1 [É1] : Ada signs in with a passkey.",
+      "EF-2 : Ada signs out of every device.",
+      "EF-3 : (retirée) Ada exports her data as CSV.",
+      "EF-4 : Ada exports her data as CSV.",
+    ]);
+    expect(check({ [PRD]: now }, { [PRD]: VALID })).toEqual([]);
+    const struck = now.replace(
+      "(retirée) Ada exports her data as CSV.",
+      "~~Ada exports her data as CSV.~~",
+    );
+    expect(check({ [PRD]: struck }, { [PRD]: VALID })).toEqual([]);
+  });
+
+  it("does not report a text two identifiers shared in the base when one is retired", () => {
+    const base = doc([
+      "EF-3 : Ada exports her data as CSV.",
+      "EF-4 : Ada exports her data as CSV.",
+    ]);
+    const now = doc([
+      "EF-3 : (retired) Ada exports her data as CSV.",
+      "EF-4 : Ada exports her data as CSV.",
+    ]);
+    expect(check({ [PRD]: now }, { [PRD]: base })).toEqual([]);
+  });
+
+  it.each(["TBD", "TODO", "—", "N/A", "To be done."])(
+    "never reports a renumbering of the short text %j",
+    (text) => {
+      const base = doc([`EF-1 : ${text}`, `EF-2 : ${text}`]);
+      const now = doc([`EF-1 : ${text}`, `EF-3 : ${text}`]);
+      expect(codes(check({ [PRD]: now }, { [PRD]: base }))).toEqual([ErrorCode.REQ_ID_REMOVED]);
+    },
+  );
+
+  it("does not take a copied text for a renumbering", () => {
+    const now = doc([
+      "EF-1 [É1] : Ada signs in with a passkey.",
+      "EF-2 : Ada signs out of every device.",
+      "EF-3 : Ada exports her data as CSV.",
+      "EF-4 : Ada exports her data as CSV.",
+    ]);
+    expect(check({ [PRD]: now }, { [PRD]: VALID })).toEqual([]);
+  });
+
+  it("refuses a retired identifier made active again (matrix: reuse)", () => {
+    const base = doc(["EF-1 : One.", "EF-2 : (retired) Two."]);
+    const now = doc(["EF-1 : One.", "EF-2 : Something new."]);
+    expect(check({ [PRD]: now }, { [PRD]: base })).toEqual([
+      expect.objectContaining({
+        code: ErrorCode.REQ_ID_REUSED,
+        details: { path: PRD, line: 9, id: "EF-2", base: "HEAD", base_path: PRD, base_line: 9 },
+      }),
+    ]);
+  });
+
+  it("refuses an identifier defined twice, across documents (matrix: duplicate)", () => {
+    const epic = ".agentplugged/epics/epic-1.md";
+    const problems = check({
+      [PRD]: doc(["EF-5 : Five."]),
+      [epic]: doc(["- EF-5 : Five again."], "id: epic-1\nkind: epic\nowner: iris\n"),
+    });
+    expect(problems).toEqual([
+      expect.objectContaining({
+        code: ErrorCode.REQ_ID_DUPLICATE,
+        details: { path: epic, line: 8, id: "EF-5", first: PRD, first_line: 8 },
+      }),
+    ]);
+  });
+
+  it("refuses two documents with the same id", () => {
+    const other = ".agentplugged/docs/prd-copy.md";
+    expect(check({ [PRD]: doc([]), [other]: doc([]) })).toEqual([
+      expect.objectContaining({
+        code: ErrorCode.DOC_ID_DUPLICATE,
+        details: { path: PRD, line: 2, id: "prd", first: other },
+      }),
+    ]);
+  });
+
+  it("applies rules 1 to 3 only without a base (matrix: no base)", () => {
+    const now = doc(
+      ["EF-5 : Five.", "EF-5 : Again."],
+      "id: prd\nkind: prd\nowner: iris\nstate: x\n",
+    );
+    expect(codes(check({ [PRD]: now }))).toEqual([
+      ErrorCode.DOC_HEADER_INVALID,
+      ErrorCode.REQ_ID_DUPLICATE,
+    ]);
+  });
+
+  it("lists every problem at once, sorted by file and line", () => {
+    const now = doc(
+      ["EF-4 : Ada exports her data as CSV.", "EF-4 : Twice."],
+      "id: prd\nkind: prd\nowner: iris\nprogress: 3\n",
+    );
+    const problems = check({ [PRD]: now }, { [PRD]: VALID });
+    expect(problems.map((p) => [p.code, p.details.line])).toEqual([
+      [ErrorCode.DOC_HEADER_INVALID, 5],
+      [ErrorCode.REQ_ID_REMOVED, 8],
+      [ErrorCode.REQ_ID_REMOVED, 9],
+      [ErrorCode.REQ_ID_RENUMBERED, 9],
+      [ErrorCode.REQ_ID_DUPLICATE, 10],
+      [ErrorCode.REQ_ID_REMOVED, 10],
+    ]);
+  });
+});
+
+describe("docs check", () => {
+  function baseOf(read: DocsBaseRead): DocsBase & { refs: string[] } {
+    const refs: string[] = [];
+    return {
+      refs,
+      read: async (ref) => {
+        refs.push(ref);
+        return read;
+      },
+      readBlobs: async () => new Map(),
+      blobsInHistory: async () => new Set(),
+    };
+  }
+
+  function context(files: MemoryFiles, docsBase?: DocsBase): CommandContext {
+    return {
+      files,
+      tools: noTools,
+      method: shippedMethod(),
+      actor: "human",
+      engineVersion: "1.2.3",
+      ...(docsBase === undefined ? {} : { docsBase }),
+    };
+  }
+
+  async function run(files: MemoryFiles, docsBase?: DocsBase, input: Record<string, unknown> = {}) {
+    return createCommandRegistry().run("docs", context(files, docsBase), {
+      action: "check",
+      ...input,
+    });
+  }
+
+  it("compares with HEAD by default, reads only the three folders' Markdown, writes nothing", async () => {
+    const files = new MemoryFiles({
+      [PRD]: VALID,
+      ".agentplugged/docs/.gitkeep": "",
+      ".agentplugged/salle/x.md": "no header here",
+      "README.md": "EF-1 : outside",
+    });
+    const base = baseOf({
+      found: true,
+      commit: "abc",
+      files: [
+        { path: PRD, text: VALID },
+        { path: ".agentplugged/docs/.gitkeep", text: "" },
+      ],
+    });
+    const result = await run(files, base);
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        documents: 1,
+        base: { ref: "HEAD", commit: "abc", documents: 1 },
+        intents: { compared: 0 },
+        warnings: [],
+        problems: [],
+        skipped: [],
+      },
+    });
+    expect(base.refs).toEqual(["HEAD"]);
+    expect(files.writes).toEqual([]);
+  });
+
+  it("passes --base, and says why there is no base", async () => {
+    const files = new MemoryFiles({ [PRD]: VALID });
+    const base = baseOf({ found: false, reason: "no_commit" });
+    const result = await run(files, base, { base: "main" });
+    expect(base.refs).toEqual(["main"]);
+    expect(result.ok && (result.value as DocsCheckResult).withoutBase).toBe("no_commit");
+    const empty = await run(files, baseOf({ found: true, commit: "c", files: [] }));
+    expect(empty.ok && (empty.value as DocsCheckResult).withoutBase).toBe("no_documents");
+  });
+
+  it("accepts the agents installed in the product as owners", async () => {
+    const text = doc([], "id: prd\nkind: prd\nowner: ada-helper\n");
+    const files = new MemoryFiles({ [PRD]: text });
+    const base = baseOf({ found: false, reason: "no_repository" });
+    const before = await run(files, base);
+    expect(before.ok && (before.value as DocsCheckResult).problems).toHaveLength(1);
+    files.seed(".agentplugged/agents/ada-helper/SKILL.md", "x");
+    const after = await run(files, base);
+    expect(after.ok && (after.value as DocsCheckResult).problems).toEqual([]);
+  });
+
+  it("refuses an unknown base, a bad --base and an unknown action", async () => {
+    const files = new MemoryFiles();
+    const unknown = await run(files, baseOf({ found: false, reason: "unknown_ref" }), {
+      base: "nope",
+    });
+    expect(!unknown.ok && unknown.error.code).toBe(ErrorCode.INVALID_ARGUMENTS);
+    const option = await run(files, baseOf({ found: false, reason: "no_commit" }), {
+      base: "--all",
+    });
+    expect(!option.ok && option.error.details.reason).toBe("--base --all");
+    const action = await createCommandRegistry().run("docs", context(files), { action: "fix" });
+    expect(!action.ok && action.error.details.reason).toBe(
+      "docs fix (check, path, grow, research, slides, costs)",
+    );
+  });
+
+  it("is a creator's command, never an agent's", async () => {
+    expect(createCommandRegistry().names()).toContain("docs");
+    expect(
+      createCommandRegistry()
+        .agentCommands()
+        .map((command) => command.name),
+    ).not.toContain("docs");
+  });
+
+  it("skips symbolic links of the working copy", async () => {
+    class LinkedFiles extends MemoryFiles {
+      async isSymbolicLink(path: string) {
+        return path.endsWith("link.md");
+      }
+    }
+    const files = new LinkedFiles({ [PRD]: VALID, ".agentplugged/docs/link.md": VALID });
+    const result = await run(files, baseOf({ found: false, reason: "no_commit" }));
+    expect(result.ok && (result.value as DocsCheckResult).documents).toBe(1);
+    expect(result.ok && (result.value as DocsCheckResult).problems).toEqual([]);
+  });
+});
+
+describe("constitution", () => {
+  it("states rule 5: identifiers are never renumbered nor reused, and docs check runs first", () => {
+    expect(renderConstitutionReference()).toContain(
+      "5. Requirement identifiers (`EF-n`, `ENF-n`, `PU-n`, `MS-n`, `AD-n`) are never renumbered\n   nor reused. To drop one, keep its line and mark it retired: `EF-2: (retired) …`. Run\n   `npx agentplugged docs check` before proposing a document.\n",
+    );
+  });
+
+  it("states rule 4 in short: identifiers, docs check, the approved intent", () => {
+    const short = renderConstitution().replace(/\s+/g, " ");
+    expect(short).toContain("never renumbered nor reused");
+    expect(short).toContain("npx agentplugged docs check");
+    expect(short).toContain("is the creator's once approved: never change it");
+  });
+
+  it("states rule 6: an approved story intent belongs to the creator", () => {
+    expect(renderConstitutionReference()).toContain(
+      "6. The `## Intent` section of a story belongs to the creator once a `document` checkpoint\n   listing the story is approved: never change it.",
+    );
+  });
+});

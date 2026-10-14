@@ -1,0 +1,190 @@
+# Install trials: the package, installed in a new folder and typed into the terminals
+# creators use, on clean machines of the three systems, under two versions of Node.js, with and
+# without administrator rights, then on imperfect machines (no GitHub CLI, no network, no Git
+# identity, Docker stopped, a long path with spaces and accents, a proxy...).
+#
+# This file lives in the PUBLIC repository only (it is written by the public export, from a
+# template). It runs on the runners GitHub provides, which are free for a public repository; the
+# private repository has its own CI on its own machine and never runs this workflow.
+#
+#   - on a push to main or a pull request that touches the package: the archive `pnpm pack` makes
+#     from this commit is tried;
+#   - on a pushed tag `v<version>`: the published package itself, `npx agentplugged@<version>`
+#     (the job waits for npm to show the version);
+#   - by hand (workflow_dispatch), with or without a version; and every Monday, to catch a new
+#     runner image or a new Node.js.
+name: Install trials
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths:
+      - "apps/cli/**"
+      - "apps/mcp/**"
+      - "packages/**"
+      - "method/**"
+      - "tooling/install-trials/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".nvmrc"
+      - ".github/workflows/install-trials.yml"
+  pull_request:
+    paths:
+      - "apps/cli/**"
+      - "apps/mcp/**"
+      - "packages/**"
+      - "method/**"
+      - "tooling/install-trials/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".nvmrc"
+      - ".github/workflows/install-trials.yml"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Published version to try with npx agentplugged@<version> (empty: the package built from this commit)"
+        required: false
+        default: ""
+  schedule:
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  # A newer push supersedes the run in progress, but a weekly or manual run never cancels a push's.
+  group: install-trials-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  pack:
+    name: Pack the package
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm --filter agentplugged pack --pack-destination "${GITHUB_WORKSPACE}/pack"
+      - run: node --test tooling/install-trials/install-trials.test.mjs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package
+          path: pack/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  trials:
+    name: ${{ matrix.os }}, Node ${{ matrix.node }}, ${{ matrix.rights }}
+    needs: pack
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        # The oldest version the package supports (engines: >=24), and the newest one.
+        node: ["24", "latest"]
+        rights: [user]
+        include:
+          # With administrator rights where the system has them for the runner's account: Unix
+          # runs the whole trial as root (the Windows runner's account is an administrator already).
+          - os: ubuntu-latest
+            node: "24"
+            rights: root
+          - os: macos-latest
+            node: "24"
+            rights: root
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+
+      # zsh is the terminal of macOS and a common one on Linux; sh and bash are there already.
+      - name: Install zsh (Linux)
+        if: runner.os == 'Linux'
+        run: command -v zsh >/dev/null || sudo apt-get install -y zsh
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: package
+          path: pack
+
+      - name: Choose what to try
+        id: package
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          version=""
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then version="${GITHUB_REF_NAME#v}"; fi
+          if [ -n "${INPUT_VERSION}" ]; then version="${INPUT_VERSION#v}"; fi
+          # A tag name and an input are typed by people: only a version goes any further.
+          if [ -n "${version}" ] && ! printf '%s' "${version}" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-+.][0-9A-Za-z.+-]+)?$'; then
+            echo "\"${version}\" is not a version (x.y.z)" >&2
+            exit 1
+          fi
+          if [ -n "${version}" ]; then
+            echo "spec=agentplugged@${version}" >> "${GITHUB_OUTPUT}"
+            echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "spec=$(ls pack/*.tgz | head -n 1)" >> "${GITHUB_OUTPUT}"
+          fi
+
+      # A tag is pushed before npm shows the version: wait for it (up to 20 minutes).
+      - name: Wait for npm to show the version
+        if: steps.package.outputs.version != ''
+        env:
+          VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          for attempt in $(seq 1 40); do
+            if npm view "agentplugged@${VERSION}" version >/dev/null 2>&1; then exit 0; fi
+            echo "agentplugged@${VERSION} is not on npm yet (attempt ${attempt}/40)"
+            sleep 30
+          done
+          echo "agentplugged@${VERSION} never appeared on npm" >&2
+          exit 1
+
+      - name: Install trials
+        if: matrix.rights == 'user'
+        env:
+          SPEC: ${{ steps.package.outputs.spec }}
+        run: node tooling/install-trials/trial.mjs --package "${SPEC}" --shell all
+
+      - name: Install trials, as root
+        if: matrix.rights == 'root'
+        env:
+          SPEC: ${{ steps.package.outputs.spec }}
+        run: sudo -E env "PATH=${PATH}" node tooling/install-trials/trial.mjs --package "${SPEC}" --shell all
+
+  all-trials:
+    name: All install trials
+    if: ${{ always() }}
+    needs: [pack, trials]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every trial passed
+        run: |
+          if [ "${{ needs.pack.result }}" != "success" ] || [ "${{ needs.trials.result }}" != "success" ]; then
+            echo "pack: ${{ needs.pack.result }}, trials: ${{ needs.trials.result }}" >&2
+            exit 1
+          fi

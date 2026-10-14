@@ -1,0 +1,37 @@
+{
+  "format": "agentplugged.peer-message.v1.test-vectors",
+  "notes": [
+    "Envelope { v, to, from, id, nonce, ciphertext }; ciphertext = ephemeral X25519 key (32 bytes) || XChaCha20-Poly1305 ciphertext, base64url.",
+    "key = KDF('apmsg001', X25519(ephemeral, recipient enc) || len2(to) to || len2(from) from || len2(id) id), KDF(ctx, ikm) = crypto_kdf_derive_from_key(32, 1, ctx, SHA-256(ikm)); len2 = length on 2 bytes, big-endian.",
+    "associated data = 'agentplugged/msg/v1' || v (1 byte) || len2(to) to || len2(from) from || len2(id) id || SHA-256(recipient enc public key) || ephemeral public key.",
+    "content = RFC 8785 JSON of { t: 'msg.inner/v1', sender, seq, type, body, alg: 'ed25519', sig }; sig = Ed25519 over the canonical JSON of { t, sender, seq, type, body, to, id }.",
+    "These keys and nonces are fixed test values: never use them elsewhere."
+  ],
+  "sender": {
+    "seed": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+    "public_key": "7776e870b93354f2a0b24c23f2a36cc4e80e223218c1b97926fdd018396a2b9b",
+    "device": "phone:CltnVJVCyaVe1qgL"
+  },
+  "recipient": {
+    "enc_secret": "303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f",
+    "enc_public": "34e42d4af5ef94a07a3a84201b889d4cd1a743cb27b11b6a10438a8feb8e5847"
+  },
+  "ephemeral_secret": "505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f",
+  "nonce": "707172737475767778797a7b7c7d7e7f8081828384858687",
+  "message": {
+    "seq": 7,
+    "type": "order",
+    "body": {
+      "approve": "G-0000000001",
+      "note": "Validé, à la place."
+    }
+  },
+  "envelope": {
+    "v": 1,
+    "to": "01K6KXJ5G0ROUTE0BRIDGE0001",
+    "from": "01K6KXJ5G0ROUTE0PH0NE00001",
+    "id": "01K6KXJ5G0MESSAGE00000001A",
+    "nonce": "cHFyc3R1dnd4eXp7fH1-f4CBgoOEhYaH",
+    "ciphertext": "OS0XSjizsb6vrx_oJIcIQcX6UxvG6v22QCwSRmRIjBwQ8WOo-ICXxQl8tL-DI7XJzQ0YE6oafnH0YuhumBGDkJ_JP5zq9s0TSJxgX9b1ef22klSgVZDjcfPXqlbgQ7_2WglA-QLKXFarSHvPZUf-SZ_oNjv4LyR8mEEIZhv_J8AYiC0OFi0VYLB5z-N2cIE2S3cTODi2pGNDlO1WhV9lLZnce7eCDHyulhw69ccWeO7-bnyy9MknpGjqMiioFaTzJYTf5gH0Y1DALirsLk1ycNrpLnb3PQP09ZSNBOpQT24osW3oCPpp7vrzju6ryyPi6he-bI51MIt0FcYsXAVuAguWj5C7z0Hc4hIkngLOzW9Zl2GYGPj-9H4dAJbwCtLLAE-B-mnRKYlSWG5oaA"
+  }
+}

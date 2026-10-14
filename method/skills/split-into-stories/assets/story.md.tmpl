@@ -1,0 +1,36 @@
+---
+id: 1-1
+kind: story
+owner: sam
+# Only documents that exist: drop `ux` when the profile has no UX domain (no ux.md).
+links: [prd, architecture, ux]
+title: "<one line, what the user gets>"
+epic: epic-1
+reviewer: quentin
+requirements: [EF-1]
+# budget_usd: the `expected` of the story's lane in state.get `usage.estimates`; never a figure of your own.
+budget_usd: 5
+branch: feat/1-1-<short slug>
+depends_on: []
+---
+# 1-1 — <story title>
+
+## Context
+
+- <the requirements this story implements, by identifier: EF-1, ENF-1>
+- <the architecture decisions it follows, by identifier: AD-1>
+- <the screens, flows and UX-n elements of the UX specification it builds, and the page of its screen under ux-mockups/ if one is drawn>
+- <the earlier stories it builds on, by id>
+
+## Intent
+
+<why this story exists and what it must achieve, in a few plain sentences>
+
+## Acceptance criteria
+
+- Given <a starting situation>, when <the user or the system acts>, then <an observable result>.
+- Given <an error case>, when <the same action>, then <what the user sees>.
+
+## Out of scope
+
+- <what this story does not do, and the story that does it, by id>

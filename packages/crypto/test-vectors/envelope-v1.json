@@ -1,0 +1,874 @@
+{
+  "format": "agentplugged.event-envelope.v1.test-vectors",
+  "notes": [
+    "signed_bytes_hex: RFC 8785 canonical JSON of the envelope without sig, in hexadecimal.",
+    "hash: sha256: then base64url SHA-256 of the canonical JSON of the whole envelope, sig included (the next event's prev).",
+    "verify_with: the keys given to the verifier; webauthn_credential names one of keys.webauthn, with its stored counter (0 when absent).",
+    "Keys are fixed test keys: never use them elsewhere."
+  ],
+  "keys": {
+    "ed25519": {
+      "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "public_key": "A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg"
+    },
+    "webauthn": {
+      "rp_id": "agentplugged.local",
+      "origin": "https://agentplugged.local",
+      "es256": {
+        "p256_private_scalar_hex": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+        "credential": {
+          "id": "wMHCw8TFxsfIycrLzM3Ozw",
+          "public_key": "pQECAyYgASFYIA0JGKBBmEdGBWFbbfkP3LNHkfs-y4IvSybrbk_EURudIlggGbkMG4PAw1z7uzHq0yu1KuM2IvV-PMFjgJfOl_Qwuro"
+        }
+      },
+      "rs256": {
+        "private_key_jwk": "scripts/fixtures/rs256-test-key.jwk.json",
+        "credential": {
+          "id": "0NHS09TV1tfY2drb3N3e3w",
+          "public_key": "pAEDAzkBACBZAQDBOSSu0PqOAvjN4vooBbU9SjS34lgjdqlO7yDWEoG4MBq05lJ7U-X4WjWfJQixZvWGMRM_BmcCZuLoi17NFSqbVhdN9-GE8g5NUlcyF5eeBfqF5y-7nBrys3KoVBEZV4_bEr2IrYlQIhUnoi_qivWBzVLoQF6Be5EnfYa1t-6IAiRWO9lGvtFzq-0W3Tm6WZYf2bAPflKUAdWm9WyZRkywMyBAd76R3F5bioxj8FEG-wjLtkzuuFT58-o57KyEYElx80pEUGjiDnTB6ffiOuYBV7ubXsyXgSfdw7WEwykjkoGuqnZrwOqslcZKk58oF25AAgSbvbxpHujJeUCwmmVdIUMBAAE"
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "ed25519-payload",
+      "description": "Ed25519, clear payload.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0ED25519PAY10AD01",
+        "type": "story.validated",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": null,
+        "payload": {
+          "decision": "approved",
+          "note": "Ça marche."
+        },
+        "alg": "ed25519",
+        "sig": "1cekjyOnRNf9QXJzJF5VepmBsGB1w3txh_4pLI4ml7bbu9ZpuSAJJE6NiYXGl3X9e2GgHOipTDMFtZ_ZZvRVBg"
+      },
+      "verify_with": {
+        "ed25519_public_key": true,
+        "webauthn_credential": null
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a2265643235353139222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a35473045443235353139504159313041443031222c227061796c6f6164223a7b226465636973696f6e223a22617070726f766564222c226e6f7465223a22c38761206d61726368652e227d2c2270726576223a6e756c6c2c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2273746f72792e76616c696461746564222c2276223a317d",
+      "hash": "sha256:JKDIhTyVvHriGEI5hGzlbCiIHd2DAOKgu0lmE2Xl4vI",
+      "expected": {
+        "ok": true,
+        "assurance": "locale"
+      }
+    },
+    {
+      "name": "ed25519-payload-enc",
+      "description": "Ed25519, encrypted payload, chained to the previous case.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0ED25519ENC0PAY02",
+        "type": "story.validated",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": "sha256:JKDIhTyVvHriGEI5hGzlbCiIHd2DAOKgu0lmE2Xl4vI",
+        "alg": "ed25519",
+        "assurance": "locale",
+        "payload_enc": {
+          "alg": "xchacha20poly1305",
+          "key_id": "pk:xWD4nP5Pr0uhkbYA",
+          "nonce": "YGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3",
+          "ct": "Wy1TWur-uZ-WvT3vKo-Gm3UwPMjbIS6MNC_8oSNeUhpZlvVo7KllNyx3gu10p8Zd_ecz35XPs4PO1A"
+        },
+        "sig": "1olhD-p3Vf0-E-RA5D2bOpgIvjzCb-jDxlmbkZpjPYZbhYcKrfY8YLWhdS832FJlwH6H-aCtaGxntau8WBgfBA"
+      },
+      "verify_with": {
+        "ed25519_public_key": true,
+        "webauthn_credential": null
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a2265643235353139222c226173737572616e6365223a226c6f63616c65222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a35473045443235353139454e43305041593032222c227061796c6f61645f656e63223a7b22616c67223a22786368616368613230706f6c7931333035222c226374223a22577931545775722d755a2d57765433764b6f2d476d335577504d6a624953364d4e435f386f534e655568705a6c76566f374b6c6c4e7978336775313070385a645f65637a333558507334504f3141222c226b65795f6964223a22706b3a785744346e503550723075686b625941222c226e6f6e6365223a22594746695932526c5a6d646f615770726247317562334278636e4e3064585a33227d2c2270726576223a227368613235363a4a4b444968547956764872694745493568477a6c6243694948643244414f4b6775306c6d4532586c347649222c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2273746f72792e76616c696461746564222c2276223a317d",
+      "hash": "sha256:iikldmrf1j40ghOS_Os8eDKP7gGTbKxrlDM4PQCBsGA",
+      "expected": {
+        "ok": true,
+        "assurance": "locale"
+      }
+    },
+    {
+      "name": "webauthn-es256",
+      "description": "WebAuthn ES256 assertion with UV, challenge = SHA-256 of the signed bytes.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0WEBAVTHNES256003",
+        "type": "release.approved",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": "sha256:iikldmrf1j40ghOS_Os8eDKP7gGTbKxrlDM4PQCBsGA",
+        "payload": {
+          "release": "0.2.0",
+          "risk": "high"
+        },
+        "alg": "webauthn-es256",
+        "assurance": "presence",
+        "sig": {
+          "authenticatorData": "ZCPTv_JPYi946sxoyo2JcmPJFmx8b6_nF96_f0m9UAwFAAAAAQ",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiajIwb2NxV1MwRGxRa1poaW9FNF9LTE16R01senhETzM0ZnpBRVpTeFFNSSIsIm9yaWdpbiI6Imh0dHBzOi8vYWdlbnRwbHVnZ2VkLmxvY2FsIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+          "signature": "MEUCIQCjLK0ZTCYxEo87KWdd_MZYFH0wpPXr1Eed1hyZMS2BuQIgH4RjlZOz6V8qJyoXaEhfBWCKiWQTi0LpoxvIv0FBSH8"
+        }
+      },
+      "verify_with": {
+        "ed25519_public_key": false,
+        "webauthn_credential": "es256"
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a22776562617574686e2d6573323536222c226173737572616e6365223a2270726573656e6365222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a354730574542415654484e4553323536303033222c227061796c6f6164223a7b2272656c65617365223a22302e322e30222c227269736b223a2268696768227d2c2270726576223a227368613235363a69696b6c646d7266316a343067684f535f4f733865444b5037674754624b78726c444d3450514342734741222c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2272656c656173652e617070726f766564222c2276223a317d",
+      "hash": "sha256:JO-zgJMHp-cDzCsCoVDLU0lH9vsaDRByl2PixALBXy8",
+      "expected": {
+        "ok": true,
+        "assurance": "presence",
+        "new_counter": 1
+      }
+    },
+    {
+      "name": "webauthn-rs256",
+      "description": "WebAuthn RS256 (RSASSA-PKCS1-v1_5 with SHA-256) assertion with UV, counter 7.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0WEBAVTHNRS256004",
+        "type": "release.approved",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": null,
+        "payload": {
+          "release": "0.3.0",
+          "risk": "high"
+        },
+        "alg": "webauthn-rs256",
+        "sig": {
+          "authenticatorData": "ZCPTv_JPYi946sxoyo2JcmPJFmx8b6_nF96_f0m9UAwFAAAABw",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiaC1fTnVqYTlYQllsUER4eEhPbF81Um9fVDVFbF9PYlRIYnNFMXRPeVJCTSIsIm9yaWdpbiI6Imh0dHBzOi8vYWdlbnRwbHVnZ2VkLmxvY2FsIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+          "signature": "pDNvr2WegE_CIcN0K_PKXKlddWdiqj6VU_iXktfzm0nQkOyFEbLnF4J8Fp-29VH_gZNqdfy_r7SJk6Qj1iO5w5-fyL52PyLEYHbB4satJrSiMQbBgby0-HFJdlv4Cu1zRtaUbv3zNuA3Gr8ws8i2auSnASxwCsG0QE6rusxlDhynC6QsJ4DFAGvmN_EPK0OmHHXrtyraYl3jePD9MDKp9ezoDR-49TpNcBHPRhuJjtLZqXfaaWEPm1HEJInA1hhXRxWsx5gPA4zBQdpsK1W8oH3fbdQpzYkaOphNp1RCrGEPG9vRcYVN4y9CWCM7-aH9N3-CgfGU-dx66VUGkiK-fQ"
+        }
+      },
+      "verify_with": {
+        "ed25519_public_key": false,
+        "webauthn_credential": "rs256"
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a22776562617574686e2d7273323536222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a354730574542415654484e5253323536303034222c227061796c6f6164223a7b2272656c65617365223a22302e332e30222c227269736b223a2268696768227d2c2270726576223a6e756c6c2c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2272656c656173652e617070726f766564222c2276223a317d",
+      "hash": "sha256:q_IMsNsZKDYPhDpo0RgJQ2ldbyOkSBh1Td-vkhPQ9K8",
+      "expected": {
+        "ok": true,
+        "assurance": "presence",
+        "new_counter": 7
+      }
+    },
+    {
+      "name": "ed25519-agent",
+      "description": "Ed25519 event of an agent: verified, with no assurance level (reserved to humans).",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0ED25519AGENT0006",
+        "type": "story.status_changed",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "agent",
+          "device": "laptop-ada",
+          "agent": "iris"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "untrusted",
+        "prev": null,
+        "payload": {
+          "status": "review"
+        },
+        "alg": "ed25519",
+        "sig": "clJxvtrtJUtpzKqY_UrzfAAwJmTkLp88RCYosEwBFCygYDXqILwnraJzPmQ7jsuUJaN79CTIv6d-IRsSyFfxCw"
+      },
+      "verify_with": {
+        "ed25519_public_key": true,
+        "webauthn_credential": null
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b226167656e74223a2269726973222c22646576696365223a226c6170746f702d616461222c226b696e64223a226167656e74227d2c22616c67223a2265643235353139222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a354730454432353531394147454e5430303036222c227061796c6f6164223a7b22737461747573223a22726576696577227d2c2270726576223a6e756c6c2c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a22756e74727573746564222c2273746f7279223a22322e32222c2274797065223a2273746f72792e7374617475735f6368616e676564222c2276223a317d",
+      "hash": "sha256:ZuT6U5FSU4etrJw4V5ruhOik1ZMYOpi7NMFv3jiOsBw",
+      "expected": {
+        "ok": true
+      }
+    },
+    {
+      "name": "ed25519-tampered-signature",
+      "description": "Last bit of the signature flipped.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0ED25519PAY10AD01",
+        "type": "story.validated",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": null,
+        "payload": {
+          "decision": "approved",
+          "note": "Ça marche."
+        },
+        "alg": "ed25519",
+        "sig": "1cekjyOnRNf9QXJzJF5VepmBsGB1w3txh_4pLI4ml7bbu9ZpuSAJJE6NiYXGl3X9e2GgHOipTDMFtZ_ZZvRVBw"
+      },
+      "verify_with": {
+        "ed25519_public_key": true,
+        "webauthn_credential": null
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a2265643235353139222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a35473045443235353139504159313041443031222c227061796c6f6164223a7b226465636973696f6e223a22617070726f766564222c226e6f7465223a22c38761206d61726368652e227d2c2270726576223a6e756c6c2c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2273746f72792e76616c696461746564222c2276223a317d",
+      "hash": "sha256:6kqKKdetqIDSbMJb26KpwMHDxn94ki6nj5n7Yb86pq0",
+      "expected": {
+        "ok": false,
+        "code": "SIGNATURE_INVALID",
+        "reason_key": "reason.signature_mismatch"
+      }
+    },
+    {
+      "name": "ed25519-field-modified",
+      "description": "payload changed after signing.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0ED25519PAY10AD01",
+        "type": "story.validated",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": null,
+        "payload": {
+          "decision": "rejected",
+          "note": "Ça marche."
+        },
+        "alg": "ed25519",
+        "sig": "1cekjyOnRNf9QXJzJF5VepmBsGB1w3txh_4pLI4ml7bbu9ZpuSAJJE6NiYXGl3X9e2GgHOipTDMFtZ_ZZvRVBg"
+      },
+      "verify_with": {
+        "ed25519_public_key": true,
+        "webauthn_credential": null
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a2265643235353139222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a35473045443235353139504159313041443031222c227061796c6f6164223a7b226465636973696f6e223a2272656a6563746564222c226e6f7465223a22c38761206d61726368652e227d2c2270726576223a6e756c6c2c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2273746f72792e76616c696461746564222c2276223a317d",
+      "hash": "sha256:bQVKX_P4QFAewjQCKZjCEq2tCz6AhqAfAY0QstYMyqQ",
+      "expected": {
+        "ok": false,
+        "code": "SIGNATURE_INVALID",
+        "reason_key": "reason.signature_mismatch"
+      }
+    },
+    {
+      "name": "ed25519-assurance-mismatch",
+      "description": "assurance: presence declared on an Ed25519 signature.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0ED25519ASSVRE005",
+        "type": "story.validated",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": null,
+        "payload": {
+          "decision": "approved"
+        },
+        "alg": "ed25519",
+        "assurance": "presence",
+        "sig": "tVnTZplklICzFDZVQ0C0bhYjlrZzLkN_EVzYEQ8phcd5HzIiGyQ-7NEHqduXqH8vdbLxtqKfp3qOXiKoV4bKBg"
+      },
+      "verify_with": {
+        "ed25519_public_key": true,
+        "webauthn_credential": null
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a2265643235353139222c226173737572616e6365223a2270726573656e6365222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a35473045443235353139415353565245303035222c227061796c6f6164223a7b226465636973696f6e223a22617070726f766564227d2c2270726576223a6e756c6c2c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2273746f72792e76616c696461746564222c2276223a317d",
+      "hash": "sha256:8eaVgHC_5saUcooQM5wLixG6TE-FH32ikXgiCD9bZDU",
+      "expected": {
+        "ok": false,
+        "code": "SIGNATURE_INVALID",
+        "reason_key": "reason.assurance_mismatch"
+      }
+    },
+    {
+      "name": "ed25519-key-missing",
+      "description": "No Ed25519 public key given to the verifier.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0ED25519PAY10AD01",
+        "type": "story.validated",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": null,
+        "payload": {
+          "decision": "approved",
+          "note": "Ça marche."
+        },
+        "alg": "ed25519",
+        "sig": "1cekjyOnRNf9QXJzJF5VepmBsGB1w3txh_4pLI4ml7bbu9ZpuSAJJE6NiYXGl3X9e2GgHOipTDMFtZ_ZZvRVBg"
+      },
+      "verify_with": {
+        "ed25519_public_key": false,
+        "webauthn_credential": null
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a2265643235353139222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a35473045443235353139504159313041443031222c227061796c6f6164223a7b226465636973696f6e223a22617070726f766564222c226e6f7465223a22c38761206d61726368652e227d2c2270726576223a6e756c6c2c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2273746f72792e76616c696461746564222c2276223a317d",
+      "hash": "sha256:JKDIhTyVvHriGEI5hGzlbCiIHd2DAOKgu0lmE2Xl4vI",
+      "expected": {
+        "ok": false,
+        "code": "SIGNATURE_INVALID",
+        "reason_key": "reason.key_missing"
+      }
+    },
+    {
+      "name": "webauthn-es256-tampered-signature",
+      "description": "Last bit of the assertion signature flipped.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0WEBAVTHNES256003",
+        "type": "release.approved",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": "sha256:iikldmrf1j40ghOS_Os8eDKP7gGTbKxrlDM4PQCBsGA",
+        "payload": {
+          "release": "0.2.0",
+          "risk": "high"
+        },
+        "alg": "webauthn-es256",
+        "assurance": "presence",
+        "sig": {
+          "authenticatorData": "ZCPTv_JPYi946sxoyo2JcmPJFmx8b6_nF96_f0m9UAwFAAAAAQ",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiajIwb2NxV1MwRGxRa1poaW9FNF9LTE16R01senhETzM0ZnpBRVpTeFFNSSIsIm9yaWdpbiI6Imh0dHBzOi8vYWdlbnRwbHVnZ2VkLmxvY2FsIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+          "signature": "MEUCIQCjLK0ZTCYxEo87KWdd_MZYFH0wpPXr1Eed1hyZMS2BuQIgH4RjlZOz6V8qJyoXaEhfBWCKiWQTi0LpoxvIv0FBSH4"
+        }
+      },
+      "verify_with": {
+        "ed25519_public_key": false,
+        "webauthn_credential": "es256"
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a22776562617574686e2d6573323536222c226173737572616e6365223a2270726573656e6365222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a354730574542415654484e4553323536303033222c227061796c6f6164223a7b2272656c65617365223a22302e322e30222c227269736b223a2268696768227d2c2270726576223a227368613235363a69696b6c646d7266316a343067684f535f4f733865444b5037674754624b78726c444d3450514342734741222c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2272656c656173652e617070726f766564222c2276223a317d",
+      "hash": "sha256:M74U7OR-vVKeM4EsL279ce3P2gaBTyiHl8nAUGGB0h4",
+      "expected": {
+        "ok": false,
+        "code": "SIGNATURE_INVALID",
+        "reason_key": "reason.signature_mismatch"
+      }
+    },
+    {
+      "name": "webauthn-es256-field-modified",
+      "description": "payload changed after signing: the challenge no longer matches.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0WEBAVTHNES256003",
+        "type": "release.approved",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": "sha256:iikldmrf1j40ghOS_Os8eDKP7gGTbKxrlDM4PQCBsGA",
+        "payload": {
+          "release": "0.2.0",
+          "risk": "low"
+        },
+        "alg": "webauthn-es256",
+        "assurance": "presence",
+        "sig": {
+          "authenticatorData": "ZCPTv_JPYi946sxoyo2JcmPJFmx8b6_nF96_f0m9UAwFAAAAAQ",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiajIwb2NxV1MwRGxRa1poaW9FNF9LTE16R01senhETzM0ZnpBRVpTeFFNSSIsIm9yaWdpbiI6Imh0dHBzOi8vYWdlbnRwbHVnZ2VkLmxvY2FsIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+          "signature": "MEUCIQCjLK0ZTCYxEo87KWdd_MZYFH0wpPXr1Eed1hyZMS2BuQIgH4RjlZOz6V8qJyoXaEhfBWCKiWQTi0LpoxvIv0FBSH8"
+        }
+      },
+      "verify_with": {
+        "ed25519_public_key": false,
+        "webauthn_credential": "es256"
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a22776562617574686e2d6573323536222c226173737572616e6365223a2270726573656e6365222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a354730574542415654484e4553323536303033222c227061796c6f6164223a7b2272656c65617365223a22302e322e30222c227269736b223a226c6f77227d2c2270726576223a227368613235363a69696b6c646d7266316a343067684f535f4f733865444b5037674754624b78726c444d3450514342734741222c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2272656c656173652e617070726f766564222c2276223a317d",
+      "hash": "sha256:ETok5LWX5yt81bjb_29CXi9HORzVQoHzVT9pjwgBPGk",
+      "expected": {
+        "ok": false,
+        "code": "SIGNATURE_INVALID",
+        "reason_key": "reason.challenge_mismatch"
+      }
+    },
+    {
+      "name": "webauthn-es256-wrong-challenge",
+      "description": "Assertion made over another challenge.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0WEBAVTHNES256003",
+        "type": "release.approved",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": "sha256:iikldmrf1j40ghOS_Os8eDKP7gGTbKxrlDM4PQCBsGA",
+        "payload": {
+          "release": "0.2.0",
+          "risk": "high"
+        },
+        "alg": "webauthn-es256",
+        "assurance": "presence",
+        "sig": {
+          "authenticatorData": "ZCPTv_JPYi946sxoyo2JcmPJFmx8b6_nF96_f0m9UAwFAAAAAQ",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoia0p6dUJVTjZucnc4ajduQUV5eGx5UFpadnJTRHVZdU1jQmwtY2U5by1YTSIsIm9yaWdpbiI6Imh0dHBzOi8vYWdlbnRwbHVnZ2VkLmxvY2FsIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+          "signature": "MEQCIA5vvZiGVfjhNZw7lD3VnzUBswSup09y6pPvBNlmYTiRAiBNkvSpbZD6jlmLeiVuDGiVWzsXY3Iqv475HmQ40OBj3Q"
+        }
+      },
+      "verify_with": {
+        "ed25519_public_key": false,
+        "webauthn_credential": "es256"
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a22776562617574686e2d6573323536222c226173737572616e6365223a2270726573656e6365222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a354730574542415654484e4553323536303033222c227061796c6f6164223a7b2272656c65617365223a22302e322e30222c227269736b223a2268696768227d2c2270726576223a227368613235363a69696b6c646d7266316a343067684f535f4f733865444b5037674754624b78726c444d3450514342734741222c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2272656c656173652e617070726f766564222c2276223a317d",
+      "hash": "sha256:YDURleS04httyPo9fyqopYdBmaQ860Xu-5lGyye0vYk",
+      "expected": {
+        "ok": false,
+        "code": "SIGNATURE_INVALID",
+        "reason_key": "reason.challenge_mismatch"
+      }
+    },
+    {
+      "name": "webauthn-es256-no-uv",
+      "description": "Assertion without the UV flag.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0WEBAVTHNES256003",
+        "type": "release.approved",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": "sha256:iikldmrf1j40ghOS_Os8eDKP7gGTbKxrlDM4PQCBsGA",
+        "payload": {
+          "release": "0.2.0",
+          "risk": "high"
+        },
+        "alg": "webauthn-es256",
+        "assurance": "presence",
+        "sig": {
+          "authenticatorData": "ZCPTv_JPYi946sxoyo2JcmPJFmx8b6_nF96_f0m9UAwBAAAAAQ",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiajIwb2NxV1MwRGxRa1poaW9FNF9LTE16R01senhETzM0ZnpBRVpTeFFNSSIsIm9yaWdpbiI6Imh0dHBzOi8vYWdlbnRwbHVnZ2VkLmxvY2FsIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+          "signature": "MEUCIQDbZvtn7ZoNXO65Htyrb6QPTDHV-Sk_ZzpPeVfPy8F0bAIgGNTU6i4m-ZbNbdMkpW8IX8R8h9IGbgmLGSfYJY1KWWA"
+        }
+      },
+      "verify_with": {
+        "ed25519_public_key": false,
+        "webauthn_credential": "es256"
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a22776562617574686e2d6573323536222c226173737572616e6365223a2270726573656e6365222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a354730574542415654484e4553323536303033222c227061796c6f6164223a7b2272656c65617365223a22302e322e30222c227269736b223a2268696768227d2c2270726576223a227368613235363a69696b6c646d7266316a343067684f535f4f733865444b5037674754624b78726c444d3450514342734741222c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2272656c656173652e617070726f766564222c2276223a317d",
+      "hash": "sha256:IJZq7Yv124mHGAn9cdkPM2wg-Rnb_rLTBcE27P9Bsjs",
+      "expected": {
+        "ok": false,
+        "code": "SIGNATURE_INVALID",
+        "reason_key": "reason.uv_missing"
+      }
+    },
+    {
+      "name": "webauthn-es256-wrong-origin",
+      "description": "Client data made for https://example.com.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0WEBAVTHNES256003",
+        "type": "release.approved",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": "sha256:iikldmrf1j40ghOS_Os8eDKP7gGTbKxrlDM4PQCBsGA",
+        "payload": {
+          "release": "0.2.0",
+          "risk": "high"
+        },
+        "alg": "webauthn-es256",
+        "assurance": "presence",
+        "sig": {
+          "authenticatorData": "ZCPTv_JPYi946sxoyo2JcmPJFmx8b6_nF96_f0m9UAwFAAAAAQ",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiajIwb2NxV1MwRGxRa1poaW9FNF9LTE16R01senhETzM0ZnpBRVpTeFFNSSIsIm9yaWdpbiI6Imh0dHBzOi8vZXhhbXBsZS5jb20iLCJjcm9zc09yaWdpbiI6ZmFsc2V9",
+          "signature": "MEQCIDuB3wFRRUKC7LcJEh_Dr4ILzwpXcMpXJjAZz-_ghkzgAiAWnc3bY14HLCpGq7NiLnkl85ZzIDvxriPToql-USe6rw"
+        }
+      },
+      "verify_with": {
+        "ed25519_public_key": false,
+        "webauthn_credential": "es256"
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a22776562617574686e2d6573323536222c226173737572616e6365223a2270726573656e6365222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a354730574542415654484e4553323536303033222c227061796c6f6164223a7b2272656c65617365223a22302e322e30222c227269736b223a2268696768227d2c2270726576223a227368613235363a69696b6c646d7266316a343067684f535f4f733865444b5037674754624b78726c444d3450514342734741222c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2272656c656173652e617070726f766564222c2276223a317d",
+      "hash": "sha256:G9msnRn62lIelqgitGf6yMGbt_CD04kd6KITOS_bBg4",
+      "expected": {
+        "ok": false,
+        "code": "SIGNATURE_INVALID",
+        "reason_key": "reason.client_data_mismatch"
+      }
+    },
+    {
+      "name": "webauthn-es256-wrong-rp",
+      "description": "Authenticator data made for the relying party example.com (rpIdHash).",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0WEBAVTHNES256003",
+        "type": "release.approved",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": "sha256:iikldmrf1j40ghOS_Os8eDKP7gGTbKxrlDM4PQCBsGA",
+        "payload": {
+          "release": "0.2.0",
+          "risk": "high"
+        },
+        "alg": "webauthn-es256",
+        "assurance": "presence",
+        "sig": {
+          "authenticatorData": "o3mm9u6vuaVeN4wRgDTidR5oL6ufLTCrE9ISVYbOGUcFAAAAAQ",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiajIwb2NxV1MwRGxRa1poaW9FNF9LTE16R01senhETzM0ZnpBRVpTeFFNSSIsIm9yaWdpbiI6Imh0dHBzOi8vYWdlbnRwbHVnZ2VkLmxvY2FsIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+          "signature": "MEQCIHauNTcGzTRdrJRf9GWazQVzNBYB7qvcsvGbC0oE5ELzAiBKrk_1vPNaYveYwj1v-QhTMZrmE8iKR-QHVe2l9bDY-A"
+        }
+      },
+      "verify_with": {
+        "ed25519_public_key": false,
+        "webauthn_credential": "es256"
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a22776562617574686e2d6573323536222c226173737572616e6365223a2270726573656e6365222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a354730574542415654484e4553323536303033222c227061796c6f6164223a7b2272656c65617365223a22302e322e30222c227269736b223a2268696768227d2c2270726576223a227368613235363a69696b6c646d7266316a343067684f535f4f733865444b5037674754624b78726c444d3450514342734741222c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2272656c656173652e617070726f766564222c2276223a317d",
+      "hash": "sha256:0iCFDBQjZk9e5XMt2cjjXp5K2Iko-twnz7vypRTP6bk",
+      "expected": {
+        "ok": false,
+        "code": "SIGNATURE_INVALID",
+        "reason_key": "reason.client_data_mismatch"
+      }
+    },
+    {
+      "name": "webauthn-es256-create-type",
+      "description": "Client data of a registration (webauthn.create), not an assertion.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0WEBAVTHNES256003",
+        "type": "release.approved",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": "sha256:iikldmrf1j40ghOS_Os8eDKP7gGTbKxrlDM4PQCBsGA",
+        "payload": {
+          "release": "0.2.0",
+          "risk": "high"
+        },
+        "alg": "webauthn-es256",
+        "assurance": "presence",
+        "sig": {
+          "authenticatorData": "ZCPTv_JPYi946sxoyo2JcmPJFmx8b6_nF96_f0m9UAwFAAAAAQ",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiajIwb2NxV1MwRGxRa1poaW9FNF9LTE16R01senhETzM0ZnpBRVpTeFFNSSIsIm9yaWdpbiI6Imh0dHBzOi8vYWdlbnRwbHVnZ2VkLmxvY2FsIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+          "signature": "MEUCIQC67Kw9J0BzjI4XNBUCtDDv0jlzgrBr4k1iyRbaKrqV6QIgBly04gtZca4Vcp4sVHhlWs0Nut7ecArKEdeJIPdLvj0"
+        }
+      },
+      "verify_with": {
+        "ed25519_public_key": false,
+        "webauthn_credential": "es256"
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a22776562617574686e2d6573323536222c226173737572616e6365223a2270726573656e6365222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a354730574542415654484e4553323536303033222c227061796c6f6164223a7b2272656c65617365223a22302e322e30222c227269736b223a2268696768227d2c2270726576223a227368613235363a69696b6c646d7266316a343067684f535f4f733865444b5037674754624b78726c444d3450514342734741222c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2272656c656173652e617070726f766564222c2276223a317d",
+      "hash": "sha256:u-KQWHXAd0uCPrDmg_blv5wDAFjLZmxprZFgUWQaP5A",
+      "expected": {
+        "ok": false,
+        "code": "SIGNATURE_INVALID",
+        "reason_key": "reason.client_data_mismatch"
+      }
+    },
+    {
+      "name": "webauthn-es256-counter-regression",
+      "description": "Assertion counter 1 while the credential has already seen 5.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0WEBAVTHNES256003",
+        "type": "release.approved",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": "sha256:iikldmrf1j40ghOS_Os8eDKP7gGTbKxrlDM4PQCBsGA",
+        "payload": {
+          "release": "0.2.0",
+          "risk": "high"
+        },
+        "alg": "webauthn-es256",
+        "assurance": "presence",
+        "sig": {
+          "authenticatorData": "ZCPTv_JPYi946sxoyo2JcmPJFmx8b6_nF96_f0m9UAwFAAAAAQ",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiajIwb2NxV1MwRGxRa1poaW9FNF9LTE16R01senhETzM0ZnpBRVpTeFFNSSIsIm9yaWdpbiI6Imh0dHBzOi8vYWdlbnRwbHVnZ2VkLmxvY2FsIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+          "signature": "MEUCIQCjLK0ZTCYxEo87KWdd_MZYFH0wpPXr1Eed1hyZMS2BuQIgH4RjlZOz6V8qJyoXaEhfBWCKiWQTi0LpoxvIv0FBSH8"
+        }
+      },
+      "verify_with": {
+        "ed25519_public_key": false,
+        "webauthn_credential": "es256",
+        "webauthn_counter": 5
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a22776562617574686e2d6573323536222c226173737572616e6365223a2270726573656e6365222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a354730574542415654484e4553323536303033222c227061796c6f6164223a7b2272656c65617365223a22302e322e30222c227269736b223a2268696768227d2c2270726576223a227368613235363a69696b6c646d7266316a343067684f535f4f733865444b5037674754624b78726c444d3450514342734741222c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2272656c656173652e617070726f766564222c2276223a317d",
+      "hash": "sha256:JO-zgJMHp-cDzCsCoVDLU0lH9vsaDRByl2PixALBXy8",
+      "expected": {
+        "ok": false,
+        "code": "SIGNATURE_INVALID",
+        "reason_key": "reason.counter_regression"
+      }
+    },
+    {
+      "name": "webauthn-es256-key-missing",
+      "description": "No WebAuthn credential given to the verifier.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0WEBAVTHNES256003",
+        "type": "release.approved",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": "sha256:iikldmrf1j40ghOS_Os8eDKP7gGTbKxrlDM4PQCBsGA",
+        "payload": {
+          "release": "0.2.0",
+          "risk": "high"
+        },
+        "alg": "webauthn-es256",
+        "assurance": "presence",
+        "sig": {
+          "authenticatorData": "ZCPTv_JPYi946sxoyo2JcmPJFmx8b6_nF96_f0m9UAwFAAAAAQ",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiajIwb2NxV1MwRGxRa1poaW9FNF9LTE16R01senhETzM0ZnpBRVpTeFFNSSIsIm9yaWdpbiI6Imh0dHBzOi8vYWdlbnRwbHVnZ2VkLmxvY2FsIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+          "signature": "MEUCIQCjLK0ZTCYxEo87KWdd_MZYFH0wpPXr1Eed1hyZMS2BuQIgH4RjlZOz6V8qJyoXaEhfBWCKiWQTi0LpoxvIv0FBSH8"
+        }
+      },
+      "verify_with": {
+        "ed25519_public_key": true,
+        "webauthn_credential": null
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a22776562617574686e2d6573323536222c226173737572616e6365223a2270726573656e6365222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a354730574542415654484e4553323536303033222c227061796c6f6164223a7b2272656c65617365223a22302e322e30222c227269736b223a2268696768227d2c2270726576223a227368613235363a69696b6c646d7266316a343067684f535f4f733865444b5037674754624b78726c444d3450514342734741222c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2272656c656173652e617070726f766564222c2276223a317d",
+      "hash": "sha256:JO-zgJMHp-cDzCsCoVDLU0lH9vsaDRByl2PixALBXy8",
+      "expected": {
+        "ok": false,
+        "code": "SIGNATURE_INVALID",
+        "reason_key": "reason.key_missing"
+      }
+    },
+    {
+      "name": "webauthn-es256-alg-mismatch",
+      "description": "ES256 event verified with the RS256 credential.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0WEBAVTHNES256003",
+        "type": "release.approved",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": "sha256:iikldmrf1j40ghOS_Os8eDKP7gGTbKxrlDM4PQCBsGA",
+        "payload": {
+          "release": "0.2.0",
+          "risk": "high"
+        },
+        "alg": "webauthn-es256",
+        "assurance": "presence",
+        "sig": {
+          "authenticatorData": "ZCPTv_JPYi946sxoyo2JcmPJFmx8b6_nF96_f0m9UAwFAAAAAQ",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiajIwb2NxV1MwRGxRa1poaW9FNF9LTE16R01senhETzM0ZnpBRVpTeFFNSSIsIm9yaWdpbiI6Imh0dHBzOi8vYWdlbnRwbHVnZ2VkLmxvY2FsIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+          "signature": "MEUCIQCjLK0ZTCYxEo87KWdd_MZYFH0wpPXr1Eed1hyZMS2BuQIgH4RjlZOz6V8qJyoXaEhfBWCKiWQTi0LpoxvIv0FBSH8"
+        }
+      },
+      "verify_with": {
+        "ed25519_public_key": false,
+        "webauthn_credential": "rs256"
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a22776562617574686e2d6573323536222c226173737572616e6365223a2270726573656e6365222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a354730574542415654484e4553323536303033222c227061796c6f6164223a7b2272656c65617365223a22302e322e30222c227269736b223a2268696768227d2c2270726576223a227368613235363a69696b6c646d7266316a343067684f535f4f733865444b5037674754624b78726c444d3450514342734741222c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2272656c656173652e617070726f766564222c2276223a317d",
+      "hash": "sha256:JO-zgJMHp-cDzCsCoVDLU0lH9vsaDRByl2PixALBXy8",
+      "expected": {
+        "ok": false,
+        "code": "SIGNATURE_INVALID",
+        "reason_key": "reason.alg_mismatch"
+      }
+    },
+    {
+      "name": "webauthn-es256-agent",
+      "description": "WebAuthn assertion on an agent's event: presence is reserved to humans.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0WEBAVTHNES256003",
+        "type": "release.approved",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "agent",
+          "device": "laptop-ada",
+          "agent": "iris"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": "sha256:iikldmrf1j40ghOS_Os8eDKP7gGTbKxrlDM4PQCBsGA",
+        "payload": {
+          "release": "0.2.0",
+          "risk": "high"
+        },
+        "alg": "webauthn-es256",
+        "sig": {
+          "authenticatorData": "ZCPTv_JPYi946sxoyo2JcmPJFmx8b6_nF96_f0m9UAwFAAAAAQ",
+          "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiRkNnOFRkWTFHdUQ5UF9ZQWxyOTVmdm0wNV9uVktYSENQS0xJR2pmajdzayIsIm9yaWdpbiI6Imh0dHBzOi8vYWdlbnRwbHVnZ2VkLmxvY2FsIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+          "signature": "MEUCIQCV6G9t4hrVdCRaJQucTDV2OZZrdgF8Dh2CI357v87QqwIgZl-r2ROIwUSKnP_FbaBuSQrC1Iwqnk1neEayg8fTegU"
+        }
+      },
+      "verify_with": {
+        "ed25519_public_key": false,
+        "webauthn_credential": "es256"
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b226167656e74223a2269726973222c22646576696365223a226c6170746f702d616461222c226b696e64223a226167656e74227d2c22616c67223a22776562617574686e2d6573323536222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a354730574542415654484e4553323536303033222c227061796c6f6164223a7b2272656c65617365223a22302e322e30222c227269736b223a2268696768227d2c2270726576223a227368613235363a69696b6c646d7266316a343067684f535f4f733865444b5037674754624b78726c444d3450514342734741222c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2272656c656173652e617070726f766564222c2276223a317d",
+      "hash": "sha256:rh7KJjd-tPPG_iqOa9GzAu_qnxS44jw5m9VccLQRo8o",
+      "expected": {
+        "ok": false,
+        "code": "SIGNATURE_INVALID",
+        "reason_key": "reason.webauthn_non_human"
+      }
+    },
+    {
+      "name": "event-invalid",
+      "description": "payload and payload_enc together.",
+      "envelope": {
+        "v": 1,
+        "id": "01K6KXJ5G0ED25519PAY10AD01",
+        "type": "story.validated",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": null,
+        "payload": {
+          "decision": "approved",
+          "note": "Ça marche."
+        },
+        "alg": "ed25519",
+        "sig": "1cekjyOnRNf9QXJzJF5VepmBsGB1w3txh_4pLI4ml7bbu9ZpuSAJJE6NiYXGl3X9e2GgHOipTDMFtZ_ZZvRVBg",
+        "payload_enc": {
+          "alg": "xchacha20poly1305",
+          "key_id": "pk:xWD4nP5Pr0uhkbYA",
+          "nonce": "YGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3",
+          "ct": "Wy1TWur-uZ-WvT3vKo-Gm3UwPMjbIS6MNC_8oSNeUhpZlvVo7KllNyx3gu10p8Zd_ecz35XPs4PO1A"
+        }
+      },
+      "verify_with": {
+        "ed25519_public_key": true,
+        "webauthn_credential": null
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a2265643235353139222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a35473045443235353139504159313041443031222c227061796c6f6164223a7b226465636973696f6e223a22617070726f766564222c226e6f7465223a22c38761206d61726368652e227d2c227061796c6f61645f656e63223a7b22616c67223a22786368616368613230706f6c7931333035222c226374223a22577931545775722d755a2d57765433764b6f2d476d335577504d6a624953364d4e435f386f534e655568705a6c76566f374b6c6c4e7978336775313070385a645f65637a333558507334504f3141222c226b65795f6964223a22706b3a785744346e503550723075686b625941222c226e6f6e6365223a22594746695932526c5a6d646f615770726247317562334278636e4e3064585a33227d2c2270726576223a6e756c6c2c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2273746f72792e76616c696461746564222c2276223a317d",
+      "hash": "sha256:2u8XZCZ6YnPTrdM4ugkEAorve9e05JAtYgCiIUGjY_8",
+      "expected": {
+        "ok": false,
+        "code": "EVENT_INVALID",
+        "reason_key": "reason.payload_exclusive"
+      }
+    },
+    {
+      "name": "upgrade-required",
+      "description": "Envelope version 15, beyond every version this engine knows (checkpoint.opened is at 14).",
+      "envelope": {
+        "v": 15,
+        "id": "01K6KXJ5G0ED25519PAY10AD01",
+        "type": "story.validated",
+        "at": "2026-10-03T08:00:00.000Z",
+        "actor": {
+          "kind": "human",
+          "device": "laptop-ada"
+        },
+        "product": "demo",
+        "story": "2.2",
+        "provenance": "trusted",
+        "prev": null,
+        "payload": {
+          "decision": "approved",
+          "note": "Ça marche."
+        },
+        "alg": "ed25519",
+        "sig": "1cekjyOnRNf9QXJzJF5VepmBsGB1w3txh_4pLI4ml7bbu9ZpuSAJJE6NiYXGl3X9e2GgHOipTDMFtZ_ZZvRVBg"
+      },
+      "verify_with": {
+        "ed25519_public_key": true,
+        "webauthn_credential": null
+      },
+      "signed_bytes_hex": "7b226163746f72223a7b22646576696365223a226c6170746f702d616461222c226b696e64223a2268756d616e227d2c22616c67223a2265643235353139222c226174223a22323032362d31302d30335430383a30303a30302e3030305a222c226964223a2230314b364b584a35473045443235353139504159313041443031222c227061796c6f6164223a7b226465636973696f6e223a22617070726f766564222c226e6f7465223a22c38761206d61726368652e227d2c2270726576223a6e756c6c2c2270726f64756374223a2264656d6f222c2270726f76656e616e6365223a2274727573746564222c2273746f7279223a22322e32222c2274797065223a2273746f72792e76616c696461746564222c2276223a31357d",
+      "hash": "sha256:oZ-Wx3YHrvH2sA_Zpcfyns3-hr_cdOkDPDvJqONkAHc",
+      "expected": {
+        "ok": false,
+        "code": "UPGRADE_REQUIRED"
+      }
+    }
+  ]
+}

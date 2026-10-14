@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>Screen name</title>
+<style>
+/* What this page shows of ux.md: the sketch, the components, the states. ux.md wins over the page. */
+:root {
+  --color-background: #ffffff;
+  --color-text: #1a1a1a;
+  --color-primary: #0f62fe;
+  --space-2: 8px;
+  --space-4: 16px;
+  --radius-md: 8px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #111111;
+    --color-text: #f2f2f2;
+  }
+}
+body { margin: 0; background: var(--color-background); color: var(--color-text); font: 16px/1.5 system-ui, sans-serif; }
+.frame { max-width: 390px; margin: var(--space-4) auto; border: 1px solid currentColor; border-radius: var(--radius-md); padding: var(--space-4); }
+button { background: var(--color-primary); color: var(--color-background); border: 0; border-radius: var(--radius-md); padding: var(--space-2) var(--space-4); font: inherit; }
+</style>
+</head>
+<body>
+<main class="frame" aria-label="Screen name">
+<h1>Screen name</h1>
+<p>Real content of the product goes here.</p>
+<button type="button">Action</button>
+</main>
+</body>
+</html>

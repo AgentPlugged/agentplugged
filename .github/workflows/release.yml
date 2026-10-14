@@ -1,0 +1,111 @@
+# Publishes the `agentplugged` package to npm, with provenance, when a `v*` tag is pushed.
+#
+# Meant for the future PUBLIC repository: npm provenance needs a public source repository and a
+# GitHub-hosted runner. It never runs in the current private repository: the job only starts when
+# the repository variable PUBLISH_ENABLED is `true`, and it is not set here.
+#
+# To enable it in the public repository:
+#   1. on npmjs.com, add this repository and this workflow (`release.yml`) as a trusted publisher
+#      of `agentplugged` (OIDC: no npm token to store);
+#   2. set the repository variable PUBLISH_ENABLED to `true`;
+#   3. push the tag `v<version>` together with its release commit (see below).
+#
+# Publication flow, end to end:
+#   - each release is one commit on main plus the tag `v<version>`, added on top of the existing
+#     history (never rewritten); the version comes from apps/cli/package.json, the only source (the
+#     Claude Code plugin takes the same version), and the notes from CHANGELOG.md;
+#   - `git push origin main v<version>`: this workflow checks tag = package version and the notes,
+#     then publishes.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish agentplugged to npm
+    if: ${{ vars.PUBLISH_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The whole history, to check that the tagged commit is on main.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+
+      - name: Check that the tag matches the package version
+        run: |
+          version="$(node -p "require('./apps/cli/package.json').version")"
+          if [ "${GITHUB_REF_NAME}" != "v${version}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match apps/cli/package.json version ${version} (expected v${version})." >&2
+            exit 1
+          fi
+
+      - name: Check that the release notes exist for this version
+        run: |
+          version="$(node -p "require('./apps/cli/package.json').version")"
+          if ! grep -qE "^## ${version//./\\.}( |$)" CHANGELOG.md; then
+            echo "CHANGELOG.md has no section for ${version}." >&2
+            exit 1
+          fi
+
+      - name: Check that the tagged commit is on main
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "${GITHUB_SHA}" origin/main; then
+            echo "Tag ${GITHUB_REF_NAME} points to ${GITHUB_SHA}, which is not on main: only main is published." >&2
+            exit 1
+          fi
+
+      # Linux keeps the keys in the Secret Service: a runner has none running, so the tests and the
+      # smoke get one of their own (GNOME Keyring in a session of its own; its login keyring is
+      # created and unlocked with a throwaway password, an empty one creates none).
+      - name: Secret Service for the keychain
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q gnome-keyring dbus-x11
+          printf '%s\n' '#!/bin/bash' \
+            'exec dbus-run-session -- bash -c '"'"'printf ci | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"'"'"' with-keychain "$@"' \
+            > "$RUNNER_TEMP/with-keychain"
+          chmod +x "$RUNNER_TEMP/with-keychain"
+          echo "WITH_KEYCHAIN=$RUNNER_TEMP/with-keychain" >> "$GITHUB_ENV"
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: $WITH_KEYCHAIN pnpm test
+      - run: pnpm build
+      - run: $WITH_KEYCHAIN pnpm smoke
+
+      # pnpm writes the archive: it replaces the `catalog:` and `workspace:` ranges with real
+      # versions, which `npm publish` of the folder would not do.
+      - name: Pack
+        working-directory: apps/cli
+        run: pnpm pack --pack-destination .release
+
+      # A pre-release (1.2.0-beta.1) goes to the `next` dist-tag, never to `latest`.
+      - name: Publish with provenance
+        working-directory: apps/cli
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          tag=latest
+          case "${version}" in *-*) tag=next ;; esac
+          npm publish ".release/agentplugged-${version}.tgz" --provenance --access public --tag "${tag}"

@@ -1,0 +1,1029 @@
+# The checks of `npx agentplugged doctor` and of the first step of `init`.
+#
+# Everything the engine looks at on the machine is written here, as data. To add a check, add an
+# entry: no code changes. Each check has
+#   - `detect`: what it looks for, among a closed set of detectors (node, command, forge-cli,
+#     forge-login, git-repo, git-config, ai-tool, keychain, presence, port, memory);
+#   - `level`: `fail` (blocking) or `warn` (to improve) when it is not ok. A program found outside
+#     the PATH is always a `warn`: the engine uses it;
+#   - `say`: one sentence per outcome, in English and French. {placeholders} are the facts the
+#     detector found (version, path, dir, name, min, cli, host, forge, port, memory, needed…);
+#   - `fix`: how to repair it, by outcome. `options` are commands as arrays of arguments (never a
+#     shell line), the first whose `when` holds on this machine (platform, a package manager really
+#     present, the forge) is shown and, after the creator says yes, run. `ask` lists what the creator
+#     types first. `interactive` marks what needs the terminal or a browser (never run from the chat).
+#     `steps` are what to do by hand, in order, when no option fits. A value found on the machine goes
+#     into a command only when it holds nothing a shell or a script would read; a value typed by the
+#     creator must only be used as an argument of its own, never inside a script.
+# The traps of a machine and the failures that reveal them:
+#   - `weak: true` marks a check whose finding is a lead, never the cause by itself (little memory
+#     does not prove a program was killed for lack of it): the diagnosis then says « a lead ».
+#   - `routine: false` leaves a check out of the usual report (administrator rights, line endings,
+#     proxy are facts, not problems, until something fails); a failure that points to it reads it.
+#   - `signatures` say what a failure looks like (an error code of the engine, an exit code, a piece
+#     of the message, matched whole and case-insensitively) and which checks to read on the machine
+#     to explain it. `extract` takes a program's name or a port out of the message and looks at it
+#     with the templates `seen_tool` and `seen_port`. `say` is what the failure shows by itself;
+#     `assumed` is what is only supposed, and is said so. A sentence never states a cause the
+#     machine did not show.
+# The checks that come from the stack (tools, ports, memory in the `prerequisites` of the
+# architecture) use the `templates` below and are never repaired by the engine: steps only.
+
+format: 1
+
+groups:
+  - id: machine
+    title: { en: "Your machine", fr: "Ta machine" }
+  - id: git
+    title: { en: "Git", fr: "Git" }
+  - id: forge
+    title: { en: "Forge (GitHub or GitLab)", fr: "Forge (GitHub ou GitLab)" }
+  - id: tools
+    title: { en: "AI tools", fr: "Outils IA" }
+  - id: keys
+    title: { en: "Keys and presence", fr: "Clés et présence" }
+  - id: prerequisites
+    title: { en: "What your stack asks for", fr: "Ce que demande ta stack" }
+
+checks:
+  - id: node
+    group: machine
+    level: fail
+    detect: { kind: node, min: "24.0.0" }
+    say:
+      ok:
+        en: "Node.js {version}"
+        fr: "Node.js {version}"
+      old:
+        en: "Node.js {version} is too old: AgentPlugged needs {min} or later"
+        fr: "Node.js {version} est trop ancien : AgentPlugged demande {min} ou plus récent"
+    fix:
+      - steps:
+          en:
+            - "Install Node.js {min} or later (https://nodejs.org, or your package manager)."
+            - "Open a new terminal and run: npx agentplugged doctor"
+          fr:
+            - "Installe Node.js {min} ou plus récent (https://nodejs.org, ou ton gestionnaire de paquets)."
+            - "Ouvre un nouveau terminal et lance : npx agentplugged doctor"
+
+  - id: git.installed
+    group: git
+    level: fail
+    detect:
+      kind: command
+      names: [git]
+      min: "2.25.0"
+      also_in: &git_dirs
+        - { env: ProgramFiles, path: [Git, cmd] }
+        - { env: "ProgramFiles(x86)", path: [Git, cmd] }
+        - { env: LOCALAPPDATA, path: [Programs, Git, cmd] }
+        - { root: true, path: [opt, homebrew, bin] }
+        - { root: true, path: [usr, local, bin] }
+    say:
+      ok:
+        en: "Git {version}"
+        fr: "Git {version}"
+      missing:
+        en: "Git was not found (not in your PATH, nor in its usual folders): the journal and the stories need it"
+        fr: "Git est introuvable (ni dans ton PATH, ni dans ses dossiers habituels) : le journal et les stories en ont besoin"
+      old:
+        en: "Git {version} is too old (2.25 or later is needed)"
+        fr: "Git {version} est trop ancien (2.25 ou plus récent est nécessaire)"
+      unreadable:
+        en: "Git is installed ({path}) but its version cannot be read"
+        fr: "Git est installé ({path}) mais sa version ne peut pas être lue"
+      off_path:
+        en: "Git {version} found in {dir}, which is not on your PATH: the engine may not find it"
+        fr: "Git {version} trouvé dans {dir}, qui n'est pas dans ton PATH : le moteur risque de ne pas le trouver"
+      stale:
+        en: "Git {version} is installed in {dir} and your system knows that folder, but this program was opened before: it does not see it yet"
+        fr: "Git {version} est installé dans {dir} et ton système connaît ce dossier, mais ce programme a été ouvert avant : il ne le voit pas encore"
+    fix:
+      - outcomes: [missing, old]
+        recommended: true
+        options:
+          - when: { platform: win32, manager: winget }
+            commands:
+              - [winget, install, --id, Git.Git, -e, --source, winget, --accept-source-agreements, --accept-package-agreements]
+          - when: { platform: darwin, manager: brew }
+            commands:
+              - [brew, install, git]
+          - when: { platform: darwin }
+            interactive: true
+            commands:
+              - [xcode-select, --install]
+          - when: { platform: linux, manager: apt-get }
+            interactive: true
+            commands:
+              - [sudo, apt-get, install, -y, git]
+          - when: { platform: linux, manager: dnf }
+            interactive: true
+            commands:
+              - [sudo, dnf, install, -y, git]
+          - when: { platform: linux, manager: pacman }
+            interactive: true
+            commands:
+              - [sudo, pacman, -S, --noconfirm, git]
+        steps:
+          en:
+            - "Install Git from https://git-scm.com/downloads."
+            - "Open a new terminal and run: npx agentplugged doctor"
+          fr:
+            - "Installe Git depuis https://git-scm.com/downloads."
+            - "Ouvre un nouveau terminal et lance : npx agentplugged doctor"
+      - outcomes: [off_path, unreadable]
+        steps:
+          en:
+            - "Add {dir} to your PATH, or close and reopen your editor and your terminal."
+          fr:
+            - "Ajoute {dir} à ton PATH, ou ferme puis rouvre ton éditeur et ton terminal."
+      - outcomes: [stale]
+        steps:
+          en:
+            - "Close and reopen your editor and your terminal: they then receive the PATH your system already has."
+          fr:
+            - "Ferme puis rouvre ton éditeur et ton terminal : ils recevront alors le PATH que ton système a déjà."
+
+  - id: git.repo
+    group: git
+    level: warn
+    detect: { kind: git-repo }
+    say:
+      ok:
+        en: "This folder is a Git repository"
+        fr: "Ce dossier est un dépôt Git"
+      missing:
+        en: "This folder is not a Git repository yet: the journal and the stories need one"
+        fr: "Ce dossier n'est pas encore un dépôt Git : le journal et les stories en ont besoin"
+    fix:
+      - recommended: true
+        unattended: true
+        options:
+          - commands:
+              - [git, init]
+        steps:
+          en:
+            - "In this folder, run: git init"
+          fr:
+            - "Dans ce dossier, lance : git init"
+
+  - id: git.identity
+    group: git
+    level: warn
+    detect: { kind: git-config, keys: [user.name, user.email] }
+    say:
+      ok:
+        en: "Git signs your commits as {git_name} <{git_email}>"
+        fr: "Git signe tes commits « {git_name} <{git_email}> »"
+      unset:
+        en: "Git does not know your name and e-mail yet ({missing}): your first commit would be refused"
+        fr: "Git ne connaît pas encore ton nom et ton e-mail ({missing}) : ton premier commit serait refusé"
+    fix:
+      - recommended: true
+        options:
+          - ask:
+              - name: user_name
+                default: "{git_name}"
+                say: { en: "Your name, as it will sign your commits", fr: "Ton nom, tel qu'il signera tes commits" }
+              - name: user_email
+                type: email
+                default: "{git_email}"
+                say: { en: "Your e-mail", fr: "Ton e-mail" }
+            commands:
+              - [git, config, --global, user.name, "{user_name}"]
+              - [git, config, --global, user.email, "{user_email}"]
+        steps:
+          en:
+            - "Run: git config --global user.name \"Your Name\""
+            - "Run: git config --global user.email you@example.com"
+          fr:
+            - "Lance : git config --global user.name \"Ton Nom\""
+            - "Lance : git config --global user.email toi@exemple.com"
+
+  - id: forge.cli
+    group: forge
+    level: warn
+    detect:
+      kind: forge-cli
+      also_in: &forge_dirs
+        - { for: gh, env: ProgramFiles, path: [GitHub CLI] }
+        - { for: gh, env: "ProgramFiles(x86)", path: [GitHub CLI] }
+        - { for: gh, env: LOCALAPPDATA, path: [Programs, GitHub CLI] }
+        - { for: gh, env: LOCALAPPDATA, path: [Microsoft, WinGet, Links] }
+        - { for: glab, env: ProgramFiles, path: [glab] }
+        - { for: glab, env: LOCALAPPDATA, path: [Programs, glab] }
+        - { for: glab, env: LOCALAPPDATA, path: [Microsoft, WinGet, Links] }
+        - { root: true, path: [opt, homebrew, bin] }
+        - { root: true, path: [usr, local, bin] }
+    say:
+      ok:
+        en: "{cli} {version}, the {forge_name} command-line tool"
+        fr: "{cli} {version}, l'outil en ligne de commande de {forge_name}"
+      missing:
+        en: "{cli} was not found (not in your PATH, nor in its usual folders): pull requests on {forge_name} need it (not before your first delivery)"
+        fr: "{cli} est introuvable (ni dans ton PATH, ni dans ses dossiers habituels) : les pull requests sur {forge_name} en ont besoin (pas avant ta première livraison)"
+      off_path:
+        en: "{cli} {version} is installed in {dir}, which is not on your PATH: the engine finds it, but an editor opened before its installation may not"
+        fr: "{cli} {version} est installé dans {dir}, qui n'est pas dans ton PATH : le moteur le trouve, mais un éditeur ouvert avant son installation peut ne pas le voir"
+      stale:
+        en: "{cli} {version} is installed in {dir} and your system knows that folder, but this program was opened before: it does not see it yet"
+        fr: "{cli} {version} est installé dans {dir} et ton système connaît ce dossier, mais ce programme a été ouvert avant : il ne le voit pas encore"
+      unreadable:
+        en: "{cli} is installed ({path}) but its version cannot be read"
+        fr: "{cli} est installé ({path}) mais sa version ne peut pas être lue"
+    fix:
+      - outcomes: [stale]
+        steps:
+          en:
+            - "Close and reopen your editor and your terminal: they then receive the PATH your system already has, and see {cli}."
+          fr:
+            - "Ferme puis rouvre ton éditeur et ton terminal : ils recevront le PATH que ton système a déjà, et verront {cli}."
+      - outcomes: [missing]
+        options:
+          - when: { platform: win32, manager: winget, forge: github }
+            commands:
+              - [winget, install, --id, GitHub.cli, -e, --source, winget, --accept-source-agreements, --accept-package-agreements]
+          - when: { platform: win32, manager: winget, forge: gitlab }
+            commands:
+              - [winget, install, --id, GLab.GLab, -e, --source, winget, --accept-source-agreements, --accept-package-agreements]
+          - when: { platform: darwin, manager: brew, forge: github }
+            commands:
+              - [brew, install, gh]
+          - when: { platform: darwin, manager: brew, forge: gitlab }
+            commands:
+              - [brew, install, glab]
+          - when: { platform: linux, manager: apt-get, forge: github }
+            interactive: true
+            commands:
+              - [sudo, apt-get, install, -y, gh]
+          - when: { platform: linux, manager: dnf, forge: github }
+            interactive: true
+            commands:
+              - [sudo, dnf, install, -y, gh]
+          - when: { platform: linux, manager: pacman, forge: github }
+            interactive: true
+            commands:
+              - [sudo, pacman, -S, --noconfirm, github-cli]
+          - when: { platform: linux, manager: pacman, forge: gitlab }
+            interactive: true
+            commands:
+              - [sudo, pacman, -S, --noconfirm, glab]
+        steps:
+          en:
+            - "Install {cli} from its official page (https://cli.github.com for gh, https://gitlab.com/gitlab-org/cli for glab)."
+            - "Open a new terminal and run: npx agentplugged doctor"
+          fr:
+            - "Installe {cli} depuis sa page officielle (https://cli.github.com pour gh, https://gitlab.com/gitlab-org/cli pour glab)."
+            - "Ouvre un nouveau terminal et lance : npx agentplugged doctor"
+      - outcomes: [off_path, unreadable]
+        recommended: true
+        options:
+          - when: { platform: win32 }
+            commands:
+              - - powershell
+                - -NoProfile
+                - -Command
+                - "$p = [Environment]::GetEnvironmentVariable('Path','User'); if (($p -split ';') -notcontains '{dir}') { [Environment]::SetEnvironmentVariable('Path', ($p.TrimEnd(';') + ';{dir}'), 'User') }"
+        done:
+          en: "Done: {dir} is on the PATH of your account. Windows already open do not see it yet: close and reopen your editor and your terminal."
+          fr: "C'est fait : {dir} est dans le PATH de ton compte. Les fenêtres déjà ouvertes ne le voient pas encore : ferme puis rouvre ton éditeur et ton terminal."
+        steps:
+          en:
+            - "Close and reopen your editor and your terminal: they then see {cli}."
+            - "If they still do not, add {dir} to your PATH."
+          fr:
+            - "Ferme puis rouvre ton éditeur et ton terminal : ils verront alors {cli}."
+            - "S'ils ne le voient toujours pas, ajoute {dir} à ton PATH."
+
+  - id: forge.login
+    group: forge
+    level: warn
+    detect:
+      kind: forge-login
+      also_in: *forge_dirs
+    say:
+      ok:
+        en: "{cli} is connected to {host}"
+        fr: "{cli} est connecté à {host}"
+      unreadable:
+        en: "Cannot tell whether {cli} is connected to {host} (no network?)"
+        fr: "Impossible de savoir si {cli} est connecté à {host} (pas de réseau ?)"
+      logged_out:
+        en: "{cli} is installed but not connected to {host}: pull requests need it (not before your first delivery)"
+        fr: "{cli} est installé mais pas connecté à {host} : les pull requests en ont besoin (pas avant ta première livraison)"
+    fix:
+      - outcomes: [logged_out]
+        options:
+          - interactive: true
+            commands:
+              - ["{cli}", auth, login, --hostname, "{host}", --web]
+        steps:
+          en:
+            - "Run: {cli} auth login --hostname {host}"
+            - "Choose to log in with a web browser and follow the page that opens. AgentPlugged never sees your token."
+          fr:
+            - "Lance : {cli} auth login --hostname {host}"
+            - "Choisis de te connecter avec un navigateur web et suis la page qui s'ouvre. AgentPlugged ne voit jamais ton jeton."
+
+  - id: tools.any
+    group: tools
+    level: warn
+    detect: { kind: ai-tool, tool: any }
+    say:
+      ok:
+        en: "AI tools found: {names}"
+        fr: "Outils IA trouvés : {names}"
+      missing:
+        en: "No AI tool found (Claude Code, Codex, Antigravity CLI or Cursor): AgentPlugged installs anyway, but you need one to talk to the team"
+        fr: "Aucun outil IA trouvé (Claude Code, Codex, Antigravity CLI ou Cursor) : AgentPlugged s'installe quand même, mais il t'en faut un pour parler à l'équipe"
+    fix:
+      - steps:
+          en:
+            - "Install the AI tool you prefer from its official site (Claude Code, Codex, Antigravity CLI or Cursor)."
+            - "Then run: npx agentplugged sync"
+          fr:
+            - "Installe l'outil IA de ton choix depuis son site officiel (Claude Code, Codex, Antigravity CLI ou Cursor)."
+            - "Puis lance : npx agentplugged sync"
+
+  - id: tools.claude-code
+    group: tools
+    level: warn
+    detect: { kind: ai-tool, tool: claude-code }
+    say:
+      ok:
+        en: "{name} {version}"
+        fr: "{name} {version}"
+      missing:
+        en: "{name} is targeted by this product but was not found on this machine"
+        fr: "{name} est ciblé par ce produit mais il est introuvable sur cette machine"
+      off_path:
+        en: "{name} {version} found in {dir}, which is not on your PATH: the engine finds it, an editor opened earlier may not"
+        fr: "{name} {version} trouvé dans {dir}, qui n'est pas dans ton PATH : le moteur le trouve, un éditeur ouvert avant peut ne pas le voir"
+      stale:
+        en: "{name} {version} is in {dir}, a folder your system knows but this program does not have yet: it was opened before"
+        fr: "{name} {version} est dans {dir}, un dossier que ton système connaît mais que ce programme n'a pas encore : il a été ouvert avant"
+    fix: &tool_fix
+      - outcomes: [missing]
+        steps:
+          en:
+            - "Install it from its official site, or take it off the list: the `tools` of .agentplugged/method.yaml."
+          fr:
+            - "Installe-le depuis son site officiel, ou retire-le de la liste : le `tools` de .agentplugged/method.yaml."
+      - outcomes: [off_path]
+        steps:
+          en:
+            - "Close and reopen your editor and your terminal, or add {dir} to your PATH."
+          fr:
+            - "Ferme puis rouvre ton éditeur et ton terminal, ou ajoute {dir} à ton PATH."
+      - outcomes: [stale]
+        steps:
+          en:
+            - "Close and reopen your editor and your terminal: they then receive the PATH your system already has."
+          fr:
+            - "Ferme puis rouvre ton éditeur et ton terminal : ils recevront le PATH que ton système a déjà."
+
+  - id: tools.codex
+    group: tools
+    level: warn
+    detect: { kind: ai-tool, tool: codex }
+    say:
+      ok:
+        en: "{name} {version}"
+        fr: "{name} {version}"
+      missing:
+        en: "{name} is targeted by this product but was not found on this machine"
+        fr: "{name} est ciblé par ce produit mais il est introuvable sur cette machine"
+      off_path:
+        en: "{name} {version} found in {dir}, which is not on your PATH: the engine finds it, an editor opened earlier may not"
+        fr: "{name} {version} trouvé dans {dir}, qui n'est pas dans ton PATH : le moteur le trouve, un éditeur ouvert avant peut ne pas le voir"
+      stale:
+        en: "{name} {version} is in {dir}, a folder your system knows but this program does not have yet: it was opened before"
+        fr: "{name} {version} est dans {dir}, un dossier que ton système connaît mais que ce programme n'a pas encore : il a été ouvert avant"
+    fix: *tool_fix
+
+  - id: tools.antigravity
+    group: tools
+    level: warn
+    detect: { kind: ai-tool, tool: antigravity }
+    say:
+      ok:
+        en: "{name} {version}"
+        fr: "{name} {version}"
+      missing:
+        en: "{name} is targeted by this product but was not found on this machine"
+        fr: "{name} est ciblé par ce produit mais il est introuvable sur cette machine"
+      off_path:
+        en: "{name} {version} found in {dir}, which is not on your PATH: the engine finds it, an editor opened earlier may not"
+        fr: "{name} {version} trouvé dans {dir}, qui n'est pas dans ton PATH : le moteur le trouve, un éditeur ouvert avant peut ne pas le voir"
+      stale:
+        en: "{name} {version} is in {dir}, a folder your system knows but this program does not have yet: it was opened before"
+        fr: "{name} {version} est dans {dir}, un dossier que ton système connaît mais que ce programme n'a pas encore : il a été ouvert avant"
+    fix: *tool_fix
+
+  - id: tools.cursor
+    group: tools
+    level: warn
+    detect: { kind: ai-tool, tool: cursor }
+    say:
+      ok:
+        en: "{name} {version}"
+        fr: "{name} {version}"
+      missing:
+        en: "{name} is targeted by this product but was not found on this machine"
+        fr: "{name} est ciblé par ce produit mais il est introuvable sur cette machine"
+      off_path:
+        en: "{name} {version} found in {dir}, which is not on your PATH: the engine finds it, an editor opened earlier may not"
+        fr: "{name} {version} trouvé dans {dir}, qui n'est pas dans ton PATH : le moteur le trouve, un éditeur ouvert avant peut ne pas le voir"
+      stale:
+        en: "{name} {version} is in {dir}, a folder your system knows but this program does not have yet: it was opened before"
+        fr: "{name} {version} est dans {dir}, un dossier que ton système connaît mais que ce programme n'a pas encore : il a été ouvert avant"
+    fix: *tool_fix
+
+  - id: keychain
+    group: keys
+    level: warn
+    detect: { kind: keychain }
+    say:
+      ok:
+        en: "System keychain available"
+        fr: "Trousseau du système disponible"
+      unavailable:
+        en: "The system keychain does not answer: your keys cannot be stored on this machine"
+        fr: "Le trousseau du système ne répond pas : tes clés ne peuvent pas être gardées sur cette machine"
+    fix:
+      - steps:
+          en:
+            - "On Linux, install and unlock a secret service (GNOME Keyring or KWallet), then run: npx agentplugged doctor"
+            - "On Windows or macOS, the system keychain is part of the system: restart the session and try again."
+          fr:
+            - "Sous Linux, installe et déverrouille un service de secrets (GNOME Keyring ou KWallet), puis lance : npx agentplugged doctor"
+            - "Sous Windows ou macOS, le trousseau fait partie du système : redémarre la session et réessaie."
+
+  - id: presence
+    group: keys
+    level: warn
+    platforms: [win32]
+    detect: { kind: presence }
+    say:
+      ok:
+        en: "Windows Hello is available"
+        fr: "Windows Hello est disponible"
+      unavailable:
+        en: "Windows Hello is not available (optional: your validations keep the \"locale\" assurance)"
+        fr: "Windows Hello n'est pas disponible (facultatif : tes validations gardent l'assurance « locale »)"
+
+  - id: path.stale
+    group: machine
+    level: warn
+    detect: { kind: path-stale }
+    say:
+      ok:
+        en: "This program sees the same PATH as your system"
+        fr: "Ce programme voit le même PATH que ton système"
+      stale:
+        en: "Your system has {count} folder(s) in its PATH that this program does not have yet (for example {first}): it was opened before they were added"
+        fr: "Ton système a {count} dossier(s) dans son PATH que ce programme n'a pas encore (par exemple {first}) : il a été ouvert avant leur ajout"
+    fix:
+      - steps:
+          en:
+            - "Close and reopen your editor and your terminal: they then receive the PATH your system already has."
+          fr:
+            - "Ferme puis rouvre ton éditeur et ton terminal : ils recevront le PATH que ton système a déjà."
+
+  - id: docker.daemon
+    group: machine
+    level: warn
+    routine: false
+    with_tool: docker
+    detect:
+      kind: docker-daemon
+      also_in: &docker_dirs
+        - { env: ProgramFiles, path: [Docker, Docker, resources, bin] }
+        - { home: true, path: [.docker, bin] }
+        - { root: true, path: [opt, homebrew, bin] }
+        - { root: true, path: [usr, local, bin] }
+    say:
+      ok:
+        en: "Docker {version} answers"
+        fr: "Docker {version} répond"
+      stopped:
+        en: "Docker is installed ({path}) but its engine does not answer (docker info fails)"
+        fr: "Docker est installé ({path}) mais son moteur ne répond pas (docker info échoue)"
+      denied:
+        en: "Docker is installed ({path}) but refuses access to this account"
+        fr: "Docker est installé ({path}) mais refuse l'accès à ce compte"
+      unreadable:
+        en: "Docker is installed ({path}) but did not answer in time"
+        fr: "Docker est installé ({path}) mais n'a pas répondu à temps"
+    fix:
+      - outcomes: [stopped, unreadable]
+        steps:
+          en:
+            - "Open Docker Desktop (or start the Docker service) and wait until it says it is running."
+            - "Then run: npx agentplugged doctor"
+          fr:
+            - "Ouvre Docker Desktop (ou démarre le service Docker) et attends qu'il dise qu'il tourne."
+            - "Puis lance : npx agentplugged doctor"
+      - outcomes: [denied]
+        steps:
+          en:
+            - "On Linux, add your account to the docker group (sudo usermod -aG docker $USER), then log out and in."
+          fr:
+            - "Sous Linux, ajoute ton compte au groupe docker (sudo usermod -aG docker $USER), puis déconnecte-toi et reconnecte-toi."
+
+  # Generic: a heavy start (a build, a database) often wants a few gigabytes; the number is a rule of thumb.
+  - id: docker.memory
+    group: machine
+    level: warn
+    weak: true
+    routine: false
+    with_tool: docker
+    detect: { kind: docker-memory, min_gb: 4, also_in: *docker_dirs }
+    say:
+      ok:
+        en: "Docker has {memory} GB of memory"
+        fr: "Docker a {memory} Go de mémoire"
+      low:
+        en: "Docker only has {memory} GB of memory, under the {needed} GB that heavy starts often want"
+        fr: "Docker n'a que {memory} Go de mémoire, sous les {needed} Go que les démarrages lourds demandent souvent"
+      unreadable:
+        en: "Docker answers but the memory it was given cannot be read"
+        fr: "Docker répond mais la mémoire qu'on lui a donnée ne peut pas être lue"
+    fix:
+      - outcomes: [low]
+        steps:
+          en:
+            - "In Docker Desktop, open Settings > Resources and give it more memory (with WSL 2: memory= in the .wslconfig file of your account), then restart Docker."
+          fr:
+            - "Dans Docker Desktop, ouvre Settings > Resources et donne-lui plus de mémoire (avec WSL 2 : memory= dans le fichier .wslconfig de ton compte), puis redémarre Docker."
+
+  - id: machine.memory
+    group: machine
+    routine: false
+    level: warn
+    weak: true
+    detect: { kind: memory, min_gb: 4 }
+    say:
+      ok:
+        en: "{memory} GB of memory on this machine"
+        fr: "{memory} Go de mémoire sur cette machine"
+      low:
+        en: "Only {memory} GB of memory on this machine"
+        fr: "Seulement {memory} Go de mémoire sur cette machine"
+    fix:
+      - steps:
+          en:
+            - "Close other programs before you start the product, or use a machine with more memory."
+          fr:
+            - "Ferme d'autres programmes avant de lancer le produit, ou utilise une machine avec plus de mémoire."
+
+  - id: disk.space
+    group: machine
+    level: warn
+    detect: { kind: disk, min_gb: 2 }
+    say:
+      ok:
+        en: "{free} GB free on the disk of your product"
+        fr: "{free} Go libres sur le disque de ton produit"
+      full:
+        en: "Only {free} GB free on the disk of your product (under {needed} GB): writes and installs will fail"
+        fr: "Seulement {free} Go libres sur le disque de ton produit (sous {needed} Go) : les écritures et les installations échoueront"
+      unreadable:
+        en: "The free room on the disk of your product cannot be read"
+        fr: "La place libre sur le disque de ton produit ne peut pas être lue"
+    fix:
+      - outcomes: [full]
+        steps:
+          en:
+            - "Free some room on that disk (downloads, the recycle bin, old project folders)."
+            - "Then run: npx agentplugged doctor"
+          fr:
+            - "Libère de la place sur ce disque (téléchargements, corbeille, anciens dossiers de projets)."
+            - "Puis lance : npx agentplugged doctor"
+
+  - id: path.length
+    group: machine
+    level: warn
+    platforms: [win32]
+    detect: { kind: path-length, max: 100 }
+    say:
+      ok:
+        en: "The folder of your product has a short enough path"
+        fr: "Le dossier de ton produit a un chemin assez court"
+      long:
+        en: "The folder of your product is {length} characters long ({folder}); Windows stops at 260 for a whole path and tools add their own folders below (long paths enabled in Windows: {windows_long})"
+        fr: "Le dossier de ton produit fait {length} caractères ({folder}) ; Windows s'arrête à 260 pour un chemin entier et les outils ajoutent leurs dossiers en dessous (chemins longs activés dans Windows : {windows_long})"
+    fix:
+      - steps:
+          en:
+            - "Move the product to a shorter folder, close to the root of a disk."
+            - "Or turn on long paths: the LongPathsEnabled value of Windows (needs administrator rights), and in Git: git config --global core.longpaths true"
+          fr:
+            - "Déplace le produit dans un dossier plus court, près de la racine d'un disque."
+            - "Ou active les chemins longs : la valeur LongPathsEnabled de Windows (demande les droits d'administrateur), et dans Git : git config --global core.longpaths true"
+
+  - id: git.line-endings
+    group: git
+    routine: false
+    level: warn
+    weak: true
+    detect: { kind: line-endings }
+    say:
+      ok:
+        en: "Line endings are settled for this repository"
+        fr: "Les fins de ligne sont réglées pour ce dépôt"
+      risky:
+        en: "Git's core.autocrlf is {autocrlf} here and this repository has no rule for line endings (.gitattributes: {attributes}): scripts can be checked out with Windows line endings (CRLF)"
+        fr: "core.autocrlf de Git vaut {autocrlf} ici et ce dépôt n'a pas de règle pour les fins de ligne (.gitattributes : {attributes}) : des scripts peuvent arriver avec des fins de ligne Windows (CRLF)"
+    fix:
+      - steps:
+          en:
+            - "Add a .gitattributes file at the root of the repository with this line: * text=auto eol=lf"
+            - "Then run: git add --renormalize ."
+          fr:
+            - "Ajoute un fichier .gitattributes à la racine du dépôt avec cette ligne : * text=auto eol=lf"
+            - "Puis lance : git add --renormalize ."
+
+  - id: admin.rights
+    group: machine
+    routine: false
+    level: warn
+    weak: true
+    detect: { kind: administrator }
+    say:
+      ok:
+        en: "This program has administrator rights"
+        fr: "Ce programme a les droits d'administrateur"
+      denied:
+        en: "This program does not have administrator rights (the usual state for daily work)"
+        fr: "Ce programme n'a pas les droits d'administrateur (l'état habituel du travail quotidien)"
+      unreadable:
+        en: "Cannot tell whether this program has administrator rights"
+        fr: "Impossible de savoir si ce programme a les droits d'administrateur"
+    fix:
+      - outcomes: [denied]
+        steps:
+          en:
+            - "Only if the failing step really needs them: run it again from a terminal opened as administrator (Windows: right-click, Run as administrator; elsewhere: sudo)."
+          fr:
+            - "Seulement si l'étape qui échoue en a vraiment besoin : relance-la depuis un terminal ouvert en administrateur (Windows : clic droit, Exécuter en tant qu'administrateur ; ailleurs : sudo)."
+
+  - id: network.proxy
+    group: machine
+    routine: false
+    level: warn
+    weak: true
+    detect: { kind: proxy }
+    say:
+      ok:
+        en: "No proxy and no particular package registry found from here (variables, Git, npm)"
+        fr: "Aucun proxy ni registre de paquets particulier trouvé d'ici (variables, Git, npm)"
+      proxy:
+        en: "A proxy or a company registry is set here: {via}"
+        fr: "Un proxy ou un registre d'entreprise est réglé ici : {via}"
+    fix:
+      - outcomes: [proxy]
+        steps:
+          en:
+            - "If downloads or installs fail, check with whoever manages your network: the proxy address, its certificate and your access to the registry."
+          fr:
+            - "Si des téléchargements ou des installations échouent, vérifie avec la personne qui gère ton réseau : l'adresse du proxy, son certificat et ton accès au registre."
+
+templates:
+  tool:
+    level: warn
+    say:
+      ok:
+        en: "{name} {version}"
+        fr: "{name} {version}"
+      missing:
+        en: "Your stack needs {name} {needed} and it was not found (not in your PATH, nor in its usual folders). {why}"
+        fr: "Ta stack demande {name} {needed} et il est introuvable (ni dans ton PATH, ni dans ses dossiers habituels). {why}"
+      old:
+        en: "Your stack needs {name} {needed} or later; {version} is installed. {why}"
+        fr: "Ta stack demande {name} {needed} ou plus récent ; {version} est installé. {why}"
+      off_path:
+        en: "{name} {version} is in {dir}, which is not on your PATH"
+        fr: "{name} {version} est dans {dir}, qui n'est pas dans ton PATH"
+      stale:
+        en: "{name} {version} is in {dir}, a folder your system knows but this program does not have yet: it was opened before"
+        fr: "{name} {version} est dans {dir}, un dossier que ton système connaît mais que ce programme n'a pas encore : il a été ouvert avant"
+      unreadable:
+        en: "{name} is installed ({path}) but its version cannot be read"
+        fr: "{name} est installé ({path}) mais sa version ne peut pas être lue"
+    fix:
+      - outcomes: [missing, old]
+        steps:
+          en:
+            - "Install {name} {needed} or later, from its official site."
+            - "Open a new terminal and run: npx agentplugged doctor"
+          fr:
+            - "Installe {name} {needed} ou plus récent, depuis son site officiel."
+            - "Ouvre un nouveau terminal et lance : npx agentplugged doctor"
+      - outcomes: [off_path, unreadable]
+        steps:
+          en:
+            - "Close and reopen your editor and your terminal, or add {dir} to your PATH."
+          fr:
+            - "Ferme puis rouvre ton éditeur et ton terminal, ou ajoute {dir} à ton PATH."
+      - outcomes: [stale]
+        steps:
+          en:
+            - "Close and reopen your editor and your terminal: they then receive the PATH your system already has."
+          fr:
+            - "Ferme puis rouvre ton éditeur et ton terminal : ils recevront le PATH que ton système a déjà."
+  port:
+    level: warn
+    say:
+      ok:
+        en: "Port {port} is free"
+        fr: "Le port {port} est libre"
+      busy:
+        en: "Port {port} is already used by another program: your stack needs it free"
+        fr: "Le port {port} est déjà utilisé par un autre programme : ta stack le veut libre"
+      reserved:
+        en: "Port {port} is inside {from}-{to}, a range the system keeps for itself: nothing can listen there, and your stack needs it"
+        fr: "Le port {port} est dans la plage {from}-{to}, que le système garde pour lui : rien ne peut y écouter, et ta stack en a besoin"
+      refused:
+        en: "Port {port} is refused by the system, and no reserved range explains it (the cause is not established): your stack needs it"
+        fr: "Le port {port} est refusé par le système, et aucune plage réservée ne l'explique (la cause n'est pas établie) : ta stack en a besoin"
+    fix:
+      - outcomes: [reserved]
+        steps:
+          en:
+            - "Choose a port outside {from}-{to} for this service (the full list: netsh interface ipv4 show excludedportrange protocol=tcp)."
+          fr:
+            - "Choisis pour ce service un port en dehors de {from}-{to} (la liste complète : netsh interface ipv4 show excludedportrange protocol=tcp)."
+      - outcomes: [busy]
+        steps:
+          en:
+            - "Find the program that uses port {port} (Windows: netstat -ano | findstr :{port} ; elsewhere: lsof -i :{port}) and stop it, or change the port of your product."
+          fr:
+            - "Trouve le programme qui utilise le port {port} (Windows : netstat -ano | findstr :{port} ; ailleurs : lsof -i :{port}) et arrête-le, ou change le port de ton produit."
+      - outcomes: [refused]
+        steps:
+          en:
+            - "Try another port. On macOS and Linux a port below 1024 needs administrator rights; on Windows, see the ranges the system keeps with: netsh interface ipv4 show excludedportrange protocol=tcp"
+          fr:
+            - "Essaie un autre port. Sous macOS et Linux, un port sous 1024 demande les droits d'administrateur ; sous Windows, vois les plages que le système garde avec : netsh interface ipv4 show excludedportrange protocol=tcp"
+  memory:
+    level: warn
+    say:
+      ok:
+        en: "{memory} GB of memory (your stack needs {needed} GB)"
+        fr: "{memory} Go de mémoire (ta stack en demande {needed})"
+      low:
+        en: "Only {memory} GB of memory; your stack needs {needed} GB"
+        fr: "Seulement {memory} Go de mémoire ; ta stack en demande {needed}"
+    fix:
+      - steps:
+          en:
+            - "Close other programs before you start the product, or run it on a machine with more memory."
+          fr:
+            - "Ferme d'autres programmes avant de lancer le produit, ou lance-le sur une machine avec plus de mémoire."
+
+  # What a failure names: looked at without accusing anyone. Steps only.
+  seen_tool:
+    level: warn
+    say:
+      ok:
+        en: "{name} is on this machine ({path})"
+        fr: "{name} est sur cette machine ({path})"
+      missing:
+        en: "{name} was not found: not in your PATH, nor in its usual folders, nor in your system's PATH"
+        fr: "{name} est introuvable : ni dans ton PATH, ni dans ses dossiers habituels, ni dans le PATH de ton système"
+      off_path:
+        en: "{name} is in {dir}, which is not on your PATH"
+        fr: "{name} est dans {dir}, qui n'est pas dans ton PATH"
+      stale:
+        en: "{name} is in {dir}, a folder your system knows but this program does not have yet: it was opened before"
+        fr: "{name} est dans {dir}, un dossier que ton système connaît mais que ce programme n'a pas encore : il a été ouvert avant"
+    fix:
+      - outcomes: [missing]
+        steps:
+          en:
+            - "If you never installed {name}, install it from its official site; if you did, find its folder and add it to your PATH."
+            - "Then open a new terminal and run: npx agentplugged doctor"
+          fr:
+            - "Si tu n'as jamais installé {name}, installe-le depuis son site officiel ; si tu l'as fait, retrouve son dossier et ajoute-le à ton PATH."
+            - "Puis ouvre un nouveau terminal et lance : npx agentplugged doctor"
+      - outcomes: [off_path]
+        steps:
+          en:
+            - "Close and reopen your editor and your terminal, or add {dir} to your PATH."
+          fr:
+            - "Ferme puis rouvre ton éditeur et ton terminal, ou ajoute {dir} à ton PATH."
+      - outcomes: [stale]
+        steps:
+          en:
+            - "Close and reopen your editor and your terminal: they then receive the PATH your system already has."
+          fr:
+            - "Ferme puis rouvre ton éditeur et ton terminal : ils recevront le PATH que ton système a déjà."
+  seen_port:
+    level: warn
+    say:
+      ok:
+        en: "Port {port} is free right now"
+        fr: "Le port {port} est libre à l'instant"
+      busy:
+        en: "Port {port} is used by another program right now"
+        fr: "Le port {port} est utilisé par un autre programme à l'instant"
+      reserved:
+        en: "Port {port} is inside {from}-{to}, a range the system keeps for itself: nothing can listen there"
+        fr: "Le port {port} est dans la plage {from}-{to}, que le système garde pour lui : rien ne peut y écouter"
+      refused:
+        en: "Port {port} is refused by the system, and no reserved range explains it (the cause is not established)"
+        fr: "Le port {port} est refusé par le système, et aucune plage réservée ne l'explique (la cause n'est pas établie)"
+    fix:
+      - outcomes: [busy]
+        steps:
+          en:
+            - "Find the program that uses port {port} (Windows: netstat -ano | findstr :{port} ; elsewhere: lsof -i :{port}) and stop it, or use another port."
+          fr:
+            - "Trouve le programme qui utilise le port {port} (Windows : netstat -ano | findstr :{port} ; ailleurs : lsof -i :{port}) et arrête-le, ou utilise un autre port."
+      - outcomes: [reserved]
+        steps:
+          en:
+            - "Choose a port outside {from}-{to} for this service (the full list: netsh interface ipv4 show excludedportrange protocol=tcp)."
+          fr:
+            - "Choisis pour ce service un port en dehors de {from}-{to} (la liste complète : netsh interface ipv4 show excludedportrange protocol=tcp)."
+      - outcomes: [refused]
+        steps:
+          en:
+            - "Try another port. On macOS and Linux a port below 1024 needs administrator rights."
+          fr:
+            - "Essaie un autre port. Sous macOS et Linux, un port sous 1024 demande les droits d'administrateur."
+
+diagnosis:
+  found:
+    en: "Cause found on your machine: {text}"
+    fr: "Cause constatée sur ta machine : {text}"
+  suspected:
+    en: "A lead on your machine, which proves nothing by itself: {text}"
+    fr: "Une piste sur ta machine, qui ne prouve rien à elle seule : {text}"
+  not_found:
+    en: "I read {count} point(s) on your machine and none explains this failure: the cause is not established"
+    fr: "J'ai relu {count} point(s) de ta machine et aucun n'explique cet échec : la cause n'est pas établie"
+  nothing:
+    en: "I recognise this failure, but there is nothing on your machine I can read about it: the cause is not established"
+    fr: "Je reconnais cet échec, mais il n'y a rien sur ta machine que je puisse relire à son sujet : la cause n'est pas établie"
+  unknown:
+    en: "I do not recognise this failure, so I blame nothing; the usual checks are in `doctor`"
+    fr: "Je ne reconnais pas cet échec, donc je n'accuse rien ; les vérifications habituelles sont dans `doctor`"
+  doctor:
+    en: "To see everything: npx agentplugged doctor"
+    fr: "Pour tout voir : npx agentplugged doctor"
+
+signatures:
+  - id: forge-not-linked
+    when: { code: [FORGE_NOT_LINKED] }
+    say:
+      en: "The engine could not use the forge's tool (FORGE_NOT_LINKED)"
+      fr: "Le moteur n'a pas pu utiliser l'outil de la forge (FORGE_NOT_LINKED)"
+    read: [forge.cli, forge.login]
+    lead: [path.stale]
+  - id: command-not-found
+    when:
+      exit_code: [127]
+      output:
+        - "is not recognized as an internal or external command"
+        - "is not recognized as the name of a cmdlet"
+        - "command not found"
+        - ": not found"
+        - "enoent"
+    say:
+      en: "A program or a file was not found by the command that failed"
+      fr: "Un programme ou un fichier est introuvable pour la commande qui a échoué"
+    read: []
+    lead: [path.stale]
+    extract: [command]
+  - id: killed
+    when:
+      exit_code: [137]
+      output: ["killed", "sigkill", "exit code 137", "exited with code 137"]
+    say:
+      en: "The program was stopped by force (exit code 137, signal 9)"
+      fr: "Le programme a été arrêté de force (code de sortie 137, signal 9)"
+    read: []
+    lead: [docker.daemon, docker.memory, machine.memory]
+    assumed:
+      en: "Running out of memory is a frequent reason for a program to be stopped this way, but not the only one (someone stopped it, a time limit): what I read above does not prove it"
+      fr: "Manquer de mémoire est une raison fréquente d'un tel arrêt, mais pas la seule (quelqu'un l'a arrêté, un délai) : ce que j'ai relu plus haut ne le prouve pas"
+  - id: node-heap
+    when: { output: ["javascript heap out of memory", "heap out of memory"] }
+    say:
+      en: "Node.js stopped at its own memory limit (the JavaScript heap)"
+      fr: "Node.js s'est arrêté à sa propre limite de mémoire (le tas JavaScript)"
+    read: [machine.memory]
+    assumed:
+      en: "This is Node.js's own limit, not necessarily the machine's memory: raising it (NODE_OPTIONS=--max-old-space-size=4096) is the usual remedy if the machine has room"
+      fr: "C'est la limite propre de Node.js, pas forcément la mémoire de la machine : la relever (NODE_OPTIONS=--max-old-space-size=4096) est le remède habituel si la machine a de la place"
+  - id: port
+    when:
+      output:
+        - "eaddrinuse"
+        - "address already in use"
+        - "port is already allocated"
+        - "ports are not available"
+        - "only one usage of each socket address"
+        - "forbidden by its access permissions"
+    say:
+      en: "A program could not listen on a port"
+      fr: "Un programme n'a pas pu écouter sur un port"
+    read: []
+    extract: [port]
+  - id: docker-engine
+    when:
+      output:
+        - "cannot connect to the docker daemon"
+        - "error during connect"
+        - "docker daemon is not running"
+        - "failed to connect to the docker api"
+        - "dockerdesktoplinuxengine"
+        - "is the docker daemon running"
+    say:
+      en: "The Docker command could not reach Docker's engine"
+      fr: "La commande Docker n'a pas pu joindre le moteur de Docker"
+    read: [docker.daemon]
+    lead: [docker.memory]
+  - id: git-identity
+    when:
+      output:
+        - "author identity unknown"
+        - "please tell me who you are"
+        - "unable to auto-detect email address"
+        - "empty ident name"
+    say:
+      en: "Git refused to commit because it does not know who you are"
+      fr: "Git a refusé de valider parce qu'il ne sait pas qui tu es"
+    read: [git.identity]
+  - id: line-endings
+    when:
+      output:
+        - "bad interpreter"
+        - "$'\\r'"
+        - "lf will be replaced by crlf"
+        - "crlf will be replaced by lf"
+    say:
+      en: "The message talks about line endings (CRLF or LF)"
+      fr: "Le message parle de fins de ligne (CRLF ou LF)"
+    read: [git.line-endings]
+    assumed:
+      en: "A script saved with Windows line endings (CRLF) breaks on Linux, macOS and in containers: I suppose it is the case here, but only the files themselves can tell"
+      fr: "Un script enregistré avec des fins de ligne Windows (CRLF) casse sous Linux, macOS et dans les conteneurs : je suppose que c'est le cas ici, mais seuls les fichiers eux-mêmes peuvent le dire"
+  - id: rights
+    when:
+      exit_code: [126]
+      output: ["eacces", "eperm", "access is denied", "permission denied", "operation not permitted", "access denied"]
+    say:
+      en: "A program was refused access (a right is missing)"
+      fr: "Un programme s'est vu refuser l'accès (un droit manque)"
+    read: [admin.rights]
+    assumed:
+      en: "The missing right is not always administrator rights: it can be a folder's rights, a file used by another program, or an antivirus; I only checked the administrator rights"
+      fr: "Le droit qui manque n'est pas toujours celui d'administrateur : ce peut être les droits d'un dossier, un fichier utilisé par un autre programme ou un antivirus ; je n'ai vérifié que les droits d'administrateur"
+  - id: path-too-long
+    when:
+      output:
+        - "enametoolong"
+        - "filename too long"
+        - "file name too long"
+        - "path too long"
+        - "path is too long"
+        - "path, file name, or both are too long"
+        - "max_path"
+    say:
+      en: "A path is too long for the system"
+      fr: "Un chemin est trop long pour le système"
+    read: [path.length]
+  - id: network
+    when:
+      output:
+        - "etimedout"
+        - "econnreset"
+        - "econnrefused"
+        - "enotfound"
+        - "eai_again"
+        - "getaddrinfo"
+        - "unable_to_verify_leaf_signature"
+        - "self signed certificate"
+        - "self-signed certificate"
+        - "ssl certificate problem"
+        - "unable to get local issuer certificate"
+        - "proxy authentication required"
+        - "could not resolve host"
+        - "tls handshake"
+    say:
+      en: "The network could not be reached, or refused the connection"
+      fr: "Le réseau n'a pas pu être joint, ou a refusé la connexion"
+    read: [network.proxy]
+    assumed:
+      en: "The network may be down, filtered, or inspected by a company proxy that re-signs certificates; I only looked at what is set on this machine, not at the network itself"
+      fr: "Le réseau peut être coupé, filtré, ou inspecté par un proxy d'entreprise qui re-signe les certificats ; je n'ai regardé que ce qui est réglé sur cette machine, pas le réseau lui-même"
+  - id: disk-full
+    when:
+      output: ["enospc", "no space left on device", "not enough space on the disk", "there is not enough space"]
+    say:
+      en: "A write failed for lack of room"
+      fr: "Une écriture a échoué faute de place"
+    read: [disk.space]

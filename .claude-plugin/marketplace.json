@@ -1,0 +1,39 @@
+{
+  "name": "agentplugged",
+  "description": "AgentPlugged: a complete AI-agent method for your project, light on tokens. / AgentPlugged : une méthode complète d'agents IA pour ton projet, économe en jetons.",
+  "version": "1.0.0",
+  "owner": {
+    "name": "Innovel Studio SASU",
+    "url": "https://agentplugged.ai"
+  },
+  "plugins": [
+    {
+      "name": "agentplugged",
+      "source": "./plugins/agentplugged",
+      "displayName": "AgentPlugged",
+      "description": "AgentPlugged installs in your project a complete method for building software with AI agents (roles, rules, checkpoints), using as few tokens as possible. This plugin is a thin wrapper: it declares the engine and offers to run `init`. / AgentPlugged installe dans ton projet une méthode complète pour construire un logiciel avec des agents IA (rôles, règles, points de validation), en consommant le moins de jetons possible. Ce plugin est une enveloppe mince : il déclare le moteur et propose de lancer `init`.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Innovel Studio SASU",
+        "url": "https://agentplugged.ai"
+      },
+      "homepage": "https://agentplugged.ai",
+      "repository": "https://github.com/AgentPlugged/agentplugged",
+      "license": "FSL-1.1-MIT",
+      "category": "development",
+      "tags": [
+        "agents",
+        "ai",
+        "method",
+        "workflow",
+        "tokens"
+      ],
+      "metadata": {
+        "description": {
+          "en": "AgentPlugged installs in your project a complete method for building software with AI agents (roles, rules, checkpoints), using as few tokens as possible. This plugin is a thin wrapper: it declares the engine and offers to run `init`.",
+          "fr": "AgentPlugged installe dans ton projet une méthode complète pour construire un logiciel avec des agents IA (rôles, règles, points de validation), en consommant le moins de jetons possible. Ce plugin est une enveloppe mince : il déclare le moteur et propose de lancer `init`."
+        }
+      }
+    }
+  ]
+}

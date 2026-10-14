@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # A newer push supersedes the run in progress.
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Typecheck, lint, test, build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      # Linux keeps the keys in the Secret Service: a runner has none running, so the tests and the
+      # smoke get one of their own (GNOME Keyring in a session of its own; its login keyring is
+      # created and unlocked with a throwaway password, an empty one creates none).
+      - name: Secret Service for the keychain (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q gnome-keyring dbus-x11
+          printf '%s\n' '#!/bin/bash' \
+            'exec dbus-run-session -- bash -c '"'"'printf ci | gnome-keyring-daemon --unlock --components=secrets >/dev/null && exec "$@"'"'"' with-keychain "$@"' \
+            > "$RUNNER_TEMP/with-keychain"
+          chmod +x "$RUNNER_TEMP/with-keychain"
+          echo "WITH_KEYCHAIN=$RUNNER_TEMP/with-keychain" >> "$GITHUB_ENV"
+
+      - run: $WITH_KEYCHAIN pnpm exec turbo run test --concurrency=2
+      - run: pnpm run test:boundaries
+      - run: pnpm build
+      - run: $WITH_KEYCHAIN pnpm smoke

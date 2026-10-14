@@ -1,0 +1,71 @@
+{
+  "name": "agentplugged",
+  "version": "1.0.0",
+  "description": "Install the AgentPlugged method in a repository and make its agents callable from Claude Code, Codex, Antigravity/Gemini CLI and Cursor.",
+  "releaseSummary": "The engine updates itself: your session moves to a newer version between two calls, with nothing to reconnect.",
+  "license": "FSL-1.1-MIT",
+  "author": "Innovel Studio SASU",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AgentPlugged/agentplugged.git",
+    "directory": "apps/cli"
+  },
+  "homepage": "https://github.com/AgentPlugged/agentplugged#readme",
+  "bugs": {
+    "url": "https://github.com/AgentPlugged/agentplugged/issues"
+  },
+  "type": "module",
+  "keywords": [
+    "agents",
+    "ai",
+    "claude-code",
+    "codex",
+    "gemini-cli",
+    "cursor",
+    "cli"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "agentplugged": "dist/bin.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "LICENSE-METHOD"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@clack/prompts": "catalog:",
+    "@modelcontextprotocol/server": "catalog:",
+    "@napi-rs/keyring": "catalog:",
+    "yaml": "catalog:",
+    "zod": "catalog:"
+  },
+  "optionalDependencies": {
+    "koffi": "catalog:"
+  },
+  "devDependencies": {
+    "@agentplugged/adapters-git": "workspace:*",
+    "@agentplugged/adapters-tools": "workspace:*",
+    "@agentplugged/core": "workspace:*",
+    "@agentplugged/crypto": "workspace:*",
+    "@agentplugged/i18n": "workspace:*",
+    "@agentplugged/mcp": "workspace:*",
+    "@agentplugged/method": "workspace:*",
+    "@agentplugged/protocol": "workspace:*",
+    "@biomejs/biome": "catalog:",
+    "@modelcontextprotocol/client": "catalog:",
+    "@types/node": "catalog:",
+    "@typescript/native": "catalog:",
+    "tsdown": "~0.23.0",
+    "vitest": "catalog:"
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "name": "@agentplugged/adapters-git",
+  "version": "1.0.0",
+  "private": true,
+  "license": "FSL-1.1-MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "@agentplugged/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./test-keychain": {
+      "@agentplugged/source": "./src/test-keychain.ts",
+      "types": "./dist/test-keychain.d.ts",
+      "default": "./dist/test-keychain.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check .",
+    "test": "vitest run --testTimeout=120000 --hookTimeout=120000",
+    "bench": "node test/bench.mjs"
+  },
+  "dependencies": {
+    "@agentplugged/core": "workspace:*",
+    "@agentplugged/crypto": "workspace:*",
+    "@agentplugged/protocol": "workspace:*",
+    "@napi-rs/keyring": "catalog:"
+  },
+  "optionalDependencies": {
+    "koffi": "catalog:"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "catalog:",
+    "@types/node": "catalog:",
+    "@typescript/native": "catalog:",
+    "vitest": "catalog:"
+  }
+}

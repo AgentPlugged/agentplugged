@@ -1,0 +1,62 @@
+{
+  "format": "agentplugged.product-key.v1.test-vectors",
+  "notes": [
+    "Subkeys: libsodium crypto_kdf_derive_from_key(32, 1, context, key), contexts apkeyid1 (key_id), approof1 (announcement proof), apevent1 (events), apfile01 (files). The key itself never encrypts anything.",
+    "key_id: pk: then the first 16 base64url characters of the apkeyid1 subkey.",
+    "proof: base64url of keyed BLAKE2b (crypto_generichash, 32 bytes, key = approof1 subkey) of 'agentplugged/key-proof/v1\\0' then the product id.",
+    "XChaCha20-Poly1305 (IETF); nonce and ct in base64url, ct ending with the 16-byte tag.",
+    "payload: key = apevent1 subkey; associated data = 'agentplugged/event/v1\\0' then the RFC 8785 canonical JSON of the envelope as written without payload_enc and sig (it has no payload); plaintext = canonical JSON of the payload.",
+    "file: key = apfile01 subkey; first line agentplugged-enc:1:<key_id>, then base64url of nonce || ct; associated data = 'agentplugged/file/v1\\0' <product_id> '\\0' <workspace path in NFC>, in UTF-8.",
+    "export: apk1: then base64url of version (1) || opslimit (u32 BE) || memlimit (u32 BE) || salt (16) || nonce (24) || key_id length (1) || key_id || product_id length (1) || product_id || ct; associated data = 'agentplugged/key-export/v1\\0' then everything before ct; key = Argon2id (crypto_pwhash, ALG_ARGON2ID13) of the NFC passphrase; a real import accepts only the MODERATE limits (these vectors use MIN).",
+    "Each vector has its own nonce. These keys are fixed test keys: never use them elsewhere."
+  ],
+  "key": {
+    "hex": "404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f",
+    "key_id": "pk:xWD4nP5Pr0uhkbYA",
+    "product_id": "01K6KXJ5G0PR0DVCT00000000A",
+    "proof": "En0HcLHn0_vcWknKkQt-mFHc31CcuTgxLJuUo3wFt7A"
+  },
+  "payload": {
+    "envelope": {
+      "v": 1,
+      "id": "01K6KXJ5G0C0STREP0RTED0001",
+      "type": "cost.reported",
+      "at": "2026-10-04T08:00:00.000Z",
+      "actor": {
+        "kind": "agent",
+        "device": "machine:AAAAAAAAAAAAAAAA",
+        "agent": "iris"
+      },
+      "product": "01K6KXJ5G0PR0DVCT00000000A",
+      "story": "2-13",
+      "provenance": "untrusted",
+      "prev": null,
+      "alg": "ed25519"
+    },
+    "payload": {
+      "estimated": false,
+      "tokens_in": 1200,
+      "tokens_out": 340,
+      "usd": 0.42
+    },
+    "associated_data_hex": "6167656e74706c75676765642f6576656e742f7631007b226163746f72223a7b226167656e74223a2269726973222c22646576696365223a226d616368696e653a41414141414141414141414141414141222c226b696e64223a226167656e74227d2c22616c67223a2265643235353139222c226174223a22323032362d31302d30345430383a30303a30302e3030305a222c226964223a2230314b364b584a35473043305354524550305254454430303031222c2270726576223a6e756c6c2c2270726f64756374223a2230314b364b584a35473050523044564354303030303030303041222c2270726f76656e616e6365223a22756e74727573746564222c2273746f7279223a22322d3133222c2274797065223a22636f73742e7265706f72746564222c2276223a317d",
+    "payload_enc": {
+      "alg": "xchacha20poly1305",
+      "key_id": "pk:xWD4nP5Pr0uhkbYA",
+      "nonce": "gIGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaX",
+      "ct": "5YBeNhbw1aep_tXefWVVbrPDvtMnXjhz_NULUlaQp4oxYX8oyktE8wZd8XlM3c9o9njuIEB5BeGHpMxnNcevIr1RannM--OP8HoiPHlM0x0"
+    }
+  },
+  "file": {
+    "productId": "01K6KXJ5G0PR0DVCT00000000A",
+    "path": ".agentplugged/memory/leçons.md",
+    "content": "# Leçons\n\nToujours relire le plan avant de coder.\n",
+    "associated_data_hex": "6167656e74706c75676765642f66696c652f76310030314b364b584a35473050523044564354303030303030303041002e6167656e74706c75676765642f6d656d6f72792f6c65c3a76f6e732e6d64",
+    "text": "agentplugged-enc:1:pk:xWD4nP5Pr0uhkbYA\noKGio6SlpqeoqaqrrK2ur7CxsrO0tba3XVAj-LPNeollrK0i8UtmZA2V6VaCtBmty1NMImtedZcOT9I6JjeU_jYSqJfk9JruSm-9aaNVv8UjSFTnzvvpDKV_QQ\n"
+  },
+  "export": {
+    "passphrase": "une phrase de passe de test",
+    "limits": "min",
+    "text": "apk1:AQAAAAEAACAA4OHi4-Tl5ufo6err7O3u78DBwsPExcbHyMnKy8zNzs_Q0dLT1NXW1xNwazp4V0Q0blA1UHIwdWhrYllBGjAxSzZLWEo1RzBQUjBEVkNUMDAwMDAwMDBB5UzaJrkPQkMAB3Umm5dzvVv44KyLY3B1MH3lg-QHONR_CflSt2EhmLNxgnBhSCMh"
+  }
+}

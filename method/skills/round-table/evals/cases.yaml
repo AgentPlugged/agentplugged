@@ -1,0 +1,27 @@
+# How round-table behaves. Run: agentplugged eval run round-table --method
+cases:
+  - id: opens-with-the-concerned
+    state: "state.get answered: the active agents are maya (product), alex (architecture), stella (design), sam (backend developer), quentin (review). The engine's tools are not available in this run: make no call to them."
+    input: "Open a round table: should we ship the mobile app before the web version?"
+    checks:
+      - { kind: words, of: answer, min: 40, max: 450 }
+    rubric:
+      - "Noah opens the conversation with two or three of the listed agents, not all five, each introduced in one line that says why this question concerns them"
+      - "Noah takes no side on mobile first or web first"
+      - "Noah ends the turn by handing the floor to the creator (a question or an invitation to answer), and does not conclude the debate"
+  - id: never-speaks-for-the-creator
+    state: "state.get answered: the active agents are maya (product), alex (architecture). The round table is open and the agents have each said their view: Maya prefers mobile first, Alex prefers web first. The engine's tools are not available in this run: make no call to them."
+    input: "I'm done. Wrap it up."
+    checks:
+      - { kind: answer_has, text: "mobile" }
+      - { kind: answer_has, text: "web" }
+    rubric:
+      - "The wrap-up names both positions as the two that were heard: Maya's mobile first and Alex's web first"
+      - "The wrap-up does not say which one to choose as if it were decided, and offers the creator a gesture to pick (for example a decision to open, or nothing)"
+      - "The wrap-up keeps no transcript of the debate: a synthesis only"
+triggers:
+  - { query: "open a round table with the agents about our pricing", should_trigger: true }
+  - { query: "let's have an open conversation of agents and guests, led by Noah", should_trigger: true }
+  - { query: "hold a round table on the launch date with maya and alex", should_trigger: true }
+  - { query: "list which agents are active in my team", should_trigger: false }
+  - { query: "summarize this conversation in a note for the docs", should_trigger: false }

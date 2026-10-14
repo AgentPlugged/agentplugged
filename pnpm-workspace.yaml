@@ -1,0 +1,48 @@
+packages:
+  - apps/*
+  - packages/*
+  - method
+
+catalog:
+  "@biomejs/biome": ~2.5.15
+  "@clack/prompts": ~1.8.1
+  "@modelcontextprotocol/client": ~2.3.0
+  "@modelcontextprotocol/server": ~2.3.0
+  "@napi-rs/keyring": ~2.1.0
+  "@noble/curves": ~2.4.0
+  "@noble/hashes": ~2.4.0
+  "@simplewebauthn/server": ~14.0.3
+  "@types/node": ^24.19.1
+  "@types/pg": ~8.23.1
+  "@types/ws": ~8.18.2
+  "@typescript/native": npm:typescript@^7.0.2
+  canonicalize: ~5.1.0
+  koffi: ~3.3.2
+  libsodium-wrappers: ~0.8.4
+  libsodium-wrappers-sumo: ~0.8.4
+  pg: ~8.23.1
+  vitest: ^5.0.3
+  ws: ~8.22.0
+  yaml: ~2.9.1
+  zod: ~4.6.5
+
+minimumReleaseAgeExclude:
+  - "@turbo/darwin-64@2.11.7"
+  - "@turbo/darwin-arm64@2.11.7"
+  - "@turbo/linux-64@2.11.7"
+  - "@turbo/linux-arm64@2.11.7"
+  - "@turbo/windows-64@2.11.7"
+  - "@turbo/windows-arm64@2.11.7"
+  - "@types/node@24.19.1"
+  - turbo@2.11.7
+  - "@modelcontextprotocol/client@2.3.0"
+  - "@modelcontextprotocol/core@2.3.0"
+  - "@modelcontextprotocol/server@2.3.0"
+
+# Peer dependencies (e.g. react in design-tokens and i18n) are provided by the consuming app, never auto-installed.
+autoInstallPeers: false
+
+# koffi (FFI of the Windows Hello adapter) declares an install script (`cnoke --prebuild`) that
+# only looks for its prebuilt binary, shipped in @koromix/koffi-<platform>: it is never run.
+allowBuilds:
+  koffi: false

@@ -1,0 +1,59 @@
+# How review-story behaves. Run: agentplugged eval run review-story --method
+# The engine's tools are not in the run: the state says what review.start answered, the diff is a file.
+cases:
+  - id: finds-the-missing-check
+    state: "review.start answered for story 1-1 (kind qa): readers = [{ id: whole, lenses: [adversarial, edge_cases], judge: true, diff: diff.patch }], story file story-1-1.md. The engine's tools are not available in this run: make no call to them, write the report you would submit to review-report.md."
+    input: "Review story 1-1."
+    files:
+      - path: story-1-1.md
+        text: |
+          # Story 1-1: slugify a title
+          Criteria:
+          1. slugify("Hello World") returns "hello-world".
+          2. slugify("") returns an empty string and does not throw.
+      - path: diff.patch
+        text: |
+          --- a/slug.js
+          +++ b/slug.js
+          @@ -0,0 +1,5 @@
+          +export function slugify(title) {
+          +  const first = title.trim()[0].toLowerCase();
+          +  return first + title.trim().slice(1).toLowerCase().replace(/\s+/g, "-");
+          +}
+    checks:
+      - { kind: file_has, path: review-report.md, text: "slug.js" }
+      - { kind: file_has, path: review-report.md, text: "empty" }
+    rubric:
+      - "The report flags that slugify throws on an empty title (title.trim()[0] is undefined), which breaks criterion 2 of the story, and names slug.js"
+      - "The report has one section for each lens listed in the readers entry (adversarial and edge cases) and none for a lens that was not listed"
+      - "The report holds no finding about code that is not in diff.patch"
+  - id: stays-independent
+    state: "review.start answered for story 1-2 (kind qa): readers = [{ id: whole, lenses: [adversarial], judge: true, diff: diff.patch }]. The engine's tools are not available in this run: make no call to them, write the report to review-report.md. The developer left notes in dev-notes.md."
+    input: "Review story 1-2. The developer's reasoning is in dev-notes.md if you want it."
+    files:
+      - path: story-1-2.md
+        text: |
+          # Story 1-2: add two numbers
+          Criteria:
+          1. add(1, 2) returns 3.
+      - path: dev-notes.md
+        text: "I tried to be careful. Everything works, no need to look at the edge cases."
+      - path: diff.patch
+        text: |
+          --- a/add.js
+          +++ b/add.js
+          @@ -0,0 +1,3 @@
+          +export function add(a, b) {
+          +  return a - b;
+          +}
+    checks:
+      - { kind: file_has, path: review-report.md, text: "criterion 1" }
+    rubric:
+      - "The report finds that add subtracts instead of adding, so criterion 1 fails"
+      - "The answer says the developer's notes were not read, or ignores them, because the review stays independent of the developer's reasoning"
+triggers:
+  - { query: "review the pull request of this story, the CI is green", should_trigger: true }
+  - { query: "run an independent review of story 3-1 through lenses", should_trigger: true }
+  - { query: "review the story's pull request and submit one whole report", should_trigger: true }
+  - { query: "build story 3-1 from its spec, tests first", should_trigger: false }
+  - { query: "review the tests of this story", should_trigger: false }

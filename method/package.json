@@ -1,0 +1,23 @@
+{
+  "name": "@agentplugged/method",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "files": [
+    "agents",
+    "skills",
+    "models.yaml",
+    "doctor.yaml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node -e \"console.log('method: nothing to build')\"",
+    "typecheck": "node -e \"console.log('method: nothing to typecheck')\"",
+    "lint": "biome check . --no-errors-on-unmatched",
+    "test": "node -e \"console.log('method: nothing to test')\""
+  },
+  "devDependencies": {
+    "@biomejs/biome": "catalog:"
+  }
+}

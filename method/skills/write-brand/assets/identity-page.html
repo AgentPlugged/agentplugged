@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>Visual identity</title>
+<style>
+/* The identity page (skill write-brand). One decision per section, in the order of identity.md.
+   The values below are the tokens of identity.md copied once; the sample ones are replaced. The
+   fixed rules apply to this page like to every other: docs check reads it. */
+:root { --ink: #1B2A41; --paper: #F7F5F0; --accent: #B93A0B; --soft: #E4DED2; --card: 16px; --button: 10px; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 32px 16px 64px; background: var(--paper); color: var(--ink); font: 16px/1.5 system-ui, sans-serif; }
+.board { max-width: 1040px; margin: 0 auto; }
+h1, h2 { font-family: Georgia, serif; font-weight: 400; }
+h1 { font-size: 40px; margin: 0 0 8px; }
+h2 { font-size: 28px; margin: 48px 0 8px; }
+.lead { margin: 0 0 16px; max-width: 60ch; }
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.card { background: var(--soft); color: var(--ink); border-radius: var(--card); padding: 24px; }
+.card.light { background: var(--paper); color: var(--ink); border: 1px solid var(--soft); }
+.card.dark { background: var(--ink); color: var(--paper); }
+.note { font-size: 14px; margin: 8px 0 0; }
+.logo { display: flex; align-items: center; gap: 12px; }
+.word { font: 700 32px/1 system-ui, sans-serif; }
+.logo-ink { fill: #1B2A41; }
+.logo-paper { fill: #F7F5F0; }
+.logo-accent { fill: #B93A0B; }
+.icon-app { width: 96px; height: 96px; border-radius: var(--card); background: var(--ink); display: flex; align-items: center; justify-content: center; }
+.sw { border-radius: var(--card); padding: 16px; min-height: 112px; display: flex; flex-direction: column; justify-content: flex-end; }
+.sw-ink { background: #1B2A41; color: #F7F5F0; }
+.sw-paper { background: #F7F5F0; color: #1B2A41; border: 1px solid var(--soft); }
+.sw-soft { background: #E4DED2; color: #1B2A41; }
+.swatch-accent { background: #B93A0B; color: #F7F5F0; }
+.sw b { display: block; }
+.title { font-family: Georgia, serif; font-size: 32px; line-height: 1.1; margin: 0 0 8px; }
+.cta { display: inline-block; background: #B93A0B; color: #F7F5F0; border-radius: var(--button); padding: 8px 16px; font-weight: 700; }
+.ghost { display: inline-block; border: 1px solid var(--ink); color: var(--ink); border-radius: var(--button); padding: 8px 16px; }
+.states { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+.state { text-align: center; }
+.screens { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.screen { background: var(--paper); border: 1px solid var(--ink); border-radius: var(--card); padding: 24px 16px; min-height: 320px; }
+.rule { background: var(--soft); border-radius: var(--card); padding: 16px; }
+</style>
+</head>
+<body>
+<main class="board">
+<header>
+  <div class="logo">
+    <svg width="48" height="48" viewBox="0 0 48 48" role="img" aria-label="Symbol">
+      <rect x="4" y="4" width="20" height="40" rx="10" class="logo-ink"/>
+      <circle cx="34" cy="14" r="10" class="logo-accent"/>
+    </svg>
+    <span class="word">Product</span>
+  </div>
+  <p class="lead">Visual identity, version 1. One decision per section: the symbol, the palette, the type, the signature object, three screens and the rules that are not discussed again.</p>
+</header>
+
+<h2>Symbol and logotype</h2>
+<p class="lead">What the symbol means, in one sentence, and how the two parts are drawn.</p>
+<div class="grid">
+  <div class="card light">
+    <div class="logo">
+      <svg width="72" height="72" viewBox="0 0 48 48" role="img" aria-label="Logo on a light ground">
+        <rect x="4" y="4" width="20" height="40" rx="10" class="logo-ink"/>
+        <circle cx="34" cy="14" r="10" class="logo-accent"/>
+      </svg>
+      <span class="word">Product</span>
+    </div>
+    <p class="note">Light ground.</p>
+  </div>
+  <div class="card dark">
+    <div class="logo">
+      <svg width="72" height="72" viewBox="0 0 48 48" role="img" aria-label="Logo on a dark ground">
+        <rect x="4" y="4" width="20" height="40" rx="10" class="logo-paper"/>
+        <circle cx="34" cy="14" r="10" class="logo-accent"/>
+      </svg>
+      <span class="word">Product</span>
+    </div>
+    <p class="note">Dark ground.</p>
+  </div>
+  <div class="card">
+    <div class="icon-app">
+      <svg width="56" height="56" viewBox="0 0 48 48" role="img" aria-label="App icon">
+        <rect x="4" y="4" width="20" height="40" rx="10" class="logo-paper"/>
+        <circle cx="34" cy="14" r="10" class="logo-accent"/>
+      </svg>
+    </div>
+    <p class="note">App icon: the symbol alone, readable at 29 px.</p>
+  </div>
+</div>
+
+<h2>Palette</h2>
+<p class="lead">Each colour has one role, written in identity.md.</p>
+<div class="grid">
+  <div class="sw sw-ink"><b>Ink</b>Text, titles, dark grounds.</div>
+  <div class="sw sw-paper"><b>Paper</b>The ground of screens.</div>
+  <div class="sw sw-soft"><b>Soft</b>Cards and rows.</div>
+  <div class="sw swatch-accent"><b>Accent</b>The main action, nothing else.</div>
+</div>
+
+<h2>Typography</h2>
+<div class="grid">
+  <div class="card">
+    <p class="title">A title is set in the display family.</p>
+    <p class="note">Display: titles only.</p>
+  </div>
+  <div class="card">
+    <p>Everything else is set in the body family: text, labels, buttons.</p>
+    <p class="note">Body: the rest, never mixed.</p>
+  </div>
+</div>
+
+<h2>Signature object</h2>
+<p class="lead">The one object that carries the brand, in its states.</p>
+<div class="states">
+  <div class="card state"><span class="cta">Rest</span></div>
+  <div class="card state"><span class="cta">Active</span></div>
+  <div class="card state"><span class="ghost">Done</span></div>
+  <div class="card state"><span class="ghost">Off</span></div>
+</div>
+
+<h2>Key screens</h2>
+<p class="lead">Three screens to settle the identity, not the journey.</p>
+<div class="screens">
+  <div class="screen"><p class="title">First screen</p><p>What it settles.</p><span class="cta">Start</span></div>
+  <div class="screen"><p class="title">Second screen</p><p>What it settles.</p><span class="ghost">Back</span></div>
+  <div class="screen"><p class="title">Third screen</p><p>What it settles.</p><span class="cta">Send</span></div>
+</div>
+
+<h2>Fixed rules</h2>
+<div class="grid">
+  <div class="rule"><b>The accent is reserved.</b> It colours the main action and the logo, nothing else.</div>
+  <div class="rule"><b>Two families, two roles.</b> The display family is for titles.</div>
+  <div class="rule"><b>One radius per level.</b> The scale is in identity.md.</div>
+  <div class="rule"><b>No gradient.</b> Except on photos.</div>
+</div>
+</main>
+</body>
+</html>

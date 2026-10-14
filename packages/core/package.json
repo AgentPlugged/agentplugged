@@ -1,0 +1,35 @@
+{
+  "name": "@agentplugged/core",
+  "version": "1.0.0",
+  "private": true,
+  "license": "FSL-1.1-MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "@agentplugged/source": "./src/index.ts",
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check .",
+    "test": "vitest run --testTimeout=120000 --hookTimeout=120000"
+  },
+  "dependencies": {
+    "@agentplugged/crypto": "workspace:*",
+    "@agentplugged/protocol": "workspace:*",
+    "yaml": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "catalog:",
+    "@types/node": "catalog:",
+    "@typescript/native": "catalog:",
+    "vitest": "catalog:"
+  }
+}

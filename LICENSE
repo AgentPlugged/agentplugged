@@ -1,0 +1,15 @@
+AgentPlugged is distributed under two licenses, one for each part of this repository.
+
+1. The engine: the Functional Source License, Version 1.1, MIT Future License (FSL-1.1-MIT).
+   It covers `apps/cli`, `apps/mcp` and the packages in `packages/`. The full text is in
+   `apps/cli/LICENSE`. In short: you can use, read and modify the engine, but not use it to
+   offer a competing product or service; each version becomes MIT two years after its
+   publication. Copyright 2026 Innovel Studio SASU.
+
+2. The method: the MIT License. It covers `method/` (the agents, the skills and `models.yaml`
+   that `agentplugged init` installs in a repository). The full text is in `method/LICENSE`
+   (a copy, `apps/cli/LICENSE-METHOD`, ships inside the npm package). Copyright 2026
+   Innovel Studio SASU.
+
+The `tooling/` folder and the configuration files at the root of the repository belong to the
+engine and follow its license.

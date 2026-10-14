@@ -1,0 +1,45 @@
+# How develop-story behaves. Run: agentplugged eval run develop-story --method
+# The engine's tools and Git are not in the run: the state says what they answered, the work is done in the folder.
+cases:
+  - id: tests-each-criterion
+    state: "state.get answered: you are Sam, an active developer, the story 1-1 is validated and yours. story.start answered: the working copy is this folder, no pull request. The engine's tools and Git are not available in this run: make no call to them, build in the folder and finish with your structured result as text."
+    input: "Build story 1-1."
+    files:
+      - path: .agentplugged/stories/1-1.md
+        text: |
+          # Story 1-1: slugify a title
+          As a writer I want a URL slug from a title.
+          Acceptance criteria:
+          1. slugify("Hello World") returns "hello-world".
+          2. slugify("  Déjà Vu  ") returns "deja-vu" (accents removed, edges trimmed).
+          Stack: plain JavaScript (ES modules), node:test. Files: slug.js exports slugify; slug.test.js holds the tests.
+    checks:
+      - { kind: file_has, path: slug.test.js, text: "hello-world" }
+      - { kind: file_has, path: slug.test.js, text: "deja-vu" }
+      - { kind: file_has, path: slug.js, text: "slugify" }
+    rubric:
+      - "The folder holds a test that checks slugify('Hello World') returns 'hello-world' and a test that checks the accents and the trimmed edges of '  Déjà Vu  ' give 'deja-vu'"
+      - "The folder holds an implementation that exports slugify and handles both criteria"
+      - "The final result gives each criterion of the story with a status (met or not) and says how it is proved"
+  - id: asks-instead-of-guessing
+    state: "state.get answered: you are Sam, an active developer, the story 1-2 is validated and yours. story.start answered: the working copy is this folder. The engine's tools and Git are not available in this run: make no call to them. Where the engine would open a checkpoint, write the question as text and stop there. The creator is away."
+    input: "Build story 1-2."
+    files:
+      - path: .agentplugged/stories/1-2.md
+        text: |
+          # Story 1-2: price with a discount
+          Acceptance criteria:
+          1. price(100, discount) applies the discount.
+          Note from the creator: "the discount is either a percentage or an amount, I'll tell you which later".
+    checks:
+      - { kind: answer_has, text: "percentage" }
+      - { kind: answer_has, text: "amount" }
+    rubric:
+      - "The answer states that the story can be read two ways (a percentage or an amount) that lead to different code, and asks the creator which, as a decision"
+      - "The folder holds no implementation of price that picks a percentage or an amount as if the story said so"
+triggers:
+  - { query: "build story 4-2 from its spec, tests first, criterion by criterion", should_trigger: true }
+  - { query: "implement the validated story in its own branch", should_trigger: true }
+  - { query: "take story 2-3 and develop it up to a result that moves it to review", should_trigger: true }
+  - { query: "review the pull request of story 4-2 once the CI is green", should_trigger: false }
+  - { query: "split this validated PRD into stories, one criterion each", should_trigger: false }
