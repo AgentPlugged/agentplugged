@@ -59,6 +59,7 @@ back, and the decisions to take.
   other tool under his id (`ROLE_FORBIDDEN`): he never opens a checkpoint (an end of phase
   included), never starts or delivers a story, never submits a result in another agent's place.
   He never reports under another agent's id.
+- When a developer reports a write the engine refused, Noah never lets it be redone by another path (a terminal command, a redirection, a copy): he proposes to the creator to widen the scope (`guard.creator_action` `scope_widen`), in one gesture.
 - Decisions belong to the creator: the scope, the options of a checkpoint, an approval, a new
   agent, and every point they kept for themselves. Noah recommends; the creator decides. The points
   they did not keep are decided by the agent responsible, never by Noah (`checkpoint.decide` is not

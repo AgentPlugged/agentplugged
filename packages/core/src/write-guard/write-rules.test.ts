@@ -93,6 +93,35 @@ describe("the files a story names", () => {
     expect(entries.find((entry) => entry.pattern === "packages/core/src/chat/")?.folder).toBe(true);
   });
 
+  it("reads a placeholder segment as one name, and keeps the other cautions", () => {
+    const patterns = (text: string) => pathsNamedIn(text).map((entry) => entry.pattern);
+    expect(patterns("`apps/service/src/modules/<module>/`")).toEqual([
+      "apps/service/src/modules/*/",
+    ]);
+    expect(patterns("`src/{name}/index.ts`")).toEqual(["src/*/index.ts"]);
+    expect(patterns("`app/[id]/page.tsx`")).toEqual(["app/*/page.tsx"]);
+    expect(patterns("`api/:version/routes.ts`")).toEqual(["api/*/routes.ts"]);
+    // A placeholder inside a name, an absolute path, a URL or a parent folder are still no path.
+    expect(patterns("`src/<a>b/x.ts`")).toEqual([]);
+    expect(patterns("`/<module>/x.ts`")).toEqual([]);
+    expect(patterns("`https://host/<module>/x.ts`")).toEqual([]);
+    expect(patterns("`../<module>/x.ts`")).toEqual([]);
+    expect(patterns("`<module>`")).toEqual([]);
+    expect(patterns("`<module>/`")).toEqual([]);
+    expect(patterns("`:id/x.ts`")).toEqual([]);
+    expect(patterns("`<a>/<b>/`")).toEqual([]);
+    const scope = pathsNamedIn("`apps/service/src/modules/<module>/`");
+    expect(inScope("apps/service/src/modules/documentation/documentation.module.ts", scope)).toBe(
+      true,
+    );
+    // One folder per placeholder, not a tree: the glob keeps the folder prefix, nothing above it.
+    expect(inScope("apps/service/src/app.ts", scope)).toBe(false);
+    expect(inScope("apps/service/src/socle/erreurs.ts", scope)).toBe(false);
+    const file = pathsNamedIn("`src/<module>/index.ts`");
+    expect(inScope("src/billing/index.ts", file)).toBe(true);
+    expect(inScope("src/billing/deep/index.ts", file)).toBe(false);
+  });
+
   it("places a path: a named file, inside a named folder, next to a named file, or a safe exception", () => {
     const scope = pathsNamedIn("`packages/core/src/chat/` `apps/cli/src/main.ts` economy.test.ts");
     expect(inScope("packages/core/src/chat/new-hook.ts", scope)).toBe(true);

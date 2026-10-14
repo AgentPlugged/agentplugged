@@ -179,7 +179,7 @@ async function judge(
       kind: "refuse",
       rule: "scope",
       story: owner.id,
-      message: `AgentPlugged refused this write: rule scope, story ${owner.id} does not name ${oneLine(relative, 120)}. If it is needed, ask the creator to widen the scope (guard.creator_action scope_widen {story: "${owner.id}", paths: ["${oneLine(relative, 120)}"]}); otherwise leave that file alone. Nothing was written.`,
+      message: `AgentPlugged refused this write: rule scope, story ${owner.id} does not name ${oneLine(relative, 120)}. If it is needed, ask the creator to widen the scope (guard.creator_action scope_widen {story: "${owner.id}", paths: ["${oneLine(relative, 120)}"]}); otherwise leave that file alone: do not write it by another tool or command (sed -i, a redirection, Set-Content, a copy, a script), and tell the coordinator which file you need and why. Nothing was written.`,
     };
   }
   if (request.text !== undefined && index.decisions !== undefined) {
@@ -191,7 +191,7 @@ async function judge(
         story: owner.id,
         decision: broken.decision,
         detail: broken.detail,
-        message: `AgentPlugged refused this write: decision ${broken.decision} of the architecture forbids it (${oneLine(broken.detail, 120)}). Follow the decision, or ask the creator to change it first. Nothing was written.`,
+        message: `AgentPlugged refused this write: decision ${broken.decision} of the architecture forbids it (${oneLine(broken.detail, 120)}). Follow the decision, or ask the creator to change it first; do not write the file by another tool or command. Nothing was written.`,
       };
     }
   }

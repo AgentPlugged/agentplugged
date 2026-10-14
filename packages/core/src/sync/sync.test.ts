@@ -237,17 +237,30 @@ describe("sync to Claude Code", () => {
     );
     const deny: string[] = settings.permissions.deny;
     expect(deny.some((rule) => /docs|epics|stories/.test(rule))).toBe(false);
-    // A backslash before the closing parenthesis would escape it: Claude Code warns of a malformed
-    // rule. The root of a Windows disk stays denied, in its other spelling.
+    // A lone backslash before the closing parenthesis would escape it: the rules of the root of a
+    // Windows disk are written with that one backslash doubled, for both shell tools.
     const written: string[] = [
       ...deny,
       ...(settings.permissions.allow ?? []),
       ...(settings.permissions.ask ?? []),
     ];
-    expect(written.filter((rule) => rule.endsWith("\\)"))).toEqual([]);
+    expect(written.filter((rule) => /(?<!\\)\\\)$/.test(rule))).toEqual([]);
     expect(deny).toEqual(
-      expect.arrayContaining(["Bash(rd /s* C:/)", "Bash(Remove-Item *-r* C:/)"]),
+      expect.arrayContaining([
+        "Bash(rd /s* C:\\\\)",
+        "Bash(Remove-Item *-r* C:\\\\)",
+        "Bash(rd /s* C:/)",
+        "PowerShell(rd /s* C:\\\\)",
+        "PowerShell(Remove-Item *-r* C:\\\\)",
+        "PowerShell(rd /s* C:/)",
+        "PowerShell(gh pr merge*)",
+        "PowerShell(git push *agentplugged/journal*)",
+      ]),
     );
+    // Every command rule has its twin for the other shell tool.
+    for (const rule of written.filter((entry) => entry.startsWith("Bash("))) {
+      expect(written).toContain(`PowerShell${rule.slice("Bash".length)}`);
+    }
     expect(files.files.has(".claude/settings.local.json")).toBe(false);
 
     const manifest = JSON.parse(files.files.get(SYNC_MANIFEST_PATH) ?? "{}");

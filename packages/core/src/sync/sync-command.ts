@@ -90,6 +90,7 @@ import {
   type SettingsRecord,
 } from "./permissions.js";
 import {
+  claudeCommandRules,
   claudeRulePermissions,
   codexRuleSettings,
   cursorRulePermissions,
@@ -1063,9 +1064,9 @@ export const syncCommand = defineCommand<SyncResult>({
       },
       has("claude-code")
         ? {
-            deny: claudeWritable(unique([...denyRules(permissionInputs), ...claudeRules.deny])),
-            allow: claudeWritable(claudeRules.allow),
-            ask: claudeWritable(claudeRules.ask),
+            deny: claudeCommandRules(unique([...denyRules(permissionInputs), ...claudeRules.deny])),
+            allow: claudeCommandRules(claudeRules.allow),
+            ask: claudeCommandRules(claudeRules.ask),
           }
         : {},
       { deny: manifest.permissions, ...previousLists[CLAUDE_SETTINGS_PATH] },
@@ -1105,10 +1106,12 @@ export const syncCommand = defineCommand<SyncResult>({
     }
     const conflicts = [
       ...(has("claude-code")
-        ? allowConflicts(CLAUDE_SETTINGS_PATH, claudeSettings?.value, claudeRules.allow, {
-            deny: manifest.permissions,
-            ...previousLists[CLAUDE_SETTINGS_PATH],
-          })
+        ? allowConflicts(
+            CLAUDE_SETTINGS_PATH,
+            claudeSettings?.value,
+            claudeCommandRules(claudeRules.allow),
+            { deny: manifest.permissions, ...previousLists[CLAUDE_SETTINGS_PATH] },
+          )
         : []),
       ...(has("cursor")
         ? allowConflicts(CURSOR_CLI_PATH, cursorSettings?.value, cursorRules.allow, {
@@ -1210,15 +1213,6 @@ const CODEX_HOME_DENY = [
 
 function unique(rules: readonly string[]): string[] {
   return [...new Set(rules)];
-}
-
-/**
- * The rules Claude Code's settings can hold: a backslash before the closing parenthesis escapes it
- * there, so such a rule would be malformed (the `C:/` spelling of the same root stays). The
- * engine's own guards keep them: they read the rules themselves.
- */
-function claudeWritable(rules: readonly string[]): string[] {
-  return rules.filter((rule) => !rule.endsWith("\\)"));
 }
 
 /** The tool a generated path belongs to, for the summary. */

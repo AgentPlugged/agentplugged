@@ -278,7 +278,8 @@ function alreadyRecorded(
  * source is a `${…}`), or for an absent source: when in doubt, the read counts.
  */
 function isLocalShellCommand(tool: string, source: string | undefined): boolean {
-  if (tool.trim() !== "Bash" || source === undefined) return false;
+  const shell = tool.trim();
+  if ((shell !== "Bash" && shell !== "PowerShell") || source === undefined) return false;
   const command = source.trim();
   if (command === "" || /^\$\{[^}]*\}$/.test(command) || /^https?:\/\//i.test(command)) {
     return false;

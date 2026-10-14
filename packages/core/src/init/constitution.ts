@@ -1031,6 +1031,10 @@ retrospective, an installation and a validation point never wait for it.
    scope: \`guard.creator_action\` \`scope_widen\`) or a decision of the architecture contradicted, and
    lets the write through in doubt. Reading, and writes in other tools, stay governed by the
    permission rules alone: \`read_secrets\` is always denied, whatever the session.
+5. A write the engine refused is never redone by another path: not by a terminal command
+   (\`sed -i\`, a redirection \`>\`, \`Set-Content\`, \`Out-File\`, a copy, a script), not by another tool.
+   The agent stops, tells the coordinator which file it needs and why, and the coordinator offers
+   the creator to widen the scope (\`guard.creator_action\` \`scope_widen\`) in one gesture.
 `;
 }
 

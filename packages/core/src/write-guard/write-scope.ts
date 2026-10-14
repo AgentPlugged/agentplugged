@@ -22,6 +22,10 @@ const BARE_PATH = new RegExp(
 // A path in running text needs a directory and a slash to be read: `packages/core/src/chat/`.
 const BARE_FOLDER = /(?<![\w@./:~-])((?:\.\/)?[\w@.-]+(?:\/[\w@.*-]+)+\/)(?![\w])/g;
 
+// A whole segment that is a placeholder, never a name: `<module>`, `{module}`, `[module]`, `:module`.
+const TEMPLATE_SEGMENT =
+  /^(?:<[A-Za-z_][\w-]*>|\{[A-Za-z_][\w-]*\}|\[[A-Za-z_][\w-]*\]|:[A-Za-z_][\w-]*)$/;
+
 /** A token read as a path of the project, or undefined (a URL, an absolute path, a word). */
 function pathOf(token: string): ScopeEntry | undefined {
   let text = token
@@ -29,6 +33,15 @@ function pathOf(token: string): ScopeEntry | undefined {
     .replaceAll("\\", "/")
     .replace(/^\{project-root\}\//, "")
     .replace(/^\.\//, "");
+  // A placeholder segment stands for one name: a single folder or file, nothing wider.
+  if (text.includes("/")) {
+    // A path that opens with a placeholder has no literal folder to anchor it: it would name the whole tree.
+    if (TEMPLATE_SEGMENT.test(text.split("/")[0] ?? "")) return undefined;
+    text = text
+      .split("/")
+      .map((part) => (TEMPLATE_SEGMENT.test(part) ? "*" : part))
+      .join("/");
+  }
   // Annotations after a path: `file.ts:12`, `file.ts#L3`.
   text = text.replace(/[:#][\w,-]*$/, "");
   if (text === "" || text.length > 200) return undefined;

@@ -63,30 +63,33 @@ describe("Claude Code hooks of untrusted content", () => {
     expect(hooks.PostToolUse.map((group) => group.matcher)).toEqual([
       "WebFetch",
       "WebSearch",
-      "Bash",
+      "Bash|PowerShell",
       OTHER_MCP_MATCHER,
       // The creator's answers to the question tool.
       "AskUserQuestion",
     ]);
-    // Network commands, each by its own `if`.
-    expect(hooks.PostToolUse[2]?.hooks.map((hook) => hook.if)).toEqual([
-      "Bash(curl*)",
-      "Bash(wget*)",
-      "Bash(gh *)",
-      "Bash(git pull*)",
-      "Bash(git fetch*)",
-      "Bash(git clone*)",
-      "Bash(Invoke-WebRequest*)",
-      "Bash(Invoke-RestMethod*)",
-      "Bash(iwr *)",
-      "Bash(irm *)",
-    ]);
+    // Network commands, each by its own `if`, for both shell tools.
+    expect(hooks.PostToolUse[2]?.hooks.map((hook) => hook.if)).toEqual(
+      [
+        "curl*",
+        "wget*",
+        "gh *",
+        "git pull*",
+        "git fetch*",
+        "git clone*",
+        "Invoke-WebRequest*",
+        "Invoke-RestMethod*",
+        "iwr *",
+        "irm *",
+      ].flatMap((pattern) => [`Bash(${pattern})`, `PowerShell(${pattern})`]),
+    );
     expect(hooks.PostToolUse[2]?.hooks[0]?.input).toEqual({
       action: "external_read",
       tool: "Bash",
       source: hookValue("tool_input.command"),
       session: hookValue("session_id"),
     });
+    expect(hooks.PostToolUse[2]?.hooks[1]?.input).toMatchObject({ tool: "PowerShell" });
     expect(hooks.PostToolUse[0]?.hooks).toEqual([
       {
         type: "mcp_tool",
@@ -149,7 +152,7 @@ describe("Claude Code hooks of untrusted content", () => {
     // The last group is the question tool's hook: it refuses a call that carries answers.
     // Only the installations are gated: the other rules are written as the tool's own.
     expect(hooks.PreToolUse.map((group) => group.matcher)).toEqual([
-      "Bash",
+      "Bash|PowerShell",
       "Write",
       "Edit",
       "MultiEdit",
@@ -171,6 +174,7 @@ describe("Claude Code hooks of untrusted content", () => {
       },
       timeout: 30,
     });
+    expect(install?.hooks.map((hook) => hook.if)).toContain("PowerShell(npm install*)");
     expect(install?.hooks.every((hook) => hook.input && isTrustHook(hook))).toBe(true);
     // A rule that denies is refused by the tool first: nothing to ask.
     const denied = claudeTrustHooks({ ...DEFAULT_RULES, install_dependency: "deny" });
@@ -187,14 +191,14 @@ describe("Claude Code hooks of untrusted content", () => {
     const mine = { type: "command", command: "lint.sh" };
     const settings = {
       hooks: {
-        PreToolUse: [{ matcher: "Bash", hooks: [mine] }],
+        PreToolUse: [{ matcher: "Bash|PowerShell", hooks: [mine] }],
         Stop: [{ hooks: [mine] }],
       },
     };
     const hooks = claudeTrustHooks(DEFAULT_RULES);
     const once = withTrustHooks(settings, hooks);
     expect(withTrustHooks(once, hooks)).toEqual(once);
-    expect(once.hooks.PreToolUse[0]).toEqual({ matcher: "Bash", hooks: [mine] });
+    expect(once.hooks.PreToolUse[0]).toEqual({ matcher: "Bash|PowerShell", hooks: [mine] });
     expect(once.hooks.PreToolUse).toHaveLength(7);
     expect(once.hooks.Stop).toEqual([{ hooks: [mine] }]);
     expect(withTrustHooks(once, undefined)).toEqual(settings);
@@ -239,7 +243,7 @@ describe("Claude Code hooks of untrusted content", () => {
     await sync(files);
     // The question tool's hook is a command hook with no gate input: left out here.
     const actions = settingsOf(files)
-      .hooks.PreToolUse.filter((group: { matcher?: string }) => group.matcher === "Bash")
+      .hooks.PreToolUse.filter((group: { matcher?: string }) => group.matcher === "Bash|PowerShell")
       .flatMap((group: { hooks: { input: { what: string } }[] }) =>
         group.hooks.map((hook) => hook.input.what),
       );

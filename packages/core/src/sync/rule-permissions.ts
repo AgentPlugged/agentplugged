@@ -302,6 +302,23 @@ export function claudeActionRules(action: RuleAction, mainBranch?: string): stri
   return rules;
 }
 
+/**
+ * The rules as Claude Code's settings hold them. A backslash right before the closing parenthesis
+ * escapes it there, so such a rule is written with that one backslash doubled (the others are
+ * read literally). Claude Code's `PowerShell` tool has its own rules: each `Bash(x)` rule gets
+ * its `PowerShell(x)` twin, or a command would pass by being run through the other shell.
+ */
+export function claudeCommandRules(rules: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const rule of rules) {
+    const lone = rule.endsWith("\\)") && !rule.endsWith("\\\\)");
+    const escaped = lone ? `${rule.slice(0, -1)}\\)` : rule;
+    push(out, [escaped]);
+    if (escaped.startsWith("Bash(")) push(out, [`PowerShell${escaped.slice("Bash".length)}`]);
+  }
+  return out;
+}
+
 /** The Claude Code rule that allows all the tools of the `agentplugged` MCP server. */
 export const ENGINE_MCP_RULE = "mcp__agentplugged";
 

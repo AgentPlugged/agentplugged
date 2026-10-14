@@ -278,7 +278,7 @@ export function readSource(tool: string, raw: string | undefined): ExternalRead 
   const toolName = truncate(cleanText(tool), 200) || "unknown";
   const given = cleanText(raw ?? "");
   const usable = given !== "" && !given.includes("${");
-  if (usable && toolName === "Bash") {
+  if (usable && (toolName === "Bash" || toolName === "PowerShell")) {
     const host = hostOf(given, true);
     return { tool: toolName, source: truncate(host ?? commandName(given), 200) };
   }

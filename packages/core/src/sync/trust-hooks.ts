@@ -111,6 +111,20 @@ const WRITE_TOOLS: ReadonlyArray<{ tool: string; path: string; text: string }> =
   { tool: "NotebookEdit", path: "notebook_path", text: "new_source" },
 ];
 
+/** The two tools that run a shell command in Claude Code: both carry it in `tool_input.command`. */
+const SHELL_MATCHER = "Bash|PowerShell";
+
+/**
+ * The `if` conditions of a hook on the shell tools: each `Bash(x)` condition and its
+ * `PowerShell(x)` twin, as a condition matches the calls of one tool only.
+ */
+function shellConditions(conditions: readonly string[]): string[] {
+  return conditions.flatMap((condition) => [
+    condition,
+    `PowerShell${condition.slice("Bash".length)}`,
+  ]);
+}
+
 /** The hooks `sync` writes for Claude Code, from the rules in force. */
 export function claudeTrustHooks(
   rules: Readonly<Record<RuleAction, RuleValue>>,
@@ -121,12 +135,14 @@ export function claudeTrustHooks(
   const conditions =
     rules.install_dependency === "deny"
       ? []
-      : claudeActionRules("install_dependency", mainBranch).filter((entry) =>
-          entry.startsWith("Bash("),
+      : shellConditions(
+          claudeActionRules("install_dependency", mainBranch).filter((entry) =>
+            entry.startsWith("Bash("),
+          ),
         );
   if (conditions.length > 0) {
     pre.push({
-      matcher: "Bash",
+      matcher: SHELL_MATCHER,
       hooks: conditions.map((condition) =>
         handler(
           "check_action",
@@ -178,11 +194,16 @@ export function claudeTrustHooks(
       hooks: [handler("record_external_read", { tool: "WebSearch", session })],
     },
     {
-      matcher: "Bash",
-      hooks: NETWORK_COMMANDS.map((condition) =>
+      matcher: SHELL_MATCHER,
+      hooks: shellConditions(NETWORK_COMMANDS).map((condition) =>
         handler(
           "record_external_read",
-          { tool: "Bash", source: hookValue("tool_input.command"), session },
+          {
+            // The hook's `if` names the shell tool, so it also tells which one ran.
+            tool: condition.startsWith("PowerShell(") ? "PowerShell" : "Bash",
+            source: hookValue("tool_input.command"),
+            session,
+          },
           condition,
         ),
       ),

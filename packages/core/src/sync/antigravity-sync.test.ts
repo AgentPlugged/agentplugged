@@ -134,8 +134,11 @@ describe("sync: Antigravity CLI's project plugin", () => {
     expect(policy.rules).toEqual(DEFAULT_RULES);
     expect(Object.keys(policy)).not.toContain("allow");
     // Every deny and ask rule of Claude Code's settings, the creator's commands included.
-    expect(policy.deny).toEqual(expect.arrayContaining(claude.deny));
-    expect(policy.ask).toEqual(claude.ask ?? []);
+    // (The PowerShell twins and the escaped final backslash are Claude Code's spelling only.)
+    const mirrored = (rules: string[]) =>
+      rules.filter((rule) => !rule.startsWith("PowerShell(") && !rule.endsWith("\\)"));
+    expect(policy.deny).toEqual(expect.arrayContaining(mirrored(claude.deny)));
+    expect(policy.ask).toEqual(mirrored(claude.ask ?? []));
     expect(policy.deny).toEqual(
       expect.arrayContaining([
         "Edit(/.agentplugged/method.yaml)",
