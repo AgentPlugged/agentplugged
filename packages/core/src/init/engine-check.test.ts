@@ -87,6 +87,30 @@ describe("checkEngine", () => {
     });
   });
 
+  it("lets a working copy through when the main working folder already pins the running engine", async () => {
+    const copy = new MemoryFiles({ [CONFIG]: "format_version: 2\nengine_version: 0.0.9\n" });
+    const mainPin = (pin: string | undefined) =>
+      Object.assign(copy, {
+        readMainCheckoutText: async () =>
+          pin === undefined ? undefined : `format_version: 2\nengine_version: ${pin}\n`,
+      });
+    expect(await check(mainPin(ENGINE))).toEqual({
+      pinned: "0.0.9",
+      overridden: false,
+      older: false,
+    });
+    // Another pin there, or none, keeps the stop; so does an older running engine.
+    for (const other of ["0.0.8", "0.2.0", undefined]) {
+      const result = await check(mainPin(other));
+      expect(result).not.toHaveProperty("overridden");
+    }
+    const ahead = new MemoryFiles({ [CONFIG]: "format_version: 2\nengine_version: 0.2.0\n" });
+    const older = await check(
+      Object.assign(ahead, { readMainCheckoutText: async () => `engine_version: ${ENGINE}\n` }),
+    );
+    expect(older).not.toHaveProperty("overridden");
+  });
+
   it("lets --engine-any and --upgrade-engine through", async () => {
     const files = new MemoryFiles({ [CONFIG]: "format_version: 2\nengine_version: 0.0.9\n" });
     expect(await check(files, { engineAny: true })).toEqual({

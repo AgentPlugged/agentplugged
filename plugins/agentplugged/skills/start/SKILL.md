@@ -8,13 +8,13 @@ description: Install the AgentPlugged method in the open project, or check it. U
 Answer in the language of the user (English or French).
 
 This plugin installs nothing in the project by itself: it declares the AgentPlugged engine (an MCP
-server, version 1.0.3) and brings you here. The method (agents, rules, hooks) is installed in
+server, version 1.0.4) and brings you here. The method (agents, rules, hooks) is installed in
 the project by `init`, in `.agentplugged/`. Nothing is sent anywhere, and nothing is published.
 
 ## Steps
 
 1. Look for `.agentplugged/method.yaml` in the open project.
-2. If it exists, the method is already installed. Run `npx -y agentplugged@1.0.3 doctor`,
+2. If it exists, the method is already installed. Run `npx -y agentplugged@1.0.4 doctor`,
    report what it says in a few lines (it tells how the method was installed and what is left to
    fix), and stop. Never run `init` again unless the user asks for it.
 3. If it does not exist, offer to install it, in one sentence, and wait for the answer. Then ask
@@ -26,7 +26,7 @@ the project by `init`, in `.agentplugged/`. Nothing is sent anywhere, and nothin
 4. Run, in the project folder (replace `<profile>`):
 
    ```
-   npx -y agentplugged@1.0.3 init --channel claude-plugin --profile <profile> --yes
+   npx -y agentplugged@1.0.4 init --channel claude-plugin --profile <profile> --yes
    ```
 
    It is the same `init` as `npx agentplugged init`; `--channel claude-plugin` only notes, on this

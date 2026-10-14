@@ -2,6 +2,12 @@
 
 All notable changes to `agentplugged`, newest first. Versions follow semantic versioning.
 
+## 1.0.4 - 2026-10-14
+
+### Fixes
+
+- A story's working copy no longer fails the engine check after an engine update that is not committed yet.
+
 ## 1.0.3 - 2026-10-14
 
 ### Fixes

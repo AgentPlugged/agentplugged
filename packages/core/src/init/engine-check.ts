@@ -62,6 +62,19 @@ export function compareSemver(a: string, b: string): number {
   return 0;
 }
 
+/** The engine version `method.yaml` pins in the repository's main working folder, if readable. */
+async function mainCheckoutPin(files: WorkspaceFiles): Promise<string | undefined> {
+  try {
+    const text = await files.readMainCheckoutText?.(METHOD_CONFIG_PATH);
+    if (text === undefined) return undefined;
+    const version = (parseDocument(text).toJS() as { engine_version?: unknown } | null)
+      ?.engine_version;
+    return SemverSchema.safeParse(version).success ? (version as string) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * Checks, before anything is written, that the running engine may work on this product:
  * a `format_version` newer than the engine knows stops with `UPGRADE_REQUIRED`, an older one with
@@ -121,6 +134,16 @@ export async function checkEngine(
     });
   }
   if (pinned === undefined || pinned === options.engineVersion) {
+    return { pinned, overridden: false, older: false };
+  }
+  // A story's working copy is made from the committed files: an engine update not committed yet
+  // is only in the main working folder. The pin that folder holds counts for the copy.
+  if (
+    !options.upgrade &&
+    !options.engineAny &&
+    compareSemver(options.engineVersion, pinned) > 0 &&
+    (await mainCheckoutPin(files)) === options.engineVersion
+  ) {
     return { pinned, overridden: false, older: false };
   }
   const details = {

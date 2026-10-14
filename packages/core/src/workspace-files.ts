@@ -37,4 +37,10 @@ export interface WorkspaceFiles {
    * Its parent folder must exist. Optional: callers without it cannot create exclusively.
    */
   createText?(path: string, content: string): Promise<boolean>;
+  /**
+   * Reads a UTF-8 text file at the same path in the repository's main working folder, when this
+   * workspace is a linked worktree of it; undefined when it is not one, or the file cannot be
+   * read. Optional: callers without it see no main working folder.
+   */
+  readMainCheckoutText?(path: string): Promise<string | undefined>;
 }

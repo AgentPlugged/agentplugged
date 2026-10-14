@@ -12,7 +12,7 @@ import {
   unlink,
   writeFile,
 } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { WorkspaceFiles } from "@agentplugged/core";
 import { renameWithRetry } from "./atomic-rename.js";
 
@@ -62,6 +62,30 @@ export class NodeWorkspaceFiles implements WorkspaceFiles {
 
   async readBytes(path: string): Promise<Uint8Array> {
     return new Uint8Array(await readFile(this.resolve(path)));
+  }
+
+  async readMainCheckoutText(path: string): Promise<string | undefined> {
+    try {
+      const target = this.resolve(path);
+      for (let top = this.root; ; top = dirname(top)) {
+        const marker = join(top, ".git");
+        const info = await stat(marker).catch(() => undefined);
+        if (info?.isDirectory() === true) return undefined;
+        if (info?.isFile() === true) {
+          // A linked worktree: `.git` names its own folder, which names the common one.
+          const named = /^gitdir:\s*(.+?)\s*$/m.exec(await readFile(marker, "utf8"))?.[1];
+          if (named === undefined) return undefined;
+          const own = resolve(top, named);
+          const common = resolve(own, (await readFile(join(own, "commondir"), "utf8")).trim());
+          if (basename(common) !== ".git") return undefined;
+          const main = join(dirname(common), relative(top, this.root));
+          return await readFile(join(main, relative(this.root, target)), "utf8");
+        }
+        if (dirname(top) === top) return undefined;
+      }
+    } catch {
+      return undefined;
+    }
   }
 
   /**
