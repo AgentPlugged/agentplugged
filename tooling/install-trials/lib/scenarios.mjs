@@ -5,9 +5,10 @@
 // `everyShell`: played once per terminal (the first flow); the others are played once, in the
 // native terminal of the platform.
 
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, symlinkSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { PLANTED, TrialFailure, TrialSkip } from "./harness.mjs";
+import { findOnPath, WINDOWS } from "./shells.mjs";
 import { offlineGh, pathWithout, stoppedDocker } from "./shims.mjs";
 
 /** The point `id` of a `doctor --json` answer; fails when the answer has no such point. */
@@ -62,8 +63,16 @@ async function noGitAnywhere(t) {
   const empty = join(t.machine.root, "empty");
   mkdirSync(empty, { recursive: true });
   const node = dirname(process.execPath);
+  // npx runs the installed command through `sh` on Unix: a folder that holds `sh` and nothing else.
+  const dirs = [node];
+  if (!WINDOWS) {
+    const shell = join(t.machine.root, "shell-only");
+    mkdirSync(shell, { recursive: true });
+    symlinkSync(findOnPath("sh", t.env.PATH ?? "", t.env) ?? "/bin/sh", join(shell, "sh"));
+    dirs.push(shell);
+  }
   const env = {
-    ...t.withPath(node),
+    ...t.withPath(dirs.join(t.delimiter)),
     ProgramFiles: empty,
     "ProgramFiles(x86)": empty,
     LOCALAPPDATA: empty,

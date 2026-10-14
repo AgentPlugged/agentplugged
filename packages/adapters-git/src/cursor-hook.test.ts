@@ -311,6 +311,8 @@ describe("Cursor's proof of the chat: beforeSubmitPrompt and sessionStart", () =
       expect(messages[0]?.text).toBe(normalizeChatText(typed));
       expect(JSON.parse(String(result.stdout)).additional_context).toContain(SESSION);
     },
+    // The first PowerShell of a fresh Windows runner can take over a minute to start.
+    180_000,
   );
 
   it("tells the agent the conversation's id at the start of the session (sessionStart)", () => {
