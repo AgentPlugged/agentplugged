@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   symlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -330,7 +331,16 @@ describe("agentplugged mcp moves to the version the product pins, between two ca
           version: MOVED_TO,
         }),
       );
-      symlinkSync(join(cliDir, "node_modules"), join(folder, "node_modules"), "junction");
+      // Each dependency linked to its real folder: a link to pnpm's links is not always followed on
+      // a Windows runner (a short-named temporary folder), and the new engine would miss a package.
+      const manifest = JSON.parse(readFileSync(join(cliDir, "package.json"), "utf8")) as {
+        dependencies: Record<string, string>;
+      };
+      for (const name of Object.keys(manifest.dependencies)) {
+        const link = join(folder, "node_modules", name);
+        mkdirSync(dirname(link), { recursive: true });
+        symlinkSync(realpathSync(join(cliDir, "node_modules", name)), link, "junction");
+      }
       const config = join(cwd, ".agentplugged/method.yaml");
       writeFileSync(
         config,
