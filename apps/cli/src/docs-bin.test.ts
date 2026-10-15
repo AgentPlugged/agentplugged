@@ -412,8 +412,10 @@ describe("agentplugged docs research", () => {
     expect(run(["docs", "check"]).status).toBe(0);
     const found = run(["docs", "research", "market", "size", "note", "apps"]);
     expect(found.status).toBe(0);
+    // The report is dated when the test starts: a run across midnight (UTC) reads it a day old.
+    const age = new Date().toISOString().slice(0, 10) === today ? "0d" : "1d";
     expect(found.stdout).toBe(
-      `research: ${RESEARCH} | Market size of note apps for solo makers | market | ${today} (0d, fresh, max 60d) | claims 2, doubt 1, flagged 0 | redo 2\n`,
+      `research: ${RESEARCH} | Market size of note apps for solo makers | market | ${today} (${age}, fresh, max 60d) | claims 2, doubt 1, flagged 0 | redo 2\n`,
     );
     expect(run(["docs", "research", "rust", "compilers"]).stdout).toBe("research: none\n");
     // The creator's age: a week is enough for a market that moved.

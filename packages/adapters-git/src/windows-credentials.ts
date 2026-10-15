@@ -407,22 +407,29 @@ const REQUEST_TIMEOUT_MS = 30_000;
 /** `CredentialBackend` through a PowerShell helper, started on the first request. */
 export class PowerShellCredentials implements CredentialBackend {
   readonly #powershell: string;
+  readonly #startupTimeoutMs: number;
   #session: Promise<Session> | undefined;
 
-  private constructor(powershell: string) {
+  private constructor(powershell: string, startupTimeoutMs: number) {
     this.#powershell = powershell;
+    this.#startupTimeoutMs = startupTimeoutMs;
   }
 
   /**
    * Starts the helper now. Rejects with `PowerShellUnavailableError` when PowerShell is absent, in
    * constrained language mode, or otherwise unable to compile the helper.
    */
-  static async open(options: { powershell?: string } = {}): Promise<PowerShellCredentials> {
+  static async open(
+    options: { powershell?: string; startupTimeoutMs?: number } = {},
+  ): Promise<PowerShellCredentials> {
     const powershell = options.powershell ?? windowsPowerShellPath();
     if (powershell === undefined) {
       throw new PowerShellUnavailableError("Windows PowerShell was not found");
     }
-    const backend = new PowerShellCredentials(powershell);
+    const backend = new PowerShellCredentials(
+      powershell,
+      options.startupTimeoutMs ?? STARTUP_TIMEOUT_MS,
+    );
     await backend.#ensure();
     return backend;
   }
@@ -430,7 +437,7 @@ export class PowerShellCredentials implements CredentialBackend {
   /** The running helper; a new one when the last stopped. */
   async #ensure(): Promise<Session> {
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      this.#session ??= Session.start(this.#powershell, STARTUP_TIMEOUT_MS).catch(
+      this.#session ??= Session.start(this.#powershell, this.#startupTimeoutMs).catch(
         (error: unknown) => {
           this.#session = undefined;
           throw error;

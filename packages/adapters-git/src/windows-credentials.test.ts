@@ -20,6 +20,16 @@ afterAll(async () => {
 const onWindows = process.platform === "win32";
 
 /**
+ * One helper for the tests that only use it: it compiles itself when it starts, which can take
+ * long on a loaded Windows runner.
+ */
+let shared: Promise<PowerShellCredentials> | undefined;
+const sharedHelper = () => {
+  shared ??= PowerShellCredentials.open({ startupTimeoutMs: 170_000 });
+  return shared;
+};
+
+/**
  * `read` until it gives `expected`, five tries at most: the Credential Manager can answer empty
  * right after a write while other processes use it.
  */
@@ -41,14 +51,14 @@ async function nativeKeyring() {
   }
 }
 
-describe.skipIf(!onWindows)("the PowerShell Credential Manager helper (Windows)", () => {
+describe.skipIf(!onWindows)("the PowerShell Credential Manager helper (Windows)", { timeout: 180_000 }, () => {
   const SECRET = "héllo ✓ 𝄞 secret=value+/";
 
   it("reads what @napi-rs/keyring wrote, and the other way round, entry for entry", async (context) => {
     const native = await nativeKeyring();
     if (native === undefined)
       return context.skip("@napi-rs/keyring cannot be loaded on this machine");
-    const helper = await PowerShellCredentials.open();
+    const helper = await sharedHelper();
     const written = new native.AsyncEntry(service, "interop-native");
     await written.setPassword(SECRET);
     expect(await helper.read(service, "interop-native")).toBe(SECRET);
@@ -68,7 +78,7 @@ describe.skipIf(!onWindows)("the PowerShell Credential Manager helper (Windows)"
   });
 
   it("overwrites, reads a missing entry as undefined and deletes a missing one as false", async () => {
-    const helper = await PowerShellCredentials.open();
+    const helper = await sharedHelper();
     expect(await helper.read(service, "plain")).toBeUndefined();
     expect(await helper.remove(service, "plain")).toBe(false);
     await helper.write(service, "plain", "one");
@@ -82,7 +92,7 @@ describe.skipIf(!onWindows)("the PowerShell Credential Manager helper (Windows)"
   });
 
   it("keeps a long secret and answers concurrent requests each with its own answer", async () => {
-    const helper = await PowerShellCredentials.open();
+    const helper = await sharedHelper();
     const long = "k".repeat(1200);
     await helper.write(service, "long", long);
     expect(await helper.read(service, "long")).toBe(long);
@@ -96,7 +106,7 @@ describe.skipIf(!onWindows)("the PowerShell Credential Manager helper (Windows)"
   });
 
   it("reports a refusal of the Credential Manager with its Windows error code", async () => {
-    const helper = await PowerShellCredentials.open();
+    const helper = await sharedHelper();
     // Past the 2,560 bytes a credential can hold.
     const error = await helper
       .write(service, "too-big", "x".repeat(2000))
@@ -141,10 +151,10 @@ ${HELPER_SCRIPT}`;
     );
     const script = `
       import { PowerShellCredentials } from ${JSON.stringify(module.href)};
-      const helper = await PowerShellCredentials.open();
+      const helper = await PowerShellCredentials.open({ startupTimeoutMs: 170_000 });
       console.log(JSON.stringify(await helper.read(${JSON.stringify(service)}, "absent") ?? null));
     `;
-    const started = Date.now();
+    // A helper that kept Node alive would never let the child exit: the test's timeout catches it.
     const child = spawn(process.execPath, ["--input-type=module", "-e", script], {
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -162,7 +172,6 @@ ${HELPER_SCRIPT}`;
       output: "null",
       errors: "",
     });
-    expect(Date.now() - started).toBeLessThan(30_000);
   });
 });
 

@@ -2,6 +2,12 @@
 
 All notable changes to `agentplugged`, newest first. Versions follow semantic versioning.
 
+## 1.0.5 - 2026-10-15
+
+### Fixes
+
+- On Windows, load the keychain's native module first and fall back on PowerShell only when Windows refuses it, so each engine process starts fast again.
+
 ## 1.0.4 - 2026-10-14
 
 ### Fixes

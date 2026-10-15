@@ -144,26 +144,22 @@ async function nativeBackend(): Promise<CredentialBackend> {
 let system: Promise<CredentialBackend> | undefined;
 
 /**
- * The system keychain of this machine. On Windows, the PowerShell helper first (no native module
- * to load, which Smart App Control may refuse), then `@napi-rs/keyring` when PowerShell cannot be
- * used; elsewhere `@napi-rs/keyring`. Chosen once per process, kept once it works.
+ * The system keychain of this machine: `@napi-rs/keyring`, and on Windows the PowerShell helper
+ * when the native module cannot be loaded (Smart App Control may refuse it). The native module
+ * comes first: it answers at once, where the helper compiles itself in each new process. Chosen
+ * once per process, kept once it works.
  */
 export function systemCredentials(): Promise<CredentialBackend> {
   system ??= (async () => {
-    let powershell: unknown;
-    if (process.platform === "win32") {
-      try {
-        return await PowerShellCredentials.open();
-      } catch (error) {
-        powershell = error;
-      }
-    }
     try {
       return await nativeBackend();
     } catch (error) {
-      throw powershell === undefined
-        ? error
-        : unavailableKeychainError(nativeCause(error), powershell);
+      if (process.platform !== "win32") throw error;
+      try {
+        return await PowerShellCredentials.open();
+      } catch (powershell) {
+        throw unavailableKeychainError(nativeCause(error), powershell);
+      }
     }
   })().catch((error: unknown) => {
     system = undefined;
@@ -188,8 +184,8 @@ async function explained<T>(operation: () => Promise<T>): Promise<T> {
 
 /**
  * `KeyStore` in the system keychain (Windows Credential Manager, macOS Keychain, the Secret
- * Service on Linux): through a PowerShell helper on Windows (`systemCredentials`) and
- * `@napi-rs/keyring` elsewhere, or when PowerShell cannot be used. Tests pass their own service
+ * Service on Linux): through `@napi-rs/keyring`, or on Windows a PowerShell helper when the
+ * native module cannot be loaded (`systemCredentials`). Tests pass their own service
  * name and delete their entries afterwards: the machine's real entries are never touched.
  */
 export class NodeKeyStore implements KeyStore {
