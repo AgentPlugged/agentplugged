@@ -1,9 +1,9 @@
-// Starts the AgentPlugged engine's MCP server (`npx -y agentplugged@1.0.5 mcp`) for Claude Code.
+// Starts the AgentPlugged engine's MCP server (`npx -y agentplugged@1.0.6 mcp`) for Claude Code.
 // Why a launcher: Claude Code on Windows cannot start `npx` (`npx.cmd`) directly. The engine
 // version is the one of this plugin, so one version only is in play.
 import { spawn } from "node:child_process";
 
-const ENGINE = "1.0.5";
+const ENGINE = "1.0.6";
 const args = ["-y", `agentplugged@${ENGINE}`, "mcp"];
 const windows = process.platform === "win32";
 const child = windows

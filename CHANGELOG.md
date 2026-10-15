@@ -2,6 +2,12 @@
 
 All notable changes to `agentplugged`, newest first. Versions follow semantic versioning.
 
+## 1.0.6 - 2026-10-15
+
+### Fixes
+
+- Ship the faster Windows keychain announced in 1.0.5, whose publication stopped on a formatting check.
+
 ## 1.0.5 - 2026-10-15
 
 ### Fixes
