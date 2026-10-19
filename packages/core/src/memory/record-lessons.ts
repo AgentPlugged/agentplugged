@@ -17,7 +17,7 @@ import {
 } from "../agent-activity/agent-commands.js";
 import { type CommandContext, defineCommand, fail, ok } from "../command.js";
 import { AgentPluggedError } from "../errors.js";
-import { forgetProductKey } from "../journal/product-key.js";
+import { forgetProductKey, type ProductKey } from "../journal/product-key.js";
 import { checkpointsOf } from "../projection/checkpoint-reducers.js";
 import { sensitiveKey } from "../sensitive/sensitive-commands.js";
 import {
@@ -180,7 +180,7 @@ export type LessonsRecorded = RecordedEvent & {
 async function materialize(
   context: CommandContext,
   product: string,
-  key: Uint8Array,
+  key: ProductKey,
   state: State,
   lessons: readonly {
     readonly id: string;
@@ -278,7 +278,7 @@ export const recordLessonsCommand = defineCommand<LessonsRecorded>({
         const repaired = await materialize(
           context,
           target.product,
-          key.key,
+          key,
           before,
           owed,
           batch.retired,
@@ -302,7 +302,7 @@ export const recordLessonsCommand = defineCommand<LessonsRecorded>({
         await materialize(
           context,
           target.product,
-          key.key,
+          key,
           before,
           plan.kept.map(({ lesson, record, digest }) => ({ id: lesson.id, record, digest })),
           plan.retired,

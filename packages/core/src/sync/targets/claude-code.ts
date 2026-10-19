@@ -1,3 +1,4 @@
+import { ACTIVITY_HOOK_PATH, renderActivityHookScript } from "../../chat/activity-hook.js";
 import { DECISION_HOOK_PATH, renderDecisionHookScript } from "../../chat/decision-hook.js";
 import { PROMPT_HOOK_PATH, renderPromptHookScript } from "../../chat/prompt-hook.js";
 import { disallowedToolsFor } from "../agent-tools.js";
@@ -26,7 +27,8 @@ export const CLAUDE_MD_PATH = "CLAUDE.md";
  * copy. `CLAUDE.md` and `.claude/settings.json` are merged with the creator's files by `sync`.
  * The script of the `UserPromptSubmit` hook records the creator's messages, the
  * proof of the chat's answers: `.claude/hooks/agentplugged-prompt.mjs`. The script of the question
- * tool's hook records the creator's answers to it: `.claude/hooks/agentplugged-decision.mjs`.
+ * tool's hook records the creator's answers to it: `.claude/hooks/agentplugged-decision.mjs`. The script of the activity hook tells what a session
+ * opened in the creator's terminal does: `.claude/hooks/agentplugged-activity.mjs`.
  */
 export async function renderClaudeCode(input: RenderInput): Promise<Target[]> {
   const targets = await renderSkillFolders(input, CLAUDE_SKILLS_DIR, "claude-code");
@@ -51,6 +53,12 @@ export async function renderClaudeCode(input: RenderInput): Promise<Target[]> {
   targets.push({
     path: DECISION_HOOK_PATH,
     content: renderDecisionHookScript(),
+    group: "claude-code",
+  });
+  // The script that tells what a session opened in the creator's terminal does.
+  targets.push({
+    path: ACTIVITY_HOOK_PATH,
+    content: renderActivityHookScript(),
     group: "claude-code",
   });
   return targets;

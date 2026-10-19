@@ -1,6 +1,29 @@
 export const packageName = "@agentplugged/crypto";
 
 export {
+  type BrowserCryptoHost,
+  type BrowserDeviceKeys,
+  type BrowserEncryptionKey,
+  type BrowserKey,
+  BrowserKeysError,
+  type BrowserKeysFailure,
+  type BrowserSubtle,
+  browserAgreement,
+  browserKeysAreUnreadable,
+  browserPublicKeys,
+  createBrowserDeviceKeys,
+  signWithBrowserKey,
+  type X25519Agreement,
+} from "./browser-keys.js";
+export {
+  type BrowserCacheKey,
+  browserCacheKeyIsUnreadable,
+  type CacheCipher,
+  createAeadCacheCipher,
+  createBrowserCacheCipher,
+  createBrowserCacheKey,
+} from "./cache-cipher.js";
+export {
   canonicalBytes,
   type EventHashResult,
   eventHash,
@@ -15,7 +38,40 @@ export {
   verifyEd25519,
 } from "./ed25519.js";
 export { fromBase64url, fromUtf8, toBase64url, toHex, utf8 } from "./encoding.js";
+export {
+  contentDigest,
+  PartAssembler,
+  type PartAssemblerOptions,
+  type PartRejection,
+  type PartVerdict,
+  splitIntoParts,
+} from "./feed-parts.js";
 export { gitBlobId, randomBytes, sha256, sha256Hex } from "./hash.js";
+export { notificationId } from "./notify-id.js";
+export {
+  createOrder,
+  type OrderCounter,
+  type OrderDraft,
+  OrderLedger,
+  type OrderSigner,
+  type OrderStatus,
+  type OrderTiming,
+  type OrderTransport,
+  type PinnedBridge,
+  pairCodeOfferParams,
+  pairOfferParams,
+  pinnedBridge,
+  revokeDeviceParams,
+  sealOrder,
+} from "./order-client.js";
+export {
+  orderSigningBytes,
+  receiptSigningBytes,
+  signOrder,
+  signOrderReceipt,
+  verifyOrderReceipt,
+  verifyOrderSignature,
+} from "./order-signature.js";
 export {
   decodePairWire,
   deriveBridgeEncryptionKey,
@@ -38,6 +94,41 @@ export {
   parsePairLink,
   sealPairBox,
 } from "./pairing.js";
+export {
+  codeRendezvous,
+  codeRendezvousId,
+  formatPairCode,
+  normalizeCodeInput,
+  type PairCode,
+  parsePairCode,
+  randomPairCode,
+} from "./pairing-code.js";
+export { CodeInitiator, CodeResponder } from "./pairing-code-exchange.js";
+export {
+  CodeJoiner,
+  type CodeJoinerEvent,
+  type CodeJoinerOptions,
+} from "./pairing-code-joiner.js";
+export {
+  createJoinerKeys,
+  type JoinerEvent,
+  type JoinerKeys,
+  type JoinerKind,
+  type JoinerLink,
+  type JoinerOptions,
+  type JoinerPins,
+  PairingJoiner,
+  rootCertificationBytes,
+  signRootCertification,
+} from "./pairing-joiner.js";
+export {
+  type CodeOffer,
+  createCodeOffer,
+  createPairOffer,
+  offerRecipientKey,
+  type PairOffer,
+  type PairOfferInput,
+} from "./pairing-offer.js";
 export {
   encryptPeerMessage,
   openPeerMessage,
@@ -85,24 +176,33 @@ export {
   encryptFile,
   encryptPayload,
   exportedKeyInfo,
+  exportedKeysInfo,
   exportProductKey,
+  exportProductKeys,
   FILE_AD_LABEL,
   type FileBinding,
   fileAssociatedData,
   generateProductKey,
   type ImportProductKeyResult,
+  type ImportProductKeysResult,
   importProductKey,
+  importProductKeys,
   KEY_EXPORT_AD_LABEL,
   KEY_PROOF_LABEL,
   NONCE_BYTES,
+  openProductKeyBox,
   type PassphraseLimits,
   PRODUCT_KEY_BYTES,
   payloadAssociatedData,
   productKeyId,
   productKeyProof,
+  productKeyRotationProof,
+  sealProductKeyFor,
   verifyProductKeyProof,
+  verifyProductKeyRotationProof,
   wipeBytes,
 } from "./product-key.js";
+export { openSecret, SecretNotSealed, sealSecret } from "./secret-box.js";
 export {
   nextSequence,
   SEQUENCE_WINDOW_SIZE,
@@ -111,5 +211,19 @@ export {
   type SequenceWindowState,
 } from "./sequence-window.js";
 export { signTrustRecord, trustRecordBytes, verifyTrustRecord } from "./trust-signature.js";
+export {
+  compressBytes,
+  decompressBytes,
+  type OpenedVault,
+  type OpenVaultOptions,
+  openVault,
+  type SealedVault,
+  type SealVaultInput,
+  sealDeltaVault,
+  sealFullVault,
+  type VaultOpenFailure,
+  type VaultOpenResult,
+  type VaultRecipient,
+} from "./vault.js";
 export { type VerifyEventResult, type VerifyKeys, verifyEvent } from "./verify-event.js";
 export { WEBAUTHN_ORIGIN, WEBAUTHN_RP_ID, type WebAuthnCredential } from "./webauthn.js";

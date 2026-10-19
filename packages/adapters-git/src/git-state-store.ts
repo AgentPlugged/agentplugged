@@ -7,6 +7,7 @@ import {
   type AnnouncedKey,
   type AppendOptions,
   type AppendPrecondition,
+  adoptRotatedKey,
   announcedKey,
   type BackupRemote,
   type Clock,
@@ -1021,9 +1022,29 @@ export class GitStateStore implements StateStore, JournalSync, JournalBackupPort
     const repo = await this.#repository();
     const key = await this.#machineKey();
     // The product key, for sensitive content only: read before the journal lock.
-    const productKey = await sensitiveProductKey(this.#options.keys, drafts);
+    let productKey = await sensitiveProductKey(this.#options.keys, drafts);
     try {
-      return await this.#appendWith(repo, key, drafts, precondition, productKey);
+      try {
+        return await this.#appendWith(repo, key, drafts, precondition, productKey);
+      } catch (error) {
+        // The journal announces a key this machine does not hold as current: if it is a renewal
+        // sealed for this machine, it is taken in and the write is tried once more.
+        const product = drafts.find((draft) => draft.payload !== undefined)?.product;
+        if (
+          productKey === undefined ||
+          product === undefined ||
+          !(error instanceof AgentPluggedError) ||
+          error.code !== ErrorCode.PRODUCT_KEY_MISMATCH
+        ) {
+          throw error;
+        }
+        const adopted = await adoptRotatedKey(this.#options.keys, product, await this.list());
+        await forgetProductKey(adopted);
+        if (adopted === undefined || adopted.keyId === productKey.keyId) throw error;
+        await forgetProductKey(productKey);
+        productKey = await sensitiveProductKey(this.#options.keys, drafts);
+        return await this.#appendWith(repo, key, drafts, precondition, productKey);
+      }
     } finally {
       await forgetProductKey(productKey);
     }

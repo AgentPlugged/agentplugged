@@ -1,15 +1,20 @@
 import {
+  CHAIN_EVENT_TYPES,
   DEVICE_TRUST_EVENT_TYPES,
   type DeviceRegisteredPayload,
   EVENT_TYPES,
   type EventEnvelope,
   type IgnoredEvent,
   MACHINE_DEVICE_PATTERN,
+  MACHINE_EVENT_TYPES,
   METHOD_EVENT_TYPES,
   type MethodMigratedPayload,
+  ORDER_EVENT_TYPES,
   PRODUCT_KEY_EVENT_TYPES,
+  type PrimaryChangedPayload,
   type ProductCreatedPayload,
   type ProductKeyCreatedPayload,
+  type ProductKeyRotatedPayload,
   type ProjectionWarning,
   type RootPin,
   TEST_EVENT_TYPE,
@@ -157,7 +162,54 @@ export const REDUCERS: Readonly<Record<string, Reducer>> = withMergeFeedback({
     if (draft.state.product_key !== undefined) return;
     if (event.actor.kind !== "system" || !MACHINE_DEVICE_PATTERN.test(event.actor.device)) return;
     const { key_id } = event.payload as ProductKeyCreatedPayload;
-    draft.state.product_key = { key_id, id: event.id, device: event.actor.device, at: event.at };
+    draft.state.product_key = {
+      key_id,
+      id: event.id,
+      device: event.actor.device,
+      at: event.at,
+      history: [{ key_id, id: event.id }],
+    };
+  },
+  /**
+   * The renewal of the product key: a `product.key_rotated` by a machine that names the key now
+   * announced as the one it follows makes its own key the announced one. The earlier keys stay in
+   * `history`, in order, so that everything written under them is still read. One that follows
+   * another key (a second renewal made at the same time, or by a machine that never saw the
+   * first) changes nothing; the earliest in projection order wins.
+   */
+  [PRODUCT_KEY_EVENT_TYPES.keyRotated]: (draft, event) => {
+    const announced = draft.state.product_key as
+      | { key_id: string; history: Array<{ key_id: string; id: string }> }
+      | undefined;
+    if (announced === undefined) return;
+    if (event.actor.kind !== "system" || !MACHINE_DEVICE_PATTERN.test(event.actor.device)) return;
+    const { key_id, previous_key_id } = event.payload as ProductKeyRotatedPayload;
+    if (previous_key_id !== announced.key_id) return;
+    if (announced.history.some((step) => step.key_id === key_id)) return;
+    draft.state.product_key = {
+      key_id,
+      id: event.id,
+      device: event.actor.device,
+      at: event.at,
+      history: [...announced.history, { key_id, id: event.id }],
+    };
+  },
+  /**
+   * The product's main bridge: the last `bridge.primary_changed` in projection order, written by a
+   * machine (a creator's key never is). Manual only: nothing in the engine writes it on its own.
+   */
+  /** An applied order is a record: nothing in the state depends on it. */
+  [ORDER_EVENT_TYPES.applied]: () => {},
+  // A refused order is a fact of the journal (shown in the history), not a change of any state.
+  [ORDER_EVENT_TYPES.rejected]: () => {},
+  // The creator's words to an agent are a record of the journal (the views list them): no state depends on them.
+  [CHAIN_EVENT_TYPES.instructionGiven]: () => {},
+  [MACHINE_EVENT_TYPES.primaryChanged]: (draft, event) => {
+    if (event.actor.kind !== "system" || !MACHINE_DEVICE_PATTERN.test(event.actor.device)) return;
+    const { bridge } = event.payload as PrimaryChangedPayload;
+    // The machine that becomes main is the one that writes the change.
+    if (bridge !== event.actor.device) return;
+    draft.state.primary_bridge = { bridge, id: event.id, device: event.actor.device, at: event.at };
   },
   /** Reserved to tests: counts the events and keeps their payloads, in order. */
   [TEST_EVENT_TYPE]: (draft, event) => {

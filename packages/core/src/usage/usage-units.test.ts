@@ -32,8 +32,8 @@ const assistant = (
 
 describe("the price table", () => {
   it("is dated, versioned and sourced", () => {
-    expect(PRICE_TABLE.version).toBe("2026-10-07");
-    expect(PRICE_TABLE.as_of).toBe("2026-10-07");
+    expect(PRICE_TABLE.version).toBe("2026-10-17");
+    expect(PRICE_TABLE.as_of).toBe("2026-10-17");
     expect(PRICE_TABLE.source).toContain("platform.claude.com");
     expect(PRICE_TABLE.source).toContain("ai.google.dev/gemini-api/docs/pricing");
   });
@@ -51,7 +51,7 @@ describe("the price table", () => {
       output: 10,
       cache_write_5m: 2.5,
       cache_write_1h: 4,
-      cache_read: 0.2,
+      cache_read: 0.1,
     });
     expect(priceOf("claude-haiku-4-5-20251001")?.output).toBe(5);
   });

@@ -7,6 +7,7 @@ import {
   verifyEd25519,
   verifyEvent,
   verifyProductKeyProof,
+  verifyProductKeyRotationProof,
 } from "@agentplugged/crypto";
 import {
   AGENT_EVENT_TYPES,
@@ -34,6 +35,7 @@ import {
   PROJECTION_FORMAT,
   type ProductCreatedPayload,
   type ProductKeyCreatedPayload,
+  type ProductKeyRotatedPayload,
   type ProjectionState,
   type ProjectionWarning,
   type RootPin,
@@ -112,6 +114,11 @@ interface Entry {
   refusal?: IgnoredReason;
 }
 
+/** The key of the ring that `keyId` names: the one held as current, or one kept from before a renewal. */
+async function ringKey(ring: ProductKey, keyId: string): Promise<ProductKey | undefined> {
+  return ring.keyId === keyId ? ring : ring.older?.(keyId);
+}
+
 /**
  * The sensitive content of the valid events, checked before they are applied:
  * - an encrypted payload on a type that is not sensitive: `unexpected_encryption`; with an
@@ -129,13 +136,39 @@ async function checkSensitive(
   for (const entry of entries) {
     if (valid.get(entry) !== true) continue;
     const { event } = entry;
-    if (event.type === PRODUCT_KEY_EVENT_TYPES.keyCreated && productKey !== undefined) {
-      const payload = entry.current?.payload as ProductKeyCreatedPayload | undefined;
+    if (
+      (event.type === PRODUCT_KEY_EVENT_TYPES.keyCreated ||
+        event.type === PRODUCT_KEY_EVENT_TYPES.keyRotated) &&
+      productKey !== undefined
+    ) {
+      const payload = entry.current?.payload as
+        | ProductKeyCreatedPayload
+        | ProductKeyRotatedPayload
+        | undefined;
+      // A key this machine holds or kept: the announcement of it must carry its proof.
+      const named = payload === undefined ? undefined : await ringKey(productKey, payload.key_id);
       if (
-        payload?.key_id === productKey.keyId &&
-        !(await verifyProductKeyProof(productKey.key, event.product, payload.proof))
+        payload !== undefined &&
+        named !== undefined &&
+        !(await verifyProductKeyProof(named.key, event.product, payload.proof))
       ) {
         entry.refusal = "key_proof_invalid";
+      }
+      // A renewal must carry the proof of a holder of the key it follows: a machine that holds
+      // that key ignores one that does not (a writer that never had the key cannot fake it).
+      if (payload !== undefined && "previous_key_id" in payload) {
+        const previous = await ringKey(productKey, payload.previous_key_id);
+        if (
+          previous !== undefined &&
+          !(await verifyProductKeyRotationProof(
+            previous.key,
+            event.product,
+            payload.key_id,
+            payload.chain_proof,
+          ))
+        ) {
+          entry.refusal = "key_proof_invalid";
+        }
       }
       continue;
     }
@@ -152,7 +185,13 @@ async function checkSensitive(
       entry.unreadable = true;
       continue;
     }
-    const decrypted = await decryptPayload(event, productKey.key);
+    // The key it names: the current one, or one kept from before a renewal.
+    const named = await ringKey(productKey, event.payload_enc.key_id);
+    if (named === undefined) {
+      entry.unreadable = true;
+      continue;
+    }
+    const decrypted = await decryptPayload(event, named.key);
     if (!decrypted.ok) {
       if (decrypted.reason === "other_key") entry.unreadable = true;
       else

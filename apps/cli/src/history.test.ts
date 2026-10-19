@@ -222,12 +222,12 @@ describe("history: acceptance", () => {
     expect(listed.stdout).toBe(
       [
         "Validations (1), most recent first:",
-        `  ${localDateTime(at)} · ${entry?.author} (root key) · terminal · approved · assurance locale (the key in this machine's keychain) · ${id} (story, high risk): Story 2-6 done, "really" · story 2-6 · warning: locale assurance on a high-risk checkpoint`,
+        `  ${localDateTime(at)} · ${entry?.author} (root key) · at the terminal · approved · assurance locale (the key in this machine's keychain) · ${id} (story, high risk): Story 2-6 done, "really" · story 2-6 · warning: locale assurance on a high-risk checkpoint`,
         "",
       ].join("\n"),
     );
     const french = binary(["history"], "fr");
-    expect(french.stdout).toContain("(clé racine) · terminal · validé · assurance locale");
+    expect(french.stdout).toContain("(clé racine) · au terminal · validé · assurance locale");
     expect(french.stdout).toContain("attention : assurance locale sur un point à risque élevé");
   });
 });

@@ -72,14 +72,12 @@ describe("sync: the agentplugged MCP server", () => {
     expect(json(files, PLUGIN_MCP)).toEqual({
       mcpServers: { agentplugged: { command: "npx", args: ARGS } },
     });
-    // Gemini CLI's settings are never created: its "mcp" cell is a fallback then.
+    // The retired Gemini CLI's settings are never created.
     expect(files.files.has(".gemini/settings.json")).toBe(false);
     expect(files.files.get(".codex/config.toml")).toContain(
       '\n[mcp_servers.agentplugged]\ncommand = "npx"\nargs = ["-y", "agentplugged@1.0.0", "mcp"]\n',
     );
-    expect(result.fallbacks.filter((f) => f.capability === "mcp").map((f) => f.id)).toEqual([
-      "gemini-cli.mcp",
-    ]);
+    expect(result.fallbacks.filter((f) => f.capability === "mcp")).toEqual([]);
     // Agents may not change the server they report through.
     expect(json(files, ".claude/settings.json").permissions.deny).toContain("Edit(/.mcp.json)");
     expect(json(files, ".cursor/cli.json").permissions.deny).toContain("Write(.mcp.json)");
@@ -169,18 +167,11 @@ describe("sync: the agentplugged MCP server", () => {
     expect(action(result, ".mcp.json")).toBe("unchanged");
   });
 
-  it("merges into existing Gemini CLI settings (JSONC accepted), then takes back its entry", async () => {
+  it("never writes the retired Gemini CLI's settings, even where they exist", async () => {
     const jsonc = '{\n  // the creator\'s theme\n  "theme": "dark", /* kept */\n}\n';
     const files = await installed({ ".gemini/settings.json": jsonc });
-    const result = await sync(files);
-    expect(json(files, ".gemini/settings.json")).toEqual({
-      theme: "dark",
-      mcpServers: { agentplugged: { command: "npx", args: ARGS } },
-    });
-    expect(result.fallbacks.some((f) => f.id === "gemini-cli.mcp")).toBe(false);
-    setTools(files, ["claude-code"]);
     await sync(files);
-    expect(json(files, ".gemini/settings.json")).toEqual({ theme: "dark" });
+    expect(files.files.get(".gemini/settings.json")).toBe(jsonc);
   });
 
   it("leaves an agentplugged server of the creator's as is, and announces a fallback", async () => {

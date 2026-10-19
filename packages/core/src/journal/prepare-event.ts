@@ -19,9 +19,11 @@ import {
   HUMAN_ONLY_EVENT_TYPES,
   isSensitiveEventType,
   isTestEventType,
+  MACHINE_EVENT_TYPES,
   MEMORY_EVENT_TYPES,
   MERGE_ORDER_EVENT_TYPES,
   METHOD_EVENT_TYPES,
+  ORDER_EVENT_TYPES,
   PRODUCT_KEY_EVENT_TYPES,
   parseEventEnvelope,
   READINESS_EVENT_TYPES,
@@ -34,9 +36,9 @@ import { AgentPluggedError } from "../errors.js";
 import type { MachineKey } from "./key-store.js";
 import {
   type AnnouncedKey,
-  checkAnnounced,
   type ProductKey,
   productKeyMissing,
+  writingKey,
 } from "./product-key.js";
 import type { EventDraft } from "./state-store.js";
 import type { Clock, UlidFactory } from "./ulid.js";
@@ -140,7 +142,12 @@ function checkDraft(
   // The product key's announcement is the engine's own (`init`), signed by the machine.
   // So is a migration of the format (`migrate`).
   const engineOwn =
-    draft.type === PRODUCT_KEY_EVENT_TYPES.keyCreated || draft.type === METHOD_EVENT_TYPES.migrated;
+    draft.type === PRODUCT_KEY_EVENT_TYPES.keyCreated ||
+    draft.type === PRODUCT_KEY_EVENT_TYPES.keyRotated ||
+    draft.type === METHOD_EVENT_TYPES.migrated ||
+    draft.type === MACHINE_EVENT_TYPES.primaryChanged ||
+    draft.type === ORDER_EVENT_TYPES.applied ||
+    draft.type === ORDER_EVENT_TYPES.rejected;
   if (engineOwn && draft.actor.kind !== "system") {
     throw thrown(eventInvalid("actor.kind", EVENT_REASON.reservedType));
   }
@@ -232,7 +239,7 @@ export async function prepareAppend(input: {
    */
   readonly announced?: AnnouncedKey | null;
 }): Promise<PreparedAppend> {
-  const { key, productKey } = input;
+  const { key } = input;
   const drafts: readonly EventDraft[] = Array.isArray(input.draft)
     ? input.draft
     : [input.draft as EventDraft];
@@ -246,9 +253,14 @@ export async function prepareAppend(input: {
       input.allowTestTypes === true,
     );
   });
+  // The key the journal announces, found among the keys the machine holds (the one a renewal made
+  // current, or one it keeps and is about to take up).
+  let productKey: ProductKey | undefined;
   if (drafts.some((draft) => sensitiveDraft(draft))) {
-    if (productKey === undefined) throw productKeyMissing(input.journalProduct ?? first.product);
-    checkAnnounced(input.announced ?? null, productKey);
+    if (input.productKey === undefined) {
+      throw productKeyMissing(input.journalProduct ?? first.product);
+    }
+    productKey = await writingKey(input.announced ?? null, input.productKey);
   }
   const engine = await prepareEngineEvents({
     key,

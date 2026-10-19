@@ -67,6 +67,8 @@ describe("Claude Code hooks of untrusted content", () => {
       OTHER_MCP_MATCHER,
       // The creator's answers to the question tool.
       "AskUserQuestion",
+      // The end of a shell command, for the activity of a session opened in the terminal.
+      "Bash|PowerShell",
     ]);
     // Network commands, each by its own `if`, for both shell tools.
     expect(hooks.PostToolUse[2]?.hooks.map((hook) => hook.if)).toEqual(
@@ -158,6 +160,7 @@ describe("Claude Code hooks of untrusted content", () => {
       "MultiEdit",
       "NotebookEdit",
       "AskUserQuestion",
+      "Read|Edit|MultiEdit|Write|NotebookEdit|Bash|PowerShell",
     ]);
     const [install] = hooks.PreToolUse;
     expect(install?.hooks).toContainEqual({
@@ -184,6 +187,7 @@ describe("Claude Code hooks of untrusted content", () => {
       "MultiEdit",
       "NotebookEdit",
       "AskUserQuestion",
+      "Read|Edit|MultiEdit|Write|NotebookEdit|Bash|PowerShell",
     ]);
   });
 
@@ -199,7 +203,7 @@ describe("Claude Code hooks of untrusted content", () => {
     const once = withTrustHooks(settings, hooks);
     expect(withTrustHooks(once, hooks)).toEqual(once);
     expect(once.hooks.PreToolUse[0]).toEqual({ matcher: "Bash|PowerShell", hooks: [mine] });
-    expect(once.hooks.PreToolUse).toHaveLength(7);
+    expect(once.hooks.PreToolUse).toHaveLength(8);
     expect(once.hooks.Stop).toEqual([{ hooks: [mine] }]);
     expect(withTrustHooks(once, undefined)).toEqual(settings);
 
@@ -225,8 +229,13 @@ describe("Claude Code hooks of untrusted content", () => {
     const files = await installed();
     await sync(files);
     const settings = settingsOf(files);
-    expect(Object.keys(settings.hooks)).toEqual(["PreToolUse", "PostToolUse", "UserPromptSubmit"]);
-    expect(settings.hooks.PostToolUse).toHaveLength(5);
+    expect(Object.keys(settings.hooks)).toEqual([
+      "PreToolUse",
+      "PostToolUse",
+      "PostToolUseFailure",
+      "UserPromptSubmit",
+    ]);
+    expect(settings.hooks.PostToolUse).toHaveLength(6);
     // A second sync changes nothing.
     const again = await sync(files);
     expect(again.entries.find((entry) => entry.path === SETTINGS)?.action).toBe("unchanged");

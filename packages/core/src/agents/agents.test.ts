@@ -128,7 +128,6 @@ describe("agent create", () => {
       ".agents/skills/scout/SKILL.md",
       ".codex/agents/scout.toml",
       ".agents/agents/scout.md",
-      ".gemini/agents/scout.md",
       ".cursor/agents/scout.md",
     ]) {
       expect(files.files.has(path), path).toBe(true);

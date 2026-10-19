@@ -286,7 +286,7 @@ describe("measure_usage", () => {
     // The creator is shown estimates only: the measure stays in the journal.
     const usage = usageOf(await state());
     expect(Object.keys(usage).sort()).toEqual(["estimates", "table"]);
-    expect(usage.table.version).toBe("2026-10-07");
+    expect(usage.table.version).toBe("2026-10-17");
     const shown = JSON.stringify(await state());
     for (const word of NEVER_SHOWN) expect(shown).not.toContain(word);
   });

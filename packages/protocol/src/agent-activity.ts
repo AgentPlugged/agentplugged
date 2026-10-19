@@ -223,3 +223,65 @@ export const SubmitResultInputSchema = z.strictObject({
 
 /** Input of the agents' `next`: nothing. */
 export const NextInputSchema = z.strictObject({});
+
+/**
+ * A note the bridge writes about a run it drives: a stable code and its parameters, never a
+ * sentence, so that each view tells it in the creator's language. Written `run:<code>` then, when
+ * there are parameters, `?name=value&...` (percent-encoded). A note that does not start with
+ * `run:` is free text written by an agent: shown as is, as the agent's own (untrusted) content.
+ */
+export const RUN_NOTE_PREFIX = "run:";
+
+/**
+ * - `cost_partial`: the run ended before the tool gave its final cost; the cost counted is the last
+ *   report known (an estimate, a lower bound);
+ * - `cost_unknown`: the tool gave no consumption (or a model with no price): no amount is claimed;
+ * - `budget_alert`: the story's cost reached the alert ratio of its budget;
+ * - `budget_exceeded`: the story's cost went over its budget and its agent was stopped for it;
+ * - `budget_flagged`: the story's cost went over its budget and the setting only flags it.
+ * - `activity`: what the run did, in numbers only (`read`, `edited`, `commands`, `failed`): never a
+ *   path, a command or a text.
+ */
+export const RUN_NOTE_CODES = [
+  "permission_denied",
+  "failed",
+  "timeout",
+  "not_started",
+  "cost_partial",
+  "cost_unknown",
+  "budget_alert",
+  "budget_exceeded",
+  "budget_flagged",
+  "activity",
+] as const;
+export type RunNoteCode = (typeof RUN_NOTE_CODES)[number];
+
+export type RunNoteParams = Readonly<Record<string, string | number>>;
+
+export function formatRunNote(code: RunNoteCode, params: RunNoteParams = {}): string {
+  const query = Object.entries(params)
+    .map(([name, value]) => `${encodeURIComponent(name)}=${encodeURIComponent(String(value))}`)
+    .join("&");
+  return `${RUN_NOTE_PREFIX}${code}${query === "" ? "" : `?${query}`}`;
+}
+
+/** The code and parameters of a bridge's run note, or undefined for any other text. */
+export function parseRunNote(
+  text: string,
+): { code: RunNoteCode; params: Record<string, string> } | undefined {
+  if (!text.startsWith(RUN_NOTE_PREFIX)) return undefined;
+  const [head = "", query = ""] = text.slice(RUN_NOTE_PREFIX.length).split("?", 2);
+  const code = RUN_NOTE_CODES.find((known) => known === head);
+  if (code === undefined) return undefined;
+  const params: Record<string, string> = {};
+  for (const pair of query.split("&")) {
+    if (pair === "") continue;
+    const [name = "", value = ""] = pair.split("=", 2);
+    try {
+      params[decodeURIComponent(name)] = decodeURIComponent(value);
+    } catch {
+      // A malformed piece is left out.
+    }
+  }
+  return { code, params };
+}

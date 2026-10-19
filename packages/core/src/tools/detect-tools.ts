@@ -9,7 +9,7 @@ export type ToolSource =
 
 export interface DetectedTool {
   readonly id: ToolId;
-  /** Product name to show; "Gemini CLI" when only the former command was found. */
+  /** Product name to show. */
   readonly name: string;
   readonly found: boolean;
   /** `x.y.z`, with its suffix if any; undefined when absent or not recognized. */
@@ -120,10 +120,9 @@ async function detectOne(probe: ToolProbe, spec: ToolSpec): Promise<DetectedTool
   // The command's version wins, then the extension's, then the editor's. An unreadable command
   // output is reported as such, never covered by another source's version.
   const version = command ? versions[0] : versions.find((candidate) => candidate !== undefined);
-  const name = (command && spec.commandNames?.[command.name]) ?? spec.name;
   return {
     id: spec.id,
-    name,
+    name: spec.name,
     found,
     version,
     versionRecognized: version !== undefined,

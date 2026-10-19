@@ -98,7 +98,7 @@ export function pairLinkUrl(host: string, link: PairLink): string {
 }
 
 /** The identifier of the pinned root a link carries. */
-export function pairLinkRootDevice(link: PairLink): string {
+export function pairLinkRootDevice(link: Pick<PairLink, "root">): string {
   return deviceIdOf(link.root.kind, link.root.key);
 }
 

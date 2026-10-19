@@ -38,10 +38,10 @@ function issuePath(result: { success: boolean; error?: { issues: { path: Propert
 }
 
 describe("checkpoints", () => {
-  it("registers checkpoint.opened at version 14, measured and resolved at version 1", () => {
+  it("registers checkpoint.opened at version 16, measured and resolved at version 1", () => {
     for (const type of Object.values(CHECKPOINT_EVENT_TYPES)) {
       expect(EVENT_TYPE_REGISTRY[type]?.version, type).toBe(
-        type === CHECKPOINT_EVENT_TYPES.opened ? 14 : 1,
+        type === CHECKPOINT_EVENT_TYPES.opened ? 16 : 1,
       );
     }
   });
@@ -70,10 +70,10 @@ describe("checkpoints", () => {
       payload,
     } as unknown as Parameters<typeof currentEvent>[0];
     const read = currentEvent(event);
-    expect(read.ok && read.event).toMatchObject({ v: 14, payload });
-    // An engine that knows version 14 only meets a version 15 with UPGRADE_REQUIRED, as one that
+    expect(read.ok && read.event).toMatchObject({ v: 16, payload });
+    // An engine that knows version 16 only meets a version 17 with UPGRADE_REQUIRED, as one that
     // knows version 1 only meets a phase_end (version 2): never a silent misreading.
-    const newer = currentEvent({ ...event, v: 15 });
+    const newer = currentEvent({ ...event, v: 17 });
     expect(!newer.ok && newer.error.code).toBe(ErrorCode.UPGRADE_REQUIRED);
   });
 

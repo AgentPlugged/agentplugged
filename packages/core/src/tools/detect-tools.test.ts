@@ -156,19 +156,15 @@ describe("detectTools", () => {
     });
   });
 
-  it("names the former Gemini CLI on the Antigravity line", async () => {
+  it("does not take the retired gemini command for Antigravity CLI", async () => {
     const tools = await detectTools(fakeProbe({ commands: { gemini: "0.62.0" } }));
-    expect(byId(tools, "antigravity")).toMatchObject({
-      name: "Gemini CLI",
-      found: true,
-      version: "0.62.0",
-      sources: [{ kind: "command", command: "gemini" }],
+    expect(byId(tools, "antigravity").found).toBe(false);
+    const both = await detectTools(fakeProbe({ commands: { agy: "1.0.0", gemini: "0.62.0" } }));
+    expect(byId(both, "antigravity")).toMatchObject({
+      name: "Antigravity CLI",
+      version: "1.0.0",
+      sources: [{ kind: "command", command: "agy" }],
     });
-  });
-
-  it("prefers agy over gemini", async () => {
-    const tools = await detectTools(fakeProbe({ commands: { agy: "1.0.0", gemini: "0.62.0" } }));
-    expect(byId(tools, "antigravity")).toMatchObject({ name: "Antigravity CLI", version: "1.0.0" });
   });
 
   it("finds Cursor through cursor-agent, then the editor, never a bare agent", async () => {

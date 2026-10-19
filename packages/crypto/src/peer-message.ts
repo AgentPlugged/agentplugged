@@ -1,4 +1,5 @@
 import { DEVICE_ID_PATTERN, TRUST_SIGNATURE_TAGS } from "@agentplugged/protocol";
+import type { X25519Agreement } from "./browser-keys.js";
 import { canonicalBytes } from "./canonical.js";
 import { fromBase64url, fromUtf8, toBase64url, utf8 } from "./encoding.js";
 import { sha256 } from "./hash.js";
@@ -16,7 +17,7 @@ import {
   x25519,
   x25519PublicKey,
 } from "./primitives.js";
-import { signTrustRecord, verifyTrustRecord } from "./trust-signature.js";
+import { signTrustRecord, trustRecordBytes, verifyTrustRecord } from "./trust-signature.js";
 
 /**
  * A message from one device to another, through the relay
@@ -64,8 +65,13 @@ export interface PeerMessageInput {
   readonly id: string;
   /** The identifier of the sending device: named and signed inside the message. */
   readonly sender: string;
-  /** The sender's Ed25519 secret key (libsodium format, 64 bytes). */
-  readonly senderSecretKey: Uint8Array;
+  /** The sender's Ed25519 secret key (libsodium format, 64 bytes), or its signer. */
+  readonly senderSecretKey?: Uint8Array;
+  /**
+   * For a sender whose key cannot be read (a browser's): signs the bytes with it. Give this or
+   * `senderSecretKey`, not both.
+   */
+  readonly senderSigner?: (bytes: Uint8Array) => Promise<Uint8Array>;
   /** The recipient's long-term X25519 public key. */
   readonly recipientEncKey: Uint8Array;
   /** The number of the message in the pair (`nextSequence`), recorded durably before sending. */
@@ -131,8 +137,12 @@ export async function encryptPeerMessageWith(
     throw new TypeError("a message number is a positive integer");
   }
   if (input.recipientEncKey.length !== 32) throw new TypeError("an X25519 key has 32 bytes");
-  if (input.senderSecretKey.length !== 64)
+  if ((input.senderSecretKey === undefined) === (input.senderSigner === undefined)) {
+    throw new TypeError("give the sender's secret key or its signer, not both and not neither");
+  }
+  if (input.senderSecretKey !== undefined && input.senderSecretKey.length !== 64) {
     throw new TypeError("an Ed25519 secret key has 64 bytes");
+  }
   const envelope = { v: PEER_MESSAGE_VERSION, to: input.to, from: input.from, id: input.id };
   const unsigned = {
     t: TRUST_SIGNATURE_TAGS.message,
@@ -141,11 +151,15 @@ export async function encryptPeerMessageWith(
     type: input.type,
     body: input.body,
   };
-  const sig = await signTrustRecord(
-    { ...unsigned, to: input.to, id: input.id },
-    TRUST_SIGNATURE_TAGS.message,
-    input.senderSecretKey,
-  );
+  const signed = { ...unsigned, to: input.to, id: input.id };
+  const sig =
+    input.senderSecretKey !== undefined
+      ? await signTrustRecord(signed, TRUST_SIGNATURE_TAGS.message, input.senderSecretKey)
+      : toBase64url(
+          await (input.senderSigner as NonNullable<typeof input.senderSigner>)(
+            trustRecordBytes(signed, TRUST_SIGNATURE_TAGS.message),
+          ),
+        );
   const content = canonicalBytes({ ...unsigned, alg: "ed25519", sig });
 
   let ephemeralSecret: Uint8Array;
@@ -200,7 +214,10 @@ export interface PeerSender {
 }
 
 export interface PeerOpenOptions {
-  readonly recipientSecretKey: Uint8Array;
+  /** The recipient's X25519 secret key; or, for a key nobody can read out, its `recipientAgreement`. */
+  readonly recipientSecretKey?: Uint8Array;
+  /** The browser's way to agree on a secret with a private key it keeps unreadable. */
+  readonly recipientAgreement?: X25519Agreement;
   /** The registry of trusted devices: the sender named inside, or undefined when not trusted. */
   readonly registry: (sender: string) => PeerSender | undefined | Promise<PeerSender | undefined>;
 }
@@ -253,11 +270,19 @@ export async function openPeerMessage(
   const packed = fromBase64url(String(envelope.ciphertext));
   if (nonce === undefined || nonce.length !== AEAD_NONCE_BYTES) return fail("malformed");
   if (packed === undefined || packed.length < 32 + 16) return fail("malformed");
-  if (options.recipientSecretKey.length !== 32) return fail("malformed");
   const ephemeralPublic = packed.slice(0, 32);
   const sealed = packed.slice(32);
-  const recipientPublic = await x25519PublicKey(options.recipientSecretKey);
-  const shared = await x25519(options.recipientSecretKey, ephemeralPublic);
+  let recipientPublic: Uint8Array;
+  let shared: Uint8Array | undefined;
+  if (options.recipientAgreement !== undefined) {
+    recipientPublic = options.recipientAgreement.publicKey;
+    shared = await options.recipientAgreement.agree(ephemeralPublic);
+  } else if (options.recipientSecretKey?.length === 32) {
+    recipientPublic = await x25519PublicKey(options.recipientSecretKey);
+    shared = await x25519(options.recipientSecretKey, ephemeralPublic);
+  } else {
+    return fail("malformed");
+  }
   if (shared === undefined) return fail("decrypt_failed");
   const key = await messageKey(shared, envelope);
   let content: Uint8Array | undefined;

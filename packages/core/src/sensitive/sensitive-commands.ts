@@ -11,13 +11,14 @@ import { agentWriteContext, invalidInput } from "../agent-activity/agent-command
 import { type CommandContext, defineCommand, fail, ok } from "../command.js";
 import { AgentPluggedError } from "../errors.js";
 import {
+  adoptRotatedKey,
   announcedKey,
-  checkAnnounced,
   forgetProductKey,
   type ProductKey,
+  productKeyById,
   productKeyMissing,
   readHeldProductKey,
-  readProductKey,
+  writingKey,
 } from "../journal/product-key.js";
 import type { StateStore } from "../journal/state-store.js";
 import { isReservedMemoryPath } from "../memory/memory-files.js";
@@ -57,11 +58,23 @@ export async function sensitiveKey(
   product: string,
 ): Promise<ProductKey> {
   const keys = context.keys ?? context.human?.keys;
+  const listing = keys === undefined ? undefined : await journal.list();
+  if (keys !== undefined && listing !== undefined) {
+    // A renewal sealed for this machine is taken in first.
+    await forgetProductKey(
+      await adoptRotatedKey(keys, product, {
+        events: listing.events,
+        problems: listing.problems,
+        allowTestTypes: context.allowTestTypes === true,
+      }).catch(() => undefined),
+    );
+  }
   const key = keys === undefined ? undefined : await readHeldProductKey(keys, product);
-  if (key === undefined) throw productKeyMissing(product);
+  if (key === undefined || listing === undefined) throw productKeyMissing(product);
   try {
-    const listing = await journal.list();
-    checkAnnounced(
+    // What is written is encrypted with the key the journal announces; what is read, with the
+    // key the file names (see `fileKeyFor`).
+    return await writingKey(
       await announcedKey(listing.events, {
         product,
         productKey: key,
@@ -74,7 +87,6 @@ export async function sensitiveKey(
     await forgetProductKey(key);
     throw error;
   }
-  return key;
 }
 
 /** `INVALID_ARGUMENTS` on the `path` of `command`. */
@@ -139,10 +151,14 @@ export const readSensitiveCommand = defineCommand<SensitiveFileRead>({
         );
       }
       key = await sensitiveKey(context, target.journal, target.product);
-      const opened = await decryptFile(text, fileBinding(target.product, area, path), key.key);
+      // The key the file names: the current one, or one kept from before a renewal.
+      const fileKeyId = encryptedFileKeyId(text) ?? "";
+      const fileKey = await productKeyById(key, fileKeyId);
+      if (fileKey === undefined) return fail(fileKeyMismatch(fileKeyId, key.keyId));
+      const opened = await decryptFile(text, fileBinding(target.product, area, path), fileKey.key);
       if (!opened.ok) {
         if (opened.reason === "other_key") {
-          return fail(fileKeyMismatch(encryptedFileKeyId(text) ?? "", key.keyId));
+          return fail(fileKeyMismatch(fileKeyId, key.keyId));
         }
         return fail(
           new AgentPluggedError(ErrorCode.UNEXPECTED, "error.unexpected", {

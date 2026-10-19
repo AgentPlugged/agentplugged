@@ -113,6 +113,7 @@ describe("sync to the four tools", () => {
         "CLAUDE.md",
         ".claude/settings.json",
         ".claude/hooks/agentplugged-prompt.mjs",
+        ".claude/hooks/agentplugged-activity.mjs",
         ".claude/hooks/agentplugged-decision.mjs",
         ".agents/skills/iris/SKILL.md",
         ".codex/agents/iris.toml",
@@ -122,7 +123,6 @@ describe("sync to the four tools", () => {
         ".codex/hooks/agentplugged-policy.json",
         ".codex/rules/agentplugged.rules",
         ".agents/agents/iris.md",
-        ".gemini/agents/iris.md",
         "GEMINI.md",
         ".cursor/agents/iris.md",
         ".cursor/rules/agentplugged.mdc",
@@ -167,17 +167,6 @@ describe("sync to the four tools", () => {
       // Antigravity CLI's plugin applies the rules, records the reads and the creator's messages.
       "antigravity.isolation",
       "antigravity.decisions",
-      "gemini-cli.permissions",
-      "gemini-cli.model",
-      "gemini-cli.mcp",
-      "gemini-cli.rules",
-      "gemini-cli.untrusted",
-      "gemini-cli.chat_proof",
-      "gemini-cli.isolation",
-      "gemini-cli.decisions",
-      "gemini-cli.installs",
-      // The traces of Gemini CLI are not read.
-      "gemini-cli.usage",
       // Cursor's hooks apply the permissions, record the reads, the creator's messages and the installations.
       "cursor.rules",
       "cursor.isolation",
@@ -204,18 +193,13 @@ describe("sync to the four tools", () => {
     expect(files.files.get(".agents/agents/iris.md")).toMatch(
       new RegExp(`^---\\nname: iris\\n${description}\\nmodel: pro\\n---\\n`),
     );
-    expect(files.files.get(".gemini/agents/iris.md")).toMatch(
-      new RegExp(`^---\\nname: iris\\n${description}\\nkind: local\\n---\\n`),
-    );
+    // Nothing is written for the retired Gemini CLI.
+    expect([...files.files.keys()].some((path) => path.startsWith(".gemini/"))).toBe(false);
     // Cursor keeps the session's model unless the creator names one.
     expect(files.files.get(".cursor/agents/iris.md")).toMatch(
       new RegExp(`^---\\nname: iris\\n${description}\\nmodel: inherit\\n---\\n`),
     );
-    for (const path of [
-      ".agents/agents/iris.md",
-      ".gemini/agents/iris.md",
-      ".cursor/agents/iris.md",
-    ]) {
+    for (const path of [".agents/agents/iris.md", ".cursor/agents/iris.md"]) {
       const text = files.files.get(path) ?? "";
       expect(text).toContain(`---\n${GENERATED_HEADER}\n# 🔎 Iris, Product Analyst\n`);
       expect(text).toContain("\n## Activation\n");
@@ -444,7 +428,6 @@ describe("sync: the tools list", () => {
       "CLAUDE.md": "deleted",
       ".cursor/cli.json": "deleted",
       "GEMINI.md": "deleted",
-      ".gemini/agents/iris.md": "deleted",
       ".agents/agents/iris.md": "deleted",
       ".agents/skills/iris/SKILL.md": "unchanged",
       ".codex/config.toml": "unchanged",

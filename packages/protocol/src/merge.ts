@@ -29,9 +29,19 @@ export const DEFAULT_MERGE_METHOD: MergeMethod = "merge";
  * 3.28: `forge`, a merge the creator did on the forge itself (the pull request merged by hand),
  * which the engine recorded from what the forge shows: no approval to wait for, the forge's own
  * event is the proof (who merged it, when, on which commit). `agent`, the merge the
- * agent responsible decided because the creator did not keep the merges for themselves.
+ * agent responsible decided because the creator did not keep the merges for themselves. `web`, the
+ * merge the machine did once the signed order of a browser the creator trusts was carried out, in
+ * the same write as that answer; `mobile`, the same for the signed order of a phone.
  */
-export const MERGE_SOURCES = ["chat", "elicitation", "terminal", "forge", "agent"] as const;
+export const MERGE_SOURCES = [
+  "chat",
+  "elicitation",
+  "terminal",
+  "forge",
+  "agent",
+  "web",
+  "mobile",
+] as const;
 export type MergeSource = (typeof MERGE_SOURCES)[number];
 
 /** Most changed files one merge records (the knowledge base reads them). */

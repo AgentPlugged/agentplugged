@@ -46,3 +46,6 @@ autoInstallPeers: false
 # only looks for its prebuilt binary, shipped in @koromix/koffi-<platform>: it is never run.
 allowBuilds:
   koffi: false
+  # The mobile build's libsodium binding unpacks the archive it ships (`tar -xzf libsodium/build.tgz`):
+  # a local file, no download.
+  react-native-libsodium: true

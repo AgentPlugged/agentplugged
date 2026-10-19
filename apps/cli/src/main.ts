@@ -195,6 +195,7 @@ import {
   writeExportFile,
 } from "./key-flow.js";
 import { ENGINE_CHILD_ENV, SESSION_INSTANCE_ENV, SESSION_KEY_ENV } from "./launcher-env.js";
+import { linkHint } from "./link-hint.js";
 import { canDrawMenus, createMenu, GoBack } from "./menu.js";
 import { formatMigrate } from "./migrate-text.js";
 import { formatNext, nextJson, nextJsonError } from "./next-text.js";
@@ -841,6 +842,8 @@ const SYNC_WARNING_KEYS = {
   description_too_long: "sync.warning.description_too_long",
   unknown_setting: "sync.warning.unknown_setting",
   local_engine: "sync.warning.local_engine",
+  gemini_legacy: "sync.warning.gemini_legacy",
+  gemini_unproven: "sync.warning.gemini_unproven",
 } as const satisfies Record<SyncWarning["kind"], string>;
 
 /** Stands for the shipped method in commands that never read it. */
@@ -866,6 +869,21 @@ function shippedMethodOrUnavailable(): MethodSource {
     return new NodeWorkspaceFiles(methodRoot());
   } catch {
     return METHOD_UNAVAILABLE;
+  }
+}
+
+/**
+ * The environment the bridge is launched with: it also learns where this engine's program is, so
+ * that it can run the same engine to make a product the creator asks for from a device. A value the
+ * creator gave is kept; nothing is added when the program cannot be found (a test, a bundle).
+ */
+export function withEngineEntry(env: CliEnvironment["env"]): CliEnvironment["env"] {
+  if (env.AGENTPLUGGED_ENGINE_ENTRY?.trim()) return env;
+  try {
+    const entry = fileURLToPath(new URL("./bin.js", import.meta.url));
+    return existsSync(entry) ? { ...env, AGENTPLUGGED_ENGINE_ENTRY: entry } : env;
+  } catch {
+    return env;
   }
 }
 
@@ -920,7 +938,7 @@ const SYNC_GROUPS: readonly TargetGroup[] = [
 
 function groupTitle(t: Translate, group: TargetGroup): string {
   if (group === "shared") return t("sync.group.shared");
-  if (group === "antigravity") return "Antigravity CLI + Gemini CLI";
+  if (group === "antigravity") return "Antigravity CLI";
   return TOOL_CATALOG.find((spec) => spec.id === group)?.name ?? group;
 }
 
@@ -989,6 +1007,10 @@ export function formatSync(
       (fallback) => `  ${formatFallback(t, locale, fallback)}`,
     );
     text += `\n${t("sync.fallbacks.title")}\n${fallbacks.join("\n")}\n`;
+  }
+  if (result.geminiCleanup !== undefined) {
+    if (result.geminiCleanup.listed > 0) text += `\n${t("sync.gemini.confirm")}\n`;
+    else if (result.entries.length === 0) text += `\n${t("sync.gemini.nothing")}\n`;
   }
   text += formatSyncRules(t, result.rules);
   if (result.codexTrustReminder) text += `\n${t("sync.codex_trust")}\n`;
@@ -1567,12 +1589,16 @@ export async function main(rawEnvironment: CliEnvironment): Promise<number> {
 
   // `bridge …` only launches the bridge, which is distributed apart: its
   // arguments are its own, so they are not parsed here.
-  if (environment.argv[0] === "bridge" || environment.argv[0] === "pair") {
+  if (
+    environment.argv[0] === "bridge" ||
+    environment.argv[0] === "pair" ||
+    environment.argv[0] === "device"
+  ) {
     return await runBridgeLauncher(
       {
         argv: environment.argv,
         cwd: environment.cwd,
-        env: environment.env,
+        env: withEngineEntry(environment.env),
         ...(environment.platform === undefined ? {} : { platform: environment.platform }),
         stdout: environment.stdout,
         stderr: environment.stderr,
@@ -1665,6 +1691,7 @@ export async function main(rawEnvironment: CliEnvironment): Promise<number> {
   let rawOption = false;
   let unverifiedOption = false;
   let yesOption = false;
+  let cleanGeminiOption = false;
   let toolsOption: string | undefined;
   let permissionsOption: string | undefined;
   let noSyncOption = false;
@@ -1726,6 +1753,7 @@ export async function main(rawEnvironment: CliEnvironment): Promise<number> {
         raw: { type: "boolean" },
         unverified: { type: "boolean" },
         yes: { type: "boolean", short: "y" },
+        "clean-gemini": { type: "boolean" },
         tools: { type: "string" },
         permissions: { type: "string" },
         "no-sync": { type: "boolean" },
@@ -1787,6 +1815,7 @@ export async function main(rawEnvironment: CliEnvironment): Promise<number> {
     rawOption = parsed.values.raw === true;
     unverifiedOption = parsed.values.unverified === true;
     yesOption = parsed.values.yes === true;
+    cleanGeminiOption = parsed.values["clean-gemini"] === true;
     toolsOption = parsed.values.tools;
     permissionsOption = parsed.values.permissions;
     noSyncOption = parsed.values["no-sync"] === true;
@@ -2012,12 +2041,18 @@ export async function main(rawEnvironment: CliEnvironment): Promise<number> {
   }
   // `--yes`, `--tools` and `--no-sync` belong to `init`, `--permissions` to `init` and `profile`.
   const initOnly = [
-    ...(yesOption ? ["--yes"] : []),
+    // `sync --clean-gemini` takes `--yes` too: it confirms what the cleanup could not prove.
+    ...(yesOption && !(command === "sync" && cleanGeminiOption) ? ["--yes"] : []),
     ...(toolsOption === undefined ? [] : ["--tools"]),
     ...(noSyncOption ? ["--no-sync"] : []),
   ];
   if (initOnly.length > 0 && command !== "init" && registry.names().includes(command)) {
     reportError(invalidArguments(`${command}: ${initOnly.join(" ")}`));
+    return failCode;
+  }
+  // `--clean-gemini` belongs to `sync` alone.
+  if (cleanGeminiOption && command !== "sync" && registry.names().includes(command)) {
+    reportError(invalidArguments(`${command}: --clean-gemini`));
     return failCode;
   }
   // `--channel` belongs to `init` alone: the store the creator installed the method from.
@@ -2416,6 +2451,9 @@ export async function main(rawEnvironment: CliEnvironment): Promise<number> {
         return failCode;
       }
       input = prepared;
+    } else if (command === "sync") {
+      // `--clean-gemini` removes what `sync` wrote for the retired Gemini CLI; `--yes` confirms the rest.
+      if (cleanGeminiOption) input = { clean_gemini: true, ...(yesOption ? { yes: true } : {}) };
     } else if (command === "journal") {
       const [action, ...extra] = rest;
       if ((action !== "sync" && action !== "status") || extra.length > 0) {
@@ -2848,6 +2886,14 @@ export async function main(rawEnvironment: CliEnvironment): Promise<number> {
           `\n${formatNextStep(t, (result.value as InitResult).targetedTools, synced)}`,
         );
       }
+      // The last line: how to link the product to the web app, when it is not yet (nothing is asked).
+      const hint = await linkHint(
+        t,
+        files.root,
+        environment.env,
+        environment.platform ?? process.platform,
+      );
+      if (hint !== undefined) environment.stdout(hint);
       // A script learns from the exit code that a blocking point remains.
       if (scripted && machineReport?.blocking === true) {
         environment.stderr(

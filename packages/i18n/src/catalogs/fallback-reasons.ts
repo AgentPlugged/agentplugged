@@ -29,8 +29,6 @@ export const FALLBACK_REASONS: Readonly<Record<"fr", Readonly<Record<string, str
       "les fichiers d'agents de cet outil ne savent pas lancer un développeur dans une copie de travail à lui : chaque développeur travaille seulement dans le `workdir` que renvoie `story.start`, la copie de travail propre à la story, une par story. Le bac à sable de Codex garde aussi les écritures dans le dossier du projet, et la copie de travail d'une story est à côté (`<projet>.worktrees/<id>`) : un développeur n'y écrit que si `sandbox_workspace_write.writable_roots` de Codex la liste par son chemin absolu (observé sur Codex 0.160.1, le 2026-10-06 : un chemin relatif est lu depuis le dossier du projet et son `..` est ignoré ; `~/` fonctionne), ce que `sync` n'écrit pas parce que le moteur ne sait pas où se trouve le projet sur cette machine. Sous Windows, Codex ne laisse écrire dans le projet qu'une fois son bac à sable Windows installé (le mode élevé, une approbation d'administrateur, proposée par l'extension d'éditeur) : sinon la session retombe en silence en lecture seule, et le mode non élevé refuse un projet dont `.git` et `.codex` sont protégés.",
     "codex.decisions":
       "Codex n'envoie à son client les formulaires qu'un serveur MCP demande (« elicitation ») que si sa politique d'approbation les laisse passer : un `never` seul les refuse en silence, d'où la forme granulaire que `sync` écrit et qui refuse tout le reste (observé sur Codex 0.160.1, le 2026-10-06, par son serveur d'application : la demande arrive au client, dont le moteur enregistre la réponse). `codex exec` les refuse, et aucun n'a été vu affiché à l'écran de l'extension d'éditeur : les décisions te sont posées en texte dans le chat (« a, b ou c ? »), et l'agent enregistre ta réponse avec `chat.answer`, en la citant. Le moteur essaie quand même le formulaire d'abord (`chat.ask`) et passe au chat quand l'outil ne peut pas l'afficher.",
-    "gemini-cli.permissions":
-      "agentplugged ne génère aucun fichier de permissions pour Gemini CLI : aucun chemin n'est bloqué.",
     // Cursor: the creator's own `.cursor/hooks.json` is kept, sync wrote no hook.
     "cursor.permissions.hooks-kept":
       "sync n'a pas pu écrire `.cursor/hooks.json` (le fichier est à toi) : aucun hook n'applique les chemins et les commandes protégés dans l'éditeur Cursor. `.cursorignore` garde les secrets hors de portée de l'agent, et `.cursor/cli.json` bloque les chemins interdits dans la CLI de Cursor seulement (l'éditeur ne le lit pas).",
@@ -48,13 +46,11 @@ export const FALLBACK_REASONS: Readonly<Record<"fr", Readonly<Record<string, str
       "le moteur ne lit aucune trace de cet outil : il ne mesure rien de ses sessions (`measure.usage` répond `available: false`) et ne l'estime jamais.",
     "codex.mcp.config-kept":
       'sync n\'a pas pu écrire `.codex/config.toml` (le fichier est à toi) : le serveur MCP `agentplugged` n\'est pas déclaré pour Codex. Ajoute toi-même `[mcp_servers.agentplugged]` avec `command = "npx"` et `args = ["-y", "agentplugged@<engine_version>", "mcp"]`.',
-    "gemini-cli.mcp":
-      "sync ne déclare le serveur MCP `agentplugged` dans `.gemini/settings.json` que si ce fichier existe déjà (sync ne crée jamais les réglages de Gemini CLI) : sinon, les anciennes installations de Gemini CLI ne voient pas le serveur.",
     // Any client's MCP file holding a server of yours: `{path}` is the file, given by core.
     "*.mcp.conflict":
       "`{path}` déclare déjà un serveur MCP `agentplugged` qui n'est pas celui qu'écrit sync : il est laissé tel quel. Vérifie qu'il lance `npx -y agentplugged@<engine_version> mcp`.",
     ...Object.fromEntries(
-      ["claude-code", "codex", "antigravity", "gemini-cli", "cursor"].map((client) => [
+      ["claude-code", "codex", "antigravity", "cursor"].map((client) => [
         `${client}.model`,
         MODEL_INHERIT_FR,
       ]),
@@ -63,9 +59,7 @@ export const FALLBACK_REASONS: Readonly<Record<"fr", Readonly<Record<string, str
       "les hooks de Codex répondent `allow` ou `deny`, jamais `ask` : une règle de permission qui demande d'abord (`ask`, que toi seul poses) est écrite en règle `prompt` dans `.codex/rules/agentplugged.rules` seulement tant que Codex demande des approbations (niveau `strict`, modifications qui demandent d'abord) : sans approbation (par défaut, écrite en forme granulaire qui laisse quand même passer les formulaires), Codex ne peut pas demander, rien n'est écrit, et le hook laisse l'appel passer. Avant une telle action, l'agent te demande dans le chat. Ce que le produit refuse (push sur la branche principale, force push, suppression en masse, lecture de secrets, écriture de ses fichiers protégés) est refusé par le hook et, pour les commandes, par les règles propres à Codex. `internet: ask` désactive la recherche web et garde le bac à sable hors ligne ; `edit_code: ask` ou `deny` donne un bac à sable en lecture seule avec approbation sur demande. Les hooks ne tournent qu'une fois que tu les as approuvés (`/hooks` dans Codex, une seule fois).",
     "codex.rules.config-kept":
       "sync n'a pas pu écrire `.codex/config.toml` (le fichier est à toi) : aucun hook n'applique les règles de permission pour Codex ; seules les règles de commandes de `.codex/rules/agentplugged.rules` le font.",
-    "gemini-cli.rules":
-      "agentplugged ne génère aucun fichier de permissions pour Gemini CLI : les règles de permission de la constitution ne sont pas appliquées techniquement. Rien n'empêche un agent de modifier `.agentplugged/method.yaml` ou de lancer `npx agentplugged sync`, `rules set` ou `migrate` dans cet outil : les changements de règles passent par toi.",
-    // Gemini CLI: Claude Code, Antigravity CLI, Codex and the Cursor editor have the hook.
+    // Claude Code, Antigravity CLI, Codex and the Cursor editor have the hook.
     "*.chat_proof":
       "agentplugged n'écrit pour cet outil aucun hook qui retienne tes messages : une réponse que tu donnes dans le chat est enregistrée « non vérifiée » (`chat_unverified`) et affichée ainsi partout, quel que soit le point (le journal garde la trace de chaque réponse). Pour que chaque réponse soit vérifiée, travaille dans Claude Code ; pour que les points à risque élevé passent par ta clé, choisis le niveau `strict`.",
     // Every tool but Claude Code.
@@ -81,13 +75,13 @@ export const FALLBACK_REASONS: Readonly<Record<"fr", Readonly<Record<string, str
     // Antigravity CLI: the client announces forms, which only a headless run cancelled.
     "antigravity.decisions":
       "Antigravity CLI annonce qu'il affiche les formulaires qu'un serveur MCP demande (« elicitation »), mais cela n'a été vérifié que dans son mode sans terminal, où il les annule : tant qu'aucune session n'en a affiché un, les décisions te sont posées en texte dans le chat (« a, b ou c ? »), et l'agent enregistre ta réponse avec `chat.answer`, en la citant. Le moteur essaie quand même le formulaire d'abord (`chat.ask`) et passe au chat quand l'outil ne peut pas l'afficher.",
-    // Gemini CLI; Codex has its own reason.
+    // Any other tool; Codex has its own reason.
     "*.decisions":
       "cet outil n'affiche pas les formulaires qu'un serveur MCP demande (« elicitation »), ou pas dans tous les modes : les décisions te sont posées en texte dans le chat (« a, b ou c ? »), et l'agent enregistre ta réponse avec `chat.answer`, en la citant. Le moteur essaie toujours d'abord le formulaire (`chat.ask`) et repasse au chat quand l'outil ne sait pas l'afficher.",
-    // Gemini CLI: Claude Code, Antigravity CLI, Codex and Cursor have hooks.
+    // Claude Code, Antigravity CLI, Codex and Cursor have hooks.
     "*.untrusted":
       "agentplugged n'écrit aucun hook pour cet outil : une lecture par l'accès web de l'outil ou par un autre serveur MCP n'est pas enregistrée toute seule. Après une lecture externe, l'agent appelle `guard.external_read` pour que le journal en garde la trace (source, heure, agent) ; rien n'est bloqué. Les actions faites par les outils de fichiers (lire, modifier, écrire) ne passent pas par un hook de lecture : seules les règles de permission les encadrent (`read_secrets` est toujours refusé). Seul Claude Code contrôle aussi une écriture avant qu'elle ait lieu (un secret, un fichier hors de la story, une décision d'architecture) : pas cet outil.",
-    // Gemini CLI: Claude Code, Antigravity CLI, Codex and Cursor have the hook.
+    // Claude Code, Antigravity CLI, Codex and Cursor have the hook.
     "*.installs":
       "cet outil n'a aucun hook qui voie une installation avant qu'elle s'exécute : le moteur ne l'inscrit pas dans l'activité, et `installs.mode: validate` ne peut pas te demander de valider ici. Ce sont les permissions de l'outil qui décident.",
   },

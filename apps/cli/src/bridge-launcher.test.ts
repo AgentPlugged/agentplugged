@@ -174,11 +174,11 @@ describe("`agentplugged bridge` : un lanceur générique", () => {
     }
   });
 
-  it("l'aide de la commande liste `bridge start|status`, en français et en anglais", async () => {
+  it("l'aide de la commande liste `bridge install|uninstall|start|status`, en français et en anglais", async () => {
     const french = await run(["--help"], { AGENTPLUGGED_LANG: "fr" });
-    expect(french.out).toContain("bridge start|status  Lance le pont sur cette machine");
+    expect(french.out).toContain("bridge install|uninstall|start|status  Installe le pont");
     const english = await run(["--help"], { AGENTPLUGGED_LANG: "en" });
-    expect(english.out).toContain("bridge start|status  Run the bridge on this machine");
+    expect(english.out).toContain("bridge install|uninstall|start|status  Install the bridge");
   });
 });
 

@@ -3,7 +3,7 @@ export type Editor = "vscode" | "cursor";
 
 /** A command found in `PATH`. */
 export interface CommandMatch {
-  /** The name that matched, for example `gemini`. */
+  /** The name that matched, for example `agy`. */
   readonly name: string;
   /** Absolute path of the executable. */
   readonly path: string;

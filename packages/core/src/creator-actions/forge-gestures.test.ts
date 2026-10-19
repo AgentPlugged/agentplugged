@@ -1042,13 +1042,13 @@ describe("a repository name already taken (review)", () => {
 });
 
 describe("the events that open a gesture's request", () => {
-  it("are version 14 of checkpoint.opened, and creator_action.executed at version 12", async () => {
+  it("are version 16 of checkpoint.opened, and creator_action.executed at version 12", async () => {
     const { requested, journal } = await product();
     await requested(CREATE);
     const opened = (await journal.list()).events.find(
       (event) => event.type === "checkpoint.opened",
     );
-    expect(opened?.v).toBe(14);
+    expect(opened?.v).toBe(16);
     expect(await journalIsReadable(journal)).toBe(true);
     const recorded: RecordedEvent | undefined = undefined;
     expect(recorded).toBeUndefined();

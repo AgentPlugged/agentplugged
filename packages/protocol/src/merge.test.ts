@@ -26,8 +26,15 @@ const payload = {
 };
 
 describe("The merge of a story", () => {
-  it("registers story.merged at version 3 (the weight of the code; 3.36: a merge without a pull request)", () => {
-    expect(eventTypeSpec(MERGE_EVENT_TYPES.merged)?.version).toBe(3);
+  it("registers story.merged at version 5 (the weight of the code, a merge without a pull request, the web and mobile sources)", () => {
+    expect(eventTypeSpec(MERGE_EVENT_TYPES.merged)?.version).toBe(5);
+  });
+
+  it("accepts the sources of the creator's own views, a browser's and a phone's", () => {
+    for (const source of ["web", "mobile"]) {
+      expect(StoryMergedPayloadSchema.safeParse({ ...payload, source }).success).toBe(true);
+    }
+    expect(StoryMergedPayloadSchema.safeParse({ ...payload, source: "watch" }).success).toBe(false);
   });
 
   it("keeps the weight of the story's code and refuses a malformed one", () => {
@@ -49,8 +56,10 @@ describe("The merge of a story", () => {
   it("accepts a merge and refuses what it is not", () => {
     expect(StoryMergedPayloadSchema.safeParse(payload).success).toBe(true);
     expect(StoryMergedPayloadSchema.safeParse({ ...payload, already: true }).success).toBe(true);
+    // A merge the machine did for the signed order of a browser.
+    expect(StoryMergedPayloadSchema.safeParse({ ...payload, source: "web" }).success).toBe(true);
     for (const wrong of [
-      { ...payload, source: "mobile" },
+      { ...payload, source: "watch" },
       { ...payload, method: "fast-forward" },
       { ...payload, commit: "HEAD" },
       { ...payload, files: ["src/a.ts", "src/a.ts"] },

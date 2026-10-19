@@ -2,6 +2,7 @@ import { sha256Hex } from "@agentplugged/crypto";
 import {
   CursorCliConfigSchema,
   ErrorCode,
+  LEGACY_GEMINI_CLIENT,
   type MethodConfig,
   NOAH_AGENT,
   type RuleAction,
@@ -62,11 +63,13 @@ import type { WorkspaceFiles } from "../workspace-files.js";
 import { type ResolvedAgent, resolveAgent } from "./agent-render.js";
 import { type ClientId, fallbacksFor, type ToolFallback } from "./compatibility.js";
 import { withCursorIgnoreBlock, withoutCursorIgnoreBlock } from "./cursor-ignore.js";
+import { cleanLegacyGemini, hasLegacyGeminiFiles, isLegacyGeminiAgent } from "./gemini-legacy.js";
 import { syncInputsFingerprint } from "./inputs.js";
 import { loadManifest, renderManifest, SYNC_MANIFEST_PATH } from "./manifest.js";
 import {
   engineCommand,
   engineWords,
+  GEMINI_SETTINGS_PATH,
   MCP_JSON_FILES,
   mcpLaunch,
   parseMcpFile,
@@ -142,6 +145,10 @@ export interface SyncEntry {
  *   and is ignored.
  * - `local_engine`: `mcp` of `method.yaml` (`path`) names an absolute path (a local build): the
  *   generated files now hold a path of this machine, not to be shared.
+ * - `gemini_legacy`: the project still holds what the retired Gemini CLI left (`path`): it is read
+ *   and left as it is, and the cleanup removes what `sync` wrote.
+ * - `gemini_unproven`: the cleanup cannot prove it wrote `path` (changed since, or no trace): it is
+ *   listed and kept, removed only on confirmation.
  */
 export interface SyncWarning {
   readonly kind:
@@ -150,7 +157,9 @@ export interface SyncWarning {
     | "kept"
     | "description_too_long"
     | "unknown_setting"
-    | "local_engine";
+    | "local_engine"
+    | "gemini_legacy"
+    | "gemini_unproven";
   readonly path: string;
   /** The agent or settings key, for the last two kinds. */
   readonly id?: string;
@@ -177,6 +186,11 @@ export interface SyncResult {
   readonly preferredTools: readonly PreferredTool[];
   /** The permission rules written: where they come from, and what to report. */
   readonly rules?: SyncRules;
+  /**
+   * Present only for the cleanup of the retired Gemini CLI's files: how many files it listed
+   * without being able to prove it wrote them.
+   */
+  readonly geminiCleanup?: { readonly listed: number };
 }
 
 /** What `sync` says about the permission rules. */
@@ -419,7 +433,7 @@ const TOOL_ROOTS: Readonly<Record<ToolId, readonly string[]>> = {
 const TOOL_FOLDERS: Readonly<Record<ToolId, readonly string[]>> = {
   "claude-code": [".claude", ".claude/skills", ".claude/agents"],
   codex: [".agents", ".agents/skills", ".codex", ".codex/agents"],
-  antigravity: [".agents", ".agents/skills", ".agents/agents", ".gemini", ".gemini/agents"],
+  antigravity: [".agents", ".agents/skills", ".agents/agents"],
   cursor: [
     ".agents",
     ".agents/skills",
@@ -572,8 +586,12 @@ export const syncCommand = defineCommand<SyncResult>({
    * Generates the files of the targeted AI tools (the `tools` list of `method.yaml`) from
    * `.agentplugged/agents/` and `.agentplugged/skills/`.
    */
-  async run({ files, tools: probe, method, platform, mainBranch, projectRoot }) {
+  async run({ files, tools: probe, method, platform, mainBranch, projectRoot }, options) {
     if (!(await files.exists(METHOD_CONFIG_PATH))) return fail(methodNotInstalled());
+    // The cleanup of the retired Gemini CLI's files: it writes nothing else.
+    if (options.clean_gemini === true) {
+      return ok(await cleanLegacyGemini(files, options.yes === true));
+    }
     const loaded = await loadMethodConfig(files);
     if (loaded instanceof AgentPluggedError) return fail(loaded);
     const definitions = await loadDefinitions(files);
@@ -712,6 +730,14 @@ export const syncCommand = defineCommand<SyncResult>({
     // configuration, written wherever the method says `npx agentplugged`.
     const engine = engineCommand(launch);
     if (engineWords(launch).some(isAbsolutePath)) plan.warn("local_engine", METHOD_CONFIG_PATH);
+    // The retired Gemini CLI: what it left is read, never written or removed here; said once.
+    if (
+      Object.hasOwn(table, LEGACY_GEMINI_CLIENT) ||
+      Object.hasOwn(loaded.config.models ?? {}, LEGACY_GEMINI_CLIENT) ||
+      (await hasLegacyGeminiFiles(files))
+    ) {
+      plan.warn("gemini_legacy", ".gemini");
+    }
     const worktreesFolder = projectRoot === undefined ? undefined : worktreesFolderOf(projectRoot);
     const input: RenderInput = {
       source: files,
@@ -766,14 +792,12 @@ export const syncCommand = defineCommand<SyncResult>({
     // The `agentplugged` MCP server, declared in each targeted tool's MCP file with the pinned
     // engine version; an `agentplugged` server of the creator's is a conflict, left as is.
     const mcpConflicts = new Map<ClientId, string>();
-    const mcpFileAbsent = new Set<ClientId>();
     const settingsRecords: Record<string, SettingsRecord> = {};
     for (const file of MCP_JSON_FILES) {
       const targeted = has(file.tool) && file.legacy !== true;
       const previous = manifest.settings?.[file.path];
       if (!targeted && previous === undefined) continue;
       const current = mcpFiles.get(file.path);
-      if (file.existingOnly && current === undefined) mcpFileAbsent.add(file.client);
       const outcome = reconcileMcpFile(file, current?.value, targeted, launch, previous);
       if (outcome.record) settingsRecords[file.path] = outcome.record;
       if (outcome.conflict) {
@@ -818,7 +842,6 @@ export const syncCommand = defineCommand<SyncResult>({
       cursorHooksKept,
       modelInherit: inheritClients(models),
       mcpConflicts,
-      mcpFileAbsent,
       antigravityPluginKept,
     });
     // Noah's section: only while Noah is installed and active.
@@ -1023,6 +1046,12 @@ export const syncCommand = defineCommand<SyncResult>({
     )) {
       if (!isGeneratedPath(path)) continue;
       if (produced.has(path) || !(await files.exists(path))) continue;
+      if (isLegacyGeminiAgent(path)) {
+        // Written for the retired Gemini CLI: never deleted by `sync`, and its hash is kept so the
+        // cleanup can still prove the file is as `sync` wrote it.
+        plan.hashes[path] = recorded;
+        continue;
+      }
       const folder = skillFolderOf(path);
       if (folder !== undefined && !path.endsWith(`/${SKILL_FILE}`)) {
         const skill = `${folder}/${SKILL_FILE}`;
@@ -1087,6 +1116,9 @@ export const syncCommand = defineCommand<SyncResult>({
       manifest.settings?.[CURSOR_CLI_PATH],
     );
     if (claude.record) settingsRecords[CLAUDE_SETTINGS_PATH] = claude.record;
+    // What `sync` added to the retired Gemini CLI's settings stays recorded until the cleanup.
+    const geminiRecord = manifest.settings?.[GEMINI_SETTINGS_PATH];
+    if (geminiRecord !== undefined) settingsRecords[GEMINI_SETTINGS_PATH] = geminiRecord;
     if (cursor.record) settingsRecords[CURSOR_CLI_PATH] = cursor.record;
     const permissionLists: Record<string, { allow?: string[]; ask?: string[] }> = {};
     const allowAdded: Array<{ path: string; count: number }> = [];

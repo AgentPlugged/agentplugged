@@ -249,9 +249,18 @@ export type CheckpointReopenedPayload = z.infer<typeof CheckpointReopenedPayload
 /**
  * Where a validation was made: the terminal, the chat, the engine at `auto`, or the AI
  * tool's form the engine asked for itself (`elicitation`), or an agent that decided a
- * point the creator did not keep (`agent`).
+ * point the creator did not keep (`agent`), the web view (`web`: a signed order of a browser) or
+ * the phone (`mobile`: a signed order of a phone).
  */
-export const VALIDATION_SOURCES = ["terminal", "chat", "auto", "elicitation", "agent"] as const;
+export const VALIDATION_SOURCES = [
+  "terminal",
+  "chat",
+  "auto",
+  "elicitation",
+  "agent",
+  "web",
+  "mobile",
+] as const;
 export type ValidationSource = (typeof VALIDATION_SOURCES)[number];
 
 /**
@@ -259,7 +268,8 @@ export type ValidationSource = (typeof VALIDATION_SOURCES)[number];
  *, `chat` when the hook proved the quote, `chat_unverified` without a hook, `system`
  * for an automatic application, `elicitation` for a choice the creator clicked in the AI tool's
  * form the engine asked for. `agent` for a point the agent responsible
- * for it decided: never the creator's answer.
+ * for it decided: never the creator's answer. `device` for an answer carried by the signed order
+ * of a trusted device of the creator (the web view, the phone).
  */
 export const VALIDATION_ASSURANCES = [
   "presence",
@@ -269,6 +279,7 @@ export const VALIDATION_ASSURANCES = [
   "system",
   "elicitation",
   "agent",
+  "device",
 ] as const;
 export type ValidationAssurance = (typeof VALIDATION_ASSURANCES)[number];
 

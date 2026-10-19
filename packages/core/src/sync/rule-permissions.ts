@@ -209,6 +209,23 @@ const READ_SECRETS: readonly RulePattern[] = [
   { kind: "read", path: "**/*.key" },
   { kind: "read", path: "**/id_rsa*" },
   { kind: "read", path: "**/id_ed25519*" },
+  { kind: "read", path: "**/*.p12" },
+  { kind: "read", path: "**/*.pfx" },
+  { kind: "read", path: "**/.npmrc" },
+  { kind: "read", path: "**/.netrc" },
+  { kind: "read", path: "**/.git-credentials" },
+  // The system keychains of the three systems (Windows' credential and vault folders, macOS'
+  // keychains, the secret services of Linux), where the machine's and the creator's keys live.
+  { kind: "read", path: "~/Library/Keychains/**" },
+  { kind: "read", path: "~/.local/share/keyrings/**" },
+  { kind: "read", path: "~/.local/share/kwalletd/**" },
+  { kind: "read", path: "~/AppData/Roaming/Microsoft/Credentials/**" },
+  { kind: "read", path: "~/AppData/Local/Microsoft/Credentials/**" },
+  { kind: "read", path: "~/AppData/Roaming/Microsoft/Protect/**" },
+  { kind: "read", path: "~/AppData/Roaming/Microsoft/Vault/**" },
+  { kind: "read", path: "~/AppData/Local/Microsoft/Vault/**" },
+  // The keys of this machine kept in a file where no keychain exists (a server).
+  { kind: "read", path: "~/.agentplugged/keys/**" },
 ];
 
 /**

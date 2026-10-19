@@ -94,7 +94,7 @@ export function storiesOf(documents: readonly ParsedDocument[]): Map<string, Par
 }
 
 /** The epics of the working copy: documents of kind `epic` with an epic id, first one wins. */
-function epicsOf(documents: readonly ParsedDocument[]): Map<string, ParsedDocument> {
+export function epicsOf(documents: readonly ParsedDocument[]): Map<string, ParsedDocument> {
   const epics = new Map<string, ParsedDocument>();
   for (const document of documents) {
     const id = document.id;

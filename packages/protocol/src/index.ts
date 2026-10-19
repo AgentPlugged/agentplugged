@@ -1,6 +1,8 @@
 export const packageName = "@agentplugged/protocol";
 
 export * from "./acceptance-qa.js";
+export * from "./account.js";
+export * from "./account-export.js";
 export {
   AGENT_EVENT_TYPES,
   AGENT_STATUSES,
@@ -14,10 +16,12 @@ export {
   type CostReportedPayload,
   CostReportedPayloadSchema,
   CostRunSchema,
+  formatRunNote,
   MAIN_SESSION_AGENT,
   MAX_TOKENS_PER_REPORT,
   NextInputSchema,
   ProgressReportedPayloadSchema,
+  parseRunNote,
   RESULT_ITEM_MAX,
   RESULT_ITEMS_MAX,
   RESULT_STATUSES,
@@ -26,6 +30,10 @@ export {
   ReportProgressInputSchema,
   ReportStatusInputSchema,
   type ResultStatus,
+  RUN_NOTE_CODES,
+  RUN_NOTE_PREFIX,
+  type RunNoteCode,
+  type RunNoteParams,
   StatusReportedPayloadSchema,
   StoryIdSchema,
   StoryStatusChangedPayloadSchema,
@@ -62,7 +70,9 @@ export {
   AgentVoiceSchema,
   menuKey,
 } from "./agent-definition.js";
+export * from "./autonomy.js";
 export * from "./brand.js";
+export * from "./briefing-read.js";
 export {
   BUDGET_EVENT_TYPES,
   BUDGET_LEVELS,
@@ -76,6 +86,7 @@ export {
   CeilingIdSchema,
   MAX_BUDGET_USD,
 } from "./budget.js";
+export * from "./chain.js";
 export {
   ANSWER_DECISIONS,
   ANTICIPATED_ANSWER_WINDOW_MS,
@@ -112,6 +123,10 @@ export {
   BLOCKABLE_ACTIONS,
   type BlockableAction,
   BranchNameSchema,
+  CARD_EFFECT_MAX,
+  CARD_LINE_MAX,
+  CARD_OPINIONS_MAX,
+  CARD_RISKS_MAX,
   CHECKPOINT_EVENT_TYPES,
   CHECKPOINT_RISKS,
   CHECKPOINT_SOURCES,
@@ -119,6 +134,8 @@ export {
   CHECKPOINT_TYPES,
   type CheckpointBlock,
   CheckpointBlockSchema,
+  type CheckpointCard,
+  CheckpointCardSchema,
   type CheckpointCriterion,
   CheckpointCriterionSchema,
   type CheckpointDocument,
@@ -184,6 +201,33 @@ export {
   type DecideChoice,
 } from "./checkpoint-decided.js";
 export {
+  ANSWER_ORDER_CODES,
+  ANSWER_SOURCES,
+  type AnswerCheckpointParams,
+  AnswerCheckpointParamsSchema,
+  type AnswerOrderCode,
+  type AnswerSource,
+  answerBasisFacts,
+  answerSourceOf,
+  type CheckpointWebAnsweredPayload,
+  CheckpointWebAnsweredPayloadSchema,
+  type CheckpointWebHeldPayload,
+  CheckpointWebHeldPayloadSchema,
+  type CheckpointWebHoldCancelledPayload,
+  CheckpointWebHoldCancelledPayloadSchema,
+  type CheckpointWebHoldFailedPayload,
+  CheckpointWebHoldFailedPayloadSchema,
+  holdsAnswer,
+  MAX_WEB_ANSWER_NOTE_LENGTH,
+  ORDER_TYPE_ANSWER_CHECKPOINT,
+  ORDER_TYPE_UNDO_CHECKPOINT_ANSWER,
+  type UndoCheckpointAnswerParams,
+  UndoCheckpointAnswerParamsSchema,
+  WEB_ANSWER_EVENT_TYPES,
+  WEB_ANSWER_STALE_MS,
+  WEB_ANSWER_WINDOW_MS,
+} from "./checkpoint-web.js";
+export {
   type CheckCiInput,
   CheckCiInputSchema,
   CI_EVENT_TYPES,
@@ -204,6 +248,8 @@ export {
   MAX_CI_CHECKS,
   MAX_CI_FAILED,
 } from "./ci.js";
+export * from "./code-read.js";
+export * from "./costs-read.js";
 export * from "./course.js";
 export {
   CREATOR_ACTION_EVENT_TYPES,
@@ -315,6 +361,7 @@ export {
   TrustDismissedPayloadSchema,
   type TrustSignatureTag,
 } from "./device-trust.js";
+export * from "./docs-read.js";
 export {
   ArchitectureHeaderSchema,
   CREATOR_OWNER,
@@ -458,6 +505,7 @@ export {
   type StartStoryFastTrackInput,
   StartStoryFastTrackInputSchema,
 } from "./fast-track.js";
+export * from "./find-read.js";
 export {
   CONCEPT_FIELD,
   CONCEPT_TYPES,
@@ -486,6 +534,7 @@ export {
   type PrfaqAngle,
   type PrfaqVerdictCategory,
 } from "./forge.js";
+export * from "./forge-link.js";
 export {
   DEFAULT_GIT_WORKFLOW,
   GIT_CI_MODES,
@@ -574,6 +623,7 @@ export {
   type JourneyStep,
   PHASE_STEPS,
 } from "./journey.js";
+export * from "./kb-read.js";
 export {
   CAMPAIGN_SECTIONS,
   CONTENT_ID_PREFIXES,
@@ -597,6 +647,7 @@ export {
   SEO_TITLE_MAX,
 } from "./launch.js";
 export * from "./loop.js";
+export * from "./machines.js";
 export {
   type ActionDraft,
   ActionDraftSchema,
@@ -747,6 +798,8 @@ export {
   type PhaseId,
   PRODUCT_ORIGINS,
   PROFILE_PRESET_IDS,
+  PROFILE_PRESET_SPECS,
+  type PresetSpec,
   type ProductOrigin,
   type Profile,
   type ProfilePresetId,
@@ -784,6 +837,7 @@ export {
   CLAUDE_EFFORTS,
   CODEX_EFFORTS,
   INHERIT_MODEL,
+  LEGACY_GEMINI_CLIENT,
   MODEL_CLIENT_IDS,
   type ModelChoice,
   type ModelClientId,
@@ -793,19 +847,34 @@ export {
   ModelTableSchema,
   NO_EFFORT,
 } from "./models.js";
+export * from "./orders.js";
 export {
   type LinkRequest,
   LinkRequestSchema,
   type LinkWelcome,
   LinkWelcomeSchema,
   linkWelcomeRecord,
+  PAIR_CODE_ALPHABET,
+  PAIR_CODE_ID_SYMBOLS,
+  PAIR_CODE_SECRET_SYMBOLS,
   PAIR_ERROR_CODES,
   PAIR_MESSAGE_TYPES,
+  PairCodeIdSchema,
+  type PairCodeOfferOrder,
+  PairCodeOfferOrderSchema,
+  PairCodeSecretSchema,
   type PairErrorCode,
+  type PairHello,
+  PairHelloSchema,
+  type PairLinkOfferOrder,
+  PairLinkOfferOrderSchema,
+  type PairOfferOrder,
+  PairOfferOrderSchema,
   type PairWire,
   PairWireSchema,
   type ProductKeys,
   ProductKeysSchema,
+  REQUESTER_DEVICE_ID_PATTERN,
 } from "./pairing.js";
 export {
   DECK_DOCUMENT_ID,
@@ -819,18 +888,25 @@ export {
   NARRATIVE_SECTIONS,
   PITCH_FIGURE_MARK,
 } from "./pitch.js";
+export * from "./point-kind.js";
+export * from "./product-browse.js";
 export {
   ENCRYPTED_FILE_PREFIX,
   isSensitivePath,
   KEY_ID_PATTERN,
   KeyIdSchema,
+  MAX_EXPORTED_KEYS,
+  MAX_KEY_BOXES,
   MAX_SENSITIVE_CONTENT_BYTES,
   MIN_PASSPHRASE_LENGTH,
   PAYLOAD_ENCRYPTION_ALG,
   PRODUCT_KEY_EVENT_TYPES,
   PRODUCT_KEY_EXPORT_PREFIX,
+  PRODUCT_KEYS_EXPORT_PREFIX,
   type ProductKeyCreatedPayload,
   ProductKeyCreatedPayloadSchema,
+  type ProductKeyRotatedPayload,
+  ProductKeyRotatedPayloadSchema,
   ReadSensitiveInputSchema,
   SENSITIVE_AREAS,
   SENSITIVE_EVENT_DOMAINS,
@@ -838,6 +914,7 @@ export {
   utf8Length,
   WriteSensitiveInputSchema,
 } from "./product-key.js";
+export * from "./product-lifecycle.js";
 export {
   ChainForkWarningSchema,
   CheckpointIdCollisionWarningSchema,
@@ -879,6 +956,8 @@ export {
   SHORT_VERSION_TARGET_SECONDS,
   ShortVersionSchema,
 } from "./publication.js";
+export * from "./published-state.js";
+export * from "./push.js";
 export {
   QUESTION_TOOL_HEADER_MAX,
   QUESTION_TOOL_MAX_OPTIONS,
@@ -934,6 +1013,7 @@ export {
   relayMessageKey,
   relayRendezvousPayload,
 } from "./relay.js";
+export * from "./repo-files.js";
 export * from "./requirements.js";
 export {
   RESEARCH_CANDIDATES_RANGE,
@@ -1065,6 +1145,7 @@ export {
   SEQUENCE_TYPES,
   type SequenceType,
 } from "./sales.js";
+export * from "./share.js";
 export {
   type AgentFrontmatter,
   AgentFrontmatterSchema,
@@ -1195,6 +1276,7 @@ export {
 } from "./sync-manifest.js";
 export * from "./table.js";
 export * from "./test-quality.js";
+export * from "./tolerant-reader.js";
 export {
   DEVIATION_EVENT_TYPES,
   DEVIATION_NOT_REPORTABLE_REASONS,
@@ -1270,6 +1352,9 @@ export {
   UsageWorkSchema,
 } from "./usage.js";
 export * from "./ux.js";
+export * from "./validation-history.js";
+export * from "./vault.js";
+export * from "./voice-read.js";
 export {
   type CheckWriteInput,
   CheckWriteInputSchema,

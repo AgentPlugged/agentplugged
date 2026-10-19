@@ -1,8 +1,10 @@
 import {
   ErrorCode,
   RULE_ACTIONS,
+  RULE_LOCKS,
   RULE_VALUES,
   type RuleAction,
+  type RuleLockLevel,
   type Rules,
   type RuleValue,
 } from "@agentplugged/protocol";
@@ -32,19 +34,10 @@ export const DEFAULT_RULES: Readonly<Record<RuleAction, RuleValue>> = {
  * - `never_allow`: `ask` or `deny` only (`destructive_command`).
  * - `locked`: `deny` only (`push_main`, `force_push`, `read_secrets`).
  */
-export type RuleLock = "none" | "never_allow" | "locked";
+export type RuleLock = RuleLockLevel;
 
-const LOCKS: Readonly<Record<RuleAction, RuleLock>> = {
-  read_files: "none",
-  edit_code: "none",
-  run_checks: "none",
-  install_dependency: "none",
-  internet: "none",
-  destructive_command: "never_allow",
-  push_main: "locked",
-  force_push: "locked",
-  read_secrets: "locked",
-};
+/** The locks are data of the protocol: the web view reads the same table. */
+const LOCKS = RULE_LOCKS;
 
 export function lockOf(action: RuleAction): RuleLock {
   return LOCKS[action];

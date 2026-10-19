@@ -5,17 +5,16 @@ export const MODEL_TIERS = ["reasoning", "code", "fast", "multimodal"] as const;
 export type ModelTier = (typeof MODEL_TIERS)[number];
 
 /**
- * Clients of the model table: the AI tools as they read a sub-agent. `antigravity` and
- * `gemini-cli` are both served by the `antigravity` entry of `tools`.
+ * Clients of the model table: the AI tools as they read a sub-agent.
  */
-export const MODEL_CLIENT_IDS = [
-  "claude-code",
-  "codex",
-  "antigravity",
-  "gemini-cli",
-  "cursor",
-] as const;
+export const MODEL_CLIENT_IDS = ["claude-code", "codex", "antigravity", "cursor"] as const;
 export type ModelClientId = (typeof MODEL_CLIENT_IDS)[number];
+
+/**
+ * Key of the retired Gemini CLI in a model table or in the `models` section of `method.yaml`.
+ * Older products still hold it: it is read, reported and ignored, never accepted for anything new.
+ */
+export const LEGACY_GEMINI_CLIENT = "gemini-cli";
 
 /** Model value that keeps the model of the session: no model is chosen per agent. */
 export const INHERIT_MODEL = "inherit";
@@ -49,7 +48,8 @@ export const ModelTableSchema = z.strictObject({
   "claude-code": tiers(ClaudeCell),
   codex: tiers(CodexCell),
   antigravity: tiers(ModelOnly),
-  "gemini-cli": tiers(ModelOnly),
+  // Retired tool: tolerated in an older table, ignored.
+  [LEGACY_GEMINI_CLIENT]: z.unknown().optional(),
   cursor: tiers(ModelOnly),
 });
 
@@ -90,7 +90,8 @@ export const ModelOverridesSchema = z.strictObject({
     }),
   ),
   antigravity: partialTiers(ModelOnly.partial()),
-  "gemini-cli": partialTiers(ModelOnly.partial()),
+  // Retired tool: tolerated in an older `method.yaml`, ignored.
+  [LEGACY_GEMINI_CLIENT]: z.unknown().optional(),
   cursor: partialTiers(ModelOnly.partial()),
 });
 

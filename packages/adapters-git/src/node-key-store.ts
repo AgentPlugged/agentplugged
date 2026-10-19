@@ -15,6 +15,8 @@ export const KEYCHAIN_HUMAN_ACCOUNT = "human";
 export const KEYCHAIN_PRESENCE_ACCOUNT = "human-presence";
 /** Prefix of the product keys' accounts: `product:<product_id>`. */
 export const PRODUCT_ACCOUNT = "product:";
+/** Prefix of the accounts of connection secrets: `connection:<name>`. */
+export const CONNECTION_ACCOUNT = "connection:";
 
 function productAccount(productId: string): string {
   return `${PRODUCT_ACCOUNT}${productId}`;
@@ -286,6 +288,24 @@ export class NodeKeyStore implements KeyStore {
     return this.#write(`${productAccount(productId)}:previous:${keyId}`, secret);
   }
 
+  readProductBackup(productId: string, keyId: string): Promise<string | undefined> {
+    return this.#read(`${productAccount(productId)}:previous:${keyId}`);
+  }
+
+  readConnectionSecret(name: string): Promise<string | undefined> {
+    return this.#read(`${CONNECTION_ACCOUNT}${name}`);
+  }
+
+  writeConnectionSecret(name: string, secret: string): Promise<void> {
+    return this.#write(`${CONNECTION_ACCOUNT}${name}`, secret);
+  }
+
+  deleteConnectionSecret(name: string): Promise<boolean> {
+    return explained(async () =>
+      (await this.#backend()).remove(this.service, `${CONNECTION_ACCOUNT}${name}`),
+    );
+  }
+
   /** Deletes the machine key's entry; true when there was one. */
   deleteMachineSecret(): Promise<boolean> {
     return explained(async () => (await this.#backend()).remove(this.service, this.account));
@@ -304,7 +324,11 @@ export class NodeKeyStore implements KeyStore {
     const backend = await explained(() => this.#backend());
     const products = await backend
       .accounts(this.service)
-      .then((found) => found.filter((name) => name.startsWith(PRODUCT_ACCOUNT)))
+      .then((found) =>
+        found.filter(
+          (name) => name.startsWith(PRODUCT_ACCOUNT) || name.startsWith(CONNECTION_ACCOUNT),
+        ),
+      )
       .catch(() => [] as string[]);
     for (const account of [this.account, this.humanAccount, this.presenceAccount, ...products]) {
       deleted = (await backend.remove(this.service, account)) || deleted;

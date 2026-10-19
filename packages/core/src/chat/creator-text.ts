@@ -33,10 +33,8 @@ const MAX_PROMPT = 50_000;
 const MAX_BLOCKS = 20;
 
 /** Invisible characters that cannot change what a text says (zero-width, bidi marks, soft hyphen). */
-const INVISIBLE = new RegExp(
-  "[\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\ufe0e\ufe0f]",
-  "g",
-);
+const INVISIBLE =
+  /[\u00ad\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]|\ufe0e|\ufe0f/g;
 
 /** The text as the rules read it: compatibility form, without invisible characters. */
 export function visibleText(prompt: string): string {

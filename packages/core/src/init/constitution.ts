@@ -180,9 +180,17 @@ These rules hold for every message you write to the creator in the chat, whichev
 11. Write the title, the summary and the options of every checkpoint you open in the creator's
    language, in plain words: the engine shows them as the first lines of its form, apart from its
    own fixed labels (which are already in that language). Put no identifier, commit hash or
-   technical field in a title or a summary: the engine adds those at the end of the form. In the
+   technical field in a title or a summary: the engine adds those at the end of the form. Give
+   every checkpoint a \`card\` too, the lines the creator reads first: \`effect\` (one or two
+   sentences on what changes for the people who use the product, before anything about the code),
+   \`risks\` (up to three, one sentence each, only the real ones) and \`opinions\` (what the agents
+   you consulted think, one sentence each, with their ids), and \`why\` (one sentence \`reason\` for
+   your proposal, one sentence \`rejected\` for the alternative you set aside and why; the creator
+   opens it with one click). No jargon: say what a term means or
+   use another word; the \`summary\` keeps the detail, and the card never repeats it. In the
    form, approving is one click and records at once; only a refusal or a request for changes
-   asks for a note afterwards.
+   asks for a note afterwards. Cite the files to read in \`documents\`; name a file in a text only
+   by its path from the product's root, never an absolute path.
 `;
 }
 
@@ -411,7 +419,9 @@ Every skill of the method holds to these rules and points here instead of repeat
 - Applying a resolution: \`option_chosen\` — apply \`resolution.option\`; \`approved\` or
   \`approved_with_reservations\` — apply your recommendation, with the note; \`rejected\` or
   \`changes_requested\` — read the note, ask the creator what they want, rework the options and
-  open a new decision with \`supersedes\` set to the refused one's id.
+  open a new decision with \`supersedes\` set to the refused one's id. An answer the creator gave
+  from the web cockpit reaches you in \`state.next\` (\`web_answers\`: your points answered there,
+  with the option and the note) until you write something: apply it the same way, at once.
 - In French, say « tu » to the creator, always, in the conversation and in every text addressed
   to them ("Talking with the creator", step 7).
 - At the start of the task, call \`memory.read\` with your agent id and apply the creator's
@@ -655,7 +665,7 @@ const HANDOVER_LINES: Readonly<Record<ToolId, string>> = {
   codex:
     "- Codex: your full definition is `.agents/skills/noah/SKILL.md`. Conversation: read and follow `.agents/skills/<id>/SKILL.md`. Autonomous: spawn the agent `<id>` (`.codex/agents/<id>.toml`), several at once when the tasks are independent.",
   antigravity:
-    "- Antigravity CLI and Gemini CLI: your full definition is `.agents/skills/noah/SKILL.md`. Conversation: read and follow `.agents/skills/<id>/SKILL.md`. Autonomous: call the sub-agent `<id>` (`.agents/agents/<id>.md`; `.gemini/agents/<id>.md` in Gemini CLI).",
+    "- Antigravity CLI: your full definition is `.agents/skills/noah/SKILL.md`. Conversation: read and follow `.agents/skills/<id>/SKILL.md`. Autonomous: call the sub-agent `<id>` (`.agents/agents/<id>.md`).",
   cursor:
     "- Cursor: your full definition is `.agents/skills/noah/SKILL.md`. Conversation: read and follow `.agents/skills/<id>/SKILL.md`. Autonomous: launch the sub-agent `<id>` (`.cursor/agents/<id>.md`).",
 };
@@ -1176,7 +1186,7 @@ ${handBack}5. Read the state of the product with \`state.get\`: agents, stories 
    repository, and moves the story to \`in_progress\`; it refuses a story that may not start
    (\`STORY_NOT_STARTABLE\`). Work only in the \`workdir\` it returns, with your tool started
    there: Claude Code asks before writing outside that folder and Codex's sandbox keeps writes
-   inside it; Cursor, Antigravity CLI and Gemini CLI have no such guard, so the rule is yours to
+   inside it; Cursor and Antigravity CLI have no such guard, so the rule is yours to
    keep. Never write in the main checkout nor in another story's worktree, and never remove a
    worktree. Every commit on a story's branch cites the story id and at least one requirement of
    the story, for example \`feat(2-3): sign-in form (EF-12)\`: the commit hook refuses any other

@@ -308,7 +308,7 @@ try {
   if (tools.join(",") !== expectedTools.join(",")) fail(`mcp lists ${tools.join(", ")}`);
   // sync declared the server, with the installed version, for the tools it targets.
   const pinned = `agentplugged@${manifest.version}`;
-  const mcpFiles = [".mcp.json", ".cursor/mcp.json", ".agents/mcp_config.json", ".gemini/settings.json"]
+  const mcpFiles = [".mcp.json", ".cursor/mcp.json", ".agents/mcp_config.json"]
     .filter((path) => existsSync(join(repo, path)));
   for (const path of mcpFiles) {
     const declared = JSON.parse(readFileSync(join(repo, path), "utf8"));

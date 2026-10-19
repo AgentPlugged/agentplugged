@@ -282,7 +282,7 @@ describe("Ed25519", () => {
 });
 
 describe("verifyEvent: envelope and assurance", () => {
-  it("rejects an invalid envelope with EVENT_INVALID, and v: 15 with UPGRADE_REQUIRED", async () => {
+  it("rejects an invalid envelope with EVENT_INVALID, and v: 17 with UPGRADE_REQUIRED", async () => {
     const { publicKey, secretKey } = await generateEd25519();
     const signed = await signEd25519(unsigned, secretKey);
     const both = {
@@ -293,7 +293,7 @@ describe("verifyEvent: envelope and assurance", () => {
       ok: false,
       error: { code: "EVENT_INVALID", details: { field: "payload_enc" } },
     });
-    expect(await verifyEvent({ ...signed, v: 15 })).toMatchObject({
+    expect(await verifyEvent({ ...signed, v: 17 })).toMatchObject({
       ok: false,
       error: { code: "UPGRADE_REQUIRED" },
     });

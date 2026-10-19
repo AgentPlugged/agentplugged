@@ -48,8 +48,7 @@ export const CAPABILITIES = [
 export type Capability = (typeof CAPABILITIES)[number];
 
 /**
- * A client of the method: one AI tool as it reads the project. The `antigravity` target also
- * serves Gemini CLI, its predecessor, for older installations.
+ * A client of the method: one AI tool as it reads the project.
  */
 export type ClientId = ModelClientId;
 
@@ -61,13 +60,6 @@ export const MODEL_INHERIT_REASON =
   "the model table (`.agentplugged/models.yaml`, or `models` in `method.yaml`) gives `inherit` for at least one model tier: agents of that tier use the model of the session.";
 
 /**
- * Why Gemini CLI has the "mcp" fallback: its project settings (`.gemini/settings.json`) hold
- * other settings too, so sync merges the server into them only when the file already exists.
- */
-export const GEMINI_MCP_REASON =
-  "sync declares the `agentplugged` MCP server in `.gemini/settings.json` only when that file already exists (sync never creates Gemini CLI's settings): older Gemini CLI installations do not see the server otherwise.";
-
-/**
  * Why Codex has the "rules" fallback: its hooks answer `allow` or `deny`, never `ask`.
  * What the product denies is refused (the hook, and the rules of commands Codex applies itself).
  */
@@ -75,15 +67,15 @@ export const CODEX_RULES_REASON =
   "Codex's hooks answer `allow` or `deny`, never `ask`: a permission rule that asks (`ask`, which only the creator sets) is written as a `prompt` rule in `.codex/rules/agentplugged.rules` only while Codex asks for approvals (the `strict` level, edits that ask first): with no approval (the default, written as a granular `approval_policy` that still lets the forms through) Codex cannot ask, nothing is written, and the hook lets the call through. Before such an action, ask the creator in the chat. What the product denies (push to the main branch, force push, mass deletion, reading secrets, writing the product's protected files) is refused by the hook and, for commands, by Codex's own rules. `internet: ask` disables web search and keeps the sandbox offline; `edit_code: ask` or `deny` is a read-only sandbox with approval on request. The hooks run only once the creator has approved them (`/hooks` in Codex, once).";
 
 /**
- * Why Gemini CLI has the "untrusted" fallback (Claude Code, Antigravity CLI, Codex and
+ * Why a tool without hooks has the "untrusted" fallback (Claude Code, Antigravity CLI, Codex and
  * Cursor have hooks): no hook records what the session read from outside.
  */
 export const UNTRUSTED_REASON =
   "agentplugged writes no hook for this tool: a read through the tool's web access or another MCP server is not recorded by itself. After reading external content, call `guard.external_read` so that the journal keeps the trace (source, time, agent); nothing is blocked for it. Actions through file tools (reading, editing, writing) are not seen by a read hook: they stay governed by the permission rules alone (`read_secrets` is always denied). Only Claude Code also checks a write before it happens (a secret, a file outside the story, a decision of the architecture): not this tool.";
 
 /**
- * Why Gemini CLI has the "chat_proof" fallback (Claude Code, Antigravity CLI, Codex and
- * the Cursor editor have the hook): no hook records the creator's messages, so an answer given in the
+ * Why a tool without the hook has the "chat_proof" fallback (Claude Code, Antigravity CLI, Codex and
+ * the Cursor editor have it): no hook records the creator's messages, so an answer given in the
  * chat is recorded unverified.
  */
 export const CHAT_PROOF_REASON =
@@ -123,22 +115,10 @@ export const CURSOR_USAGE_REASON =
 export const USAGE_REASON =
   "the engine reads no trace of this tool: it measures nothing of its sessions (`measure.usage` answers `available: false`) and never estimates it.";
 
-const USAGE_FALLBACK: CompatibilityCell = {
-  support: "fallback",
-  files: [],
-  reason: USAGE_REASON,
-};
-
 const CURSOR_DECISIONS_FALLBACK: CompatibilityCell = {
   support: "fallback",
   files: [],
   reason: CURSOR_DECISIONS_REASON,
-};
-
-const CHAT_PROOF_FALLBACK: CompatibilityCell = {
-  support: "fallback",
-  files: [],
-  reason: CHAT_PROOF_REASON,
 };
 
 /**
@@ -181,12 +161,6 @@ const CODEX_DECISIONS_FALLBACK: CompatibilityCell = {
   reason: CODEX_DECISIONS_REASON,
 };
 
-const DECISIONS_FALLBACK: CompatibilityCell = {
-  support: "fallback",
-  files: [],
-  reason: DECISIONS_REASON,
-};
-
 /**
  * Why a tool has the "installs" fallback: it has no hook that sees an
  * installation before it runs, so the engine neither records it in the activity nor validates it
@@ -194,12 +168,6 @@ const DECISIONS_FALLBACK: CompatibilityCell = {
  */
 export const INSTALLS_REASON =
   "this tool has no hook that sees an installation before it runs: the engine does not record installations in the activity, and `installs.mode: validate` cannot ask for a validation here. The tool's own permissions decide.";
-
-const INSTALLS_FALLBACK: CompatibilityCell = {
-  support: "fallback",
-  files: [],
-  reason: INSTALLS_REASON,
-};
 
 export interface CompatibilityCell {
   readonly support: "native" | "fallback";
@@ -220,12 +188,6 @@ export interface ClientCompatibility {
   readonly name: string;
   readonly cells: Readonly<Record<Capability, CompatibilityCell>>;
 }
-
-const UNTRUSTED_FALLBACK: CompatibilityCell = {
-  support: "fallback",
-  files: [],
-  reason: UNTRUSTED_REASON,
-};
 
 /**
  * The files of Antigravity CLI's plugin that guard the product: the rules (`policy.json`,
@@ -405,45 +367,6 @@ export const COMPATIBILITY: readonly ClientCompatibility[] = [
     },
   },
   {
-    client: "gemini-cli",
-    tool: "antigravity",
-    name: "Gemini CLI",
-    cells: {
-      skills: SHARED_SKILLS,
-      agents: { support: "native", files: [".gemini/agents/<id>.md"] },
-      instructions: { support: "native", files: ["GEMINI.md"] },
-      permissions: {
-        support: "fallback",
-        files: [],
-        reason: "agentplugged generates no permission file for Gemini CLI: no path is blocked.",
-      },
-      // The shipped table gives `inherit` for every tier of Gemini CLI.
-      model: {
-        support: "fallback",
-        files: [".gemini/agents/<id>.md"],
-        reason: MODEL_INHERIT_REASON,
-      },
-      // Native once the creator's `.gemini/settings.json` exists: sync never creates it.
-      mcp: {
-        support: "fallback",
-        files: [],
-        reason: GEMINI_MCP_REASON,
-      },
-      rules: {
-        support: "fallback",
-        files: [],
-        reason:
-          "agentplugged generates no permission file for Gemini CLI: the permission rules of this constitution are not technically enforced. Nothing stops an agent from editing `.agentplugged/method.yaml` or running `npx agentplugged sync`, `rules set` or `migrate` there: rule changes go through the creator.",
-      },
-      untrusted: UNTRUSTED_FALLBACK,
-      chat_proof: CHAT_PROOF_FALLBACK,
-      isolation: ISOLATION_FALLBACK,
-      decisions: DECISIONS_FALLBACK,
-      installs: INSTALLS_FALLBACK,
-      usage: USAGE_FALLBACK,
-    },
-  },
-  {
     client: "cursor",
     tool: "cursor",
     name: "Cursor",
@@ -553,11 +476,6 @@ export interface FallbackOptions {
    */
   readonly mcpConflicts?: ReadonlyMap<ClientId, string>;
   /**
-   * Clients whose MCP file `sync` merges into only when it exists (Gemini CLI's settings), and
-   * where it was absent. When given, it decides their "mcp" cell instead of the matrix.
-   */
-  readonly mcpFileAbsent?: ReadonlySet<ClientId>;
-  /**
    * `.agents/plugins/agentplugged/` is the creator's and `sync` wrote nothing there:
    * what Antigravity CLI's plugin brings is a fallback.
    */
@@ -595,9 +513,6 @@ function supportOf(
   if (capability === "mcp") {
     const kept = client === "codex" && options.codexConfigKept === true;
     if (kept || options.mcpConflicts?.has(client) === true) return "fallback";
-    if (cell.support === "fallback" && options.mcpFileAbsent !== undefined) {
-      return options.mcpFileAbsent.has(client) ? "fallback" : "native";
-    }
     return cell.support;
   }
   if (capability !== "model" || options.modelInherit === undefined) return cell.support;

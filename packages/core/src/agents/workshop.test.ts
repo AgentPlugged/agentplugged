@@ -186,7 +186,6 @@ describe("the creator's addition is created whole and rendered for every tool", 
     expect(pathsOf("pilot")).toEqual(pathsOf("iris"));
     expect(pathsOf("pilot")).toEqual([
       "antigravity:.agents/agents/<id>.md",
-      "antigravity:.gemini/agents/<id>.md",
       "claude-code:.claude/agents/<id>.md",
       "claude-code:.claude/skills/<id>/SKILL.md",
       "codex:.codex/agents/<id>.toml",

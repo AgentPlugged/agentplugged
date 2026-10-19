@@ -1,4 +1,10 @@
 import { QUESTION_TOOL_NAME, type RuleAction, type RuleValue } from "@agentplugged/protocol";
+import {
+  ACTIVITY_END_MATCHER,
+  ACTIVITY_START_MATCHER,
+  activityHookHandler,
+  isActivityHook,
+} from "../chat/activity-hook.js";
 import { decisionHookHandler, isDecisionHook } from "../chat/decision-hook.js";
 import { isPromptHook, promptHookHandler } from "../chat/prompt-hook.js";
 import { toolInputOf } from "../mcp-tools.js";
@@ -31,6 +37,10 @@ import { claudeActionRules } from "./rule-permissions.js";
  * A `UserPromptSubmit` hook of type `command` (never `mcp_tool`): it runs the
  * generated script that records the creator's messages, the proof of the chat's answers
  * (`chat/prompt-hook.ts`).
+ *
+ * A `command` hook on the file and shell tools, before and after them (`chat/activity-hook.ts`):
+ * it appends a line to a small file of the machine so that a program there can show what a session
+ * opened in the creator's terminal does. It never answers the tool.
  */
 
 type Json = Record<string, unknown>;
@@ -44,7 +54,12 @@ const HOOK_TOOLS: ReadonlySet<string> = new Set([
 ]);
 
 /** The events our hooks use. */
-export const TRUST_HOOK_EVENTS = ["PreToolUse", "PostToolUse", "UserPromptSubmit"] as const;
+export const TRUST_HOOK_EVENTS = [
+  "PreToolUse",
+  "PostToolUse",
+  "PostToolUseFailure",
+  "UserPromptSubmit",
+] as const;
 export type TrustHookEvent = (typeof TRUST_HOOK_EVENTS)[number];
 
 /** One matcher group of `hooks.<event>` (`UserPromptSubmit` has no matcher). */
@@ -218,9 +233,13 @@ export function claudeTrustHooks(
   // The creator's answers to the question tool: recorded after it, and no answer
   // written by the call itself before it.
   const question: HookGroup = { matcher: QUESTION_TOOL_NAME, hooks: [decisionHookHandler()] };
+  // What a session opened in the creator's terminal does: one line before each file or shell
+  // tool, one after each shell command (its end, well or not).
+  const activity = activityHookHandler();
   return {
-    PreToolUse: [...pre, question],
-    PostToolUse: [...post, question],
+    PreToolUse: [...pre, question, { matcher: ACTIVITY_START_MATCHER, hooks: [activity] }],
+    PostToolUse: [...post, question, { matcher: ACTIVITY_END_MATCHER, hooks: [activity] }],
+    PostToolUseFailure: [{ matcher: ACTIVITY_END_MATCHER, hooks: [activity] }],
     UserPromptSubmit: prompt,
   };
 }
@@ -237,7 +256,8 @@ export function isTrustHook(value: unknown): boolean {
       typeof value.tool === "string" &&
       HOOK_TOOLS.has(value.tool)) ||
     isPromptHook(value) ||
-    isDecisionHook(value)
+    isDecisionHook(value) ||
+    isActivityHook(value)
   );
 }
 

@@ -109,16 +109,16 @@ describe("checkpoint.opened at version 2", () => {
     }) as EventEnvelope;
 
   it("is the current version, and a version 1 one is read as is", () => {
-    expect(EVENT_TYPE_REGISTRY["checkpoint.opened"]?.version).toBe(14);
-    expect(MAX_EVENT_VERSION).toBe(14);
+    expect(EVENT_TYPE_REGISTRY["checkpoint.opened"]?.version).toBe(16);
+    expect(MAX_EVENT_VERSION).toBe(16);
     expect(parseEventEnvelope(envelope(1)).success).toBe(true);
     const read = currentEvent(envelope(1));
-    expect(read.ok && read.event.v).toBe(14);
+    expect(read.ok && read.event.v).toBe(16);
     expect(read.ok && read.event.payload).toEqual(PERMISSION);
   });
 
   it("asks for an upgrade beyond what this engine knows, instead of an invalid event", () => {
-    const newer = parseEventEnvelope(envelope(15));
+    const newer = parseEventEnvelope(envelope(17));
     expect(newer.success ? undefined : newer.error.code).toBe("UPGRADE_REQUIRED");
     // A version 2 of a type still at 1 here.
     const status = envelope(2, "agent.progress_reported", { note: "ok" });

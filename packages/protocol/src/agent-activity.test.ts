@@ -4,13 +4,16 @@ import {
   AgentResultSchema,
   CostReportedPayloadSchema,
   EVENT_TYPE_REGISTRY,
+  formatRunNote,
   GetStateInputSchema,
+  parseRunNote,
   RESULT_ITEM_MAX,
   RESULT_ITEMS_MAX,
   RESULT_SUMMARY_MAX,
   ReportCostInputSchema,
   ReportProgressInputSchema,
   ReportStatusInputSchema,
+  RUN_NOTE_CODES,
   StoryIdSchema,
   SubmitResultInputSchema,
   UpdateStoryInputSchema,
@@ -142,5 +145,22 @@ describe("agent activity", () => {
     for (const id of ["2.6", "story-2-6", "__proto__", "constructor", "", "2-", "-6", "2-6-1"]) {
       expect(StoryIdSchema.safeParse(id).success, id).toBe(false);
     }
+  });
+
+  it("tells the consumption and the budget of a run in codes, never in a sentence", () => {
+    for (const code of [
+      "cost_partial",
+      "cost_unknown",
+      "budget_exceeded",
+      "budget_flagged",
+      "activity",
+    ] as const) {
+      expect(RUN_NOTE_CODES).toContain(code);
+      expect(parseRunNote(formatRunNote(code))).toEqual({ code, params: {} });
+    }
+    expect(parseRunNote(formatRunNote("budget_alert", { percent: 80 }))).toEqual({
+      code: "budget_alert",
+      params: { percent: "80" },
+    });
   });
 });

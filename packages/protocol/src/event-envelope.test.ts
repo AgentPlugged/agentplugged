@@ -210,11 +210,11 @@ describe("parseEventEnvelope: EVENT_INVALID", () => {
 
 describe("parseEventEnvelope: UPGRADE_REQUIRED", () => {
   it("rejects a newer version, whatever the other fields", () => {
-    // Version 14 exists (`checkpoint.opened`): 15 is beyond this engine.
-    expect(rejected({ v: 15, anything: true })).toEqual({
+    // Version 16 exists (`checkpoint.opened`): 17 is beyond this engine.
+    expect(rejected({ v: 17, anything: true })).toEqual({
       code: "UPGRADE_REQUIRED",
       message_key: "error.event_upgrade_required",
-      details: { field: "v", version: 15, supported: 14 },
+      details: { field: "v", version: 17, supported: 16 },
     });
   });
 });

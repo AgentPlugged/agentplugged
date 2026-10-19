@@ -1,14 +1,16 @@
-import { eventHash, signTrustRecord } from "@agentplugged/crypto";
+import { eventHash, signTrustRecord, verifyTrustRecord } from "@agentplugged/crypto";
 import {
   DEVICE_TRUST_EVENT_TYPES,
   type DeviceConfirmedPayload,
   type DevicePairedPayload,
   type DeviceRevokedPayload,
+  type DeviceRootCertifiedPayload,
   devicePairedRecord,
   deviceRevokedRecord,
   type EventEnvelope,
   type PairedDeviceKind,
   type RootPin,
+  rootCertifiedRecord,
   TRUST_SIGNATURE_TAGS,
 } from "@agentplugged/protocol";
 import type { StateStore } from "../journal/state-store.js";
@@ -70,6 +72,38 @@ export async function buildPairedPayload(
 }
 
 /**
+ * The payload of a `device.paired` on the authority of a device that gave the order `pair.offer`:
+ * the device signed the offer (`x`, `expires_at`) before the new device existed, and the bridge
+ * adds the new device's keys. Nothing here is signed by the bridge: the projection checks the
+ * signature against the signer's key.
+ */
+export function buildOfferAuthorizedPayload(
+  description: PairedDeviceDescription,
+  authorization: {
+    readonly signer: string;
+    readonly sig: string;
+    readonly x: string;
+    readonly expiresAt: string;
+  },
+): DevicePairedPayload {
+  return {
+    device: description.device,
+    kind: description.kind,
+    sig: { alg: "ed25519", key: description.sigKey },
+    enc: { alg: "x25519", key: description.encKey },
+    bridge: description.bridge,
+    provisional: description.provisional,
+    issued_at: description.issuedAt,
+    authorization: {
+      signer: authorization.signer,
+      alg: "ed25519",
+      sig: authorization.sig,
+      order: { x: authorization.x, expires_at: authorization.expiresAt },
+    },
+  };
+}
+
+/**
  * The payload of a `device.revoked` by the bridge for a device it still holds `provisional`
  *: the handover could not be completed in time.
  */
@@ -91,6 +125,49 @@ export async function buildProvisionalRevocation(input: {
     input.bridgeSecretKey,
   );
   return { ...unsigned, authorization: { alg: "ed25519", sig } };
+}
+
+/**
+ * The payload of a `device.revoked` that `author` signs with its own key, at the terminal of a
+ * machine. A phone or a browser signs its own authorization (the `device.revoke` order carries it),
+ * and the payload is then made by `revocationPayload`.
+ */
+export async function buildRevocation(input: {
+  readonly device: string;
+  readonly chainHead: string | null;
+  readonly author: string;
+  readonly authorSecretKey: Uint8Array;
+  readonly issuedAt: string;
+}): Promise<DeviceRevokedPayload> {
+  const unsigned = {
+    device: input.device,
+    chain_head: input.chainHead,
+    issued_at: input.issuedAt,
+    author: input.author,
+  };
+  const sig = await signTrustRecord(
+    deviceRevokedRecord(unsigned),
+    TRUST_SIGNATURE_TAGS.deviceRevoked,
+    input.authorSecretKey,
+  );
+  return { ...unsigned, authorization: { alg: "ed25519", sig } };
+}
+
+/** The payload of a `device.revoked` whose authorization was signed elsewhere (by the author's device). */
+export function revocationPayload(input: {
+  readonly device: string;
+  readonly chainHead: string | null;
+  readonly author: string;
+  readonly issuedAt: string;
+  readonly sig: string;
+}): DeviceRevokedPayload {
+  return {
+    device: input.device,
+    chain_head: input.chainHead,
+    issued_at: input.issuedAt,
+    author: input.author,
+    authorization: { alg: "ed25519", sig: input.sig },
+  };
 }
 
 /** What a write of a trust event did: the event, and whether this call wrote it. */
@@ -155,6 +232,18 @@ export function writeProvisionalRevocation(
   return writeOnce(journal, product, DEVICE_TRUST_EVENT_TYPES.revoked, payload.device, payload);
 }
 
+/**
+ * Writes the `device.revoked` of a device the creator removed, once per device: the removal the
+ * creator signed is the one that stays, and a second run (a resume after a cut) writes nothing.
+ */
+export function writeRevocation(
+  journal: StateStore,
+  product: string,
+  payload: DeviceRevokedPayload,
+): Promise<TrustWrite> {
+  return writeOnce(journal, product, DEVICE_TRUST_EVENT_TYPES.revoked, payload.device, payload);
+}
+
 /** Writes `device.confirmed`: the handover of the device is complete. */
 export function writeConfirmedDevice(
   journal: StateStore,
@@ -207,4 +296,77 @@ export async function pairedHeadIfTrusted(
   if (event === undefined) return undefined;
   const hashed = eventHash(event);
   return hashed.ok ? hashed.hash : undefined;
+}
+
+/** The payload of a `device.root_certified`: the first device recognised the root with this signature. */
+export function buildRootCertifiedPayload(input: {
+  readonly root: { readonly device: string; readonly key: string };
+  readonly issuedAt: string;
+  readonly signer: string;
+  readonly sig: string;
+}): DeviceRootCertifiedPayload {
+  return {
+    root: { device: input.root.device, key: input.root.key },
+    issued_at: input.issuedAt,
+    authorization: { signer: input.signer, alg: "ed25519", sig: input.sig },
+  };
+}
+
+/** True when `sigKey` signed the certification (checked before anything is written). */
+export function rootCertificationHolds(
+  payload: DeviceRootCertifiedPayload,
+  sigKey: Uint8Array,
+): Promise<boolean> {
+  const { authorization, ...unsigned } = payload;
+  return verifyTrustRecord(
+    rootCertifiedRecord(unsigned),
+    TRUST_SIGNATURE_TAGS.rootCertified,
+    authorization.sig,
+    sigKey,
+  );
+}
+
+/**
+ * Writes `device.root_certified`, once per root and signer: the certification ties the creator's
+ * key to the account and changes the validity of nothing. A resume or a second run finds it written.
+ */
+export async function writeRootCertified(
+  journal: StateStore,
+  product: string,
+  payload: DeviceRootCertifiedPayload,
+): Promise<TrustWrite> {
+  const same = (event: EventEnvelope): boolean => {
+    if (event.type !== DEVICE_TRUST_EVENT_TYPES.rootCertified) return false;
+    const found = event.payload as Partial<DeviceRootCertifiedPayload> | undefined;
+    return (
+      found?.root?.device === payload.root.device &&
+      found.root.key === payload.root.key &&
+      found.authorization?.signer === payload.authorization.signer
+    );
+  };
+  try {
+    const [event] = await journal.appendAll(
+      [
+        {
+          type: DEVICE_TRUST_EVENT_TYPES.rootCertified,
+          actor: { kind: "system" },
+          product,
+          provenance: "trusted",
+          payload,
+        },
+      ],
+      {
+        precondition: (listing) => {
+          if (listing.events.some(same)) throw new AlreadyWritten();
+        },
+      },
+    );
+    if (event === undefined) throw new Error("no event was written");
+    return { written: true, event };
+  } catch (error) {
+    if (!(error instanceof AlreadyWritten)) throw error;
+    const existing = (await journal.list()).events.find(same);
+    if (existing === undefined) throw error;
+    return { written: false, event: existing };
+  }
 }

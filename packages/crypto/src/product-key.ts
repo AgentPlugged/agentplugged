@@ -3,13 +3,16 @@ import {
   type EncryptedPayload,
   type EventEnvelope,
   KEY_ID_PATTERN,
+  MAX_EXPORTED_KEYS,
   PAYLOAD_ENCRYPTION_ALG,
   PRODUCT_KEY_EXPORT_PREFIX,
+  PRODUCT_KEYS_EXPORT_PREFIX,
   type UnsignedEventEnvelope,
 } from "@agentplugged/protocol";
 import { canonicalBytes } from "./canonical.js";
 import { fromBase64url, fromUtf8, toBase64url, utf8 } from "./encoding.js";
 import { randomBytes } from "./hash.js";
+import { openSealed, sealToPublicKey } from "./primitives.js";
 import { sodium, sodiumSumo } from "./sodium.js";
 
 /**
@@ -179,6 +182,47 @@ export async function verifyProductKeyProof(
   proof: string,
 ): Promise<boolean> {
   const expected = fromBase64url(await productKeyProof(key, productId)) as Uint8Array;
+  const given = fromBase64url(proof);
+  if (given === undefined || given.length !== expected.length) return false;
+  const lib = await sodium();
+  return lib.memcmp(expected, given);
+}
+
+/** Label of the proof that a renewal was made by a holder of the key it follows. */
+export const KEY_ROTATION_LABEL = "agentplugged/key-rotation/v1\0";
+
+/**
+ * The proof that whoever announces `newKeyId` as the key that follows `previousKey` holds
+ * `previousKey`: keyed BLAKE2b (32 bytes, keyed by the `approof1` subkey of the previous key) of
+ * `agentplugged/key-rotation/v1\0`, the product id, a zero byte and the new `key_id`. Unlike the
+ * proof of an announcement, it cannot be copied from the journal: it is made for one renewal.
+ */
+export async function productKeyRotationProof(
+  previousKey: Uint8Array,
+  productId: string,
+  newKeyId: string,
+): Promise<string> {
+  const derived = await subkey(previousKey, CONTEXT.proof);
+  try {
+    const lib = await sodium();
+    return toBase64url(
+      lib.crypto_generichash(32, utf8(`${KEY_ROTATION_LABEL}${productId}\0${newKeyId}`), derived),
+    );
+  } finally {
+    await wipeBytes(derived);
+  }
+}
+
+/** True when `proof` is the rotation proof of `previousKey` for this renewal (constant time). */
+export async function verifyProductKeyRotationProof(
+  previousKey: Uint8Array,
+  productId: string,
+  newKeyId: string,
+  proof: string,
+): Promise<boolean> {
+  const expected = fromBase64url(
+    await productKeyRotationProof(previousKey, productId, newKeyId),
+  ) as Uint8Array;
   const given = fromBase64url(proof);
   if (given === undefined || given.length !== expected.length) return false;
   const lib = await sodium();
@@ -562,6 +606,255 @@ export async function importProductKey(
       return { ok: false, reason: "format" };
     }
     return { ok: true, key, keyId: parsed.keyId, productId: parsed.productId };
+  } finally {
+    await wipeBytes(wrapping);
+  }
+}
+
+// --- renewal: the new key for a trusted machine ------------------------------------------------
+
+/** Version byte of the plain text of a key box. */
+const KEY_BOX_VERSION = 1;
+
+/**
+ * The product key sealed for one machine (a sealed box, libsodium `crypto_box_seal`) for the
+ * encryption key the product's journal registers for it, as base64url text. The product id is
+ * inside the box, so that a box made for one product cannot be passed off as another's. Only that
+ * machine opens it: the relay, the repository and every other device see bytes.
+ */
+export async function sealProductKeyFor(
+  key: Uint8Array,
+  productId: string,
+  machineEncKey: Uint8Array,
+): Promise<string> {
+  checkKey(key);
+  const product = utf8(productId);
+  if (product.length > 255) throw new TypeError("a product id has at most 255 bytes");
+  const plain = concat(Uint8Array.of(KEY_BOX_VERSION, product.length), product, key);
+  try {
+    return toBase64url(await sealToPublicKey(plain, machineEncKey));
+  } finally {
+    await wipeBytes(plain);
+  }
+}
+
+/**
+ * The product key of a box sealed for this machine, or undefined when the box does not open with
+ * its key pair, is not well formed or was made for another product. The caller still checks the
+ * key against the `key_id` and the proof the journal announces.
+ */
+export async function openProductKeyBox(
+  sealed: string,
+  productId: string,
+  keys: { readonly publicKey: Uint8Array; readonly secretKey: Uint8Array },
+): Promise<Uint8Array | undefined> {
+  const box = fromBase64url(sealed);
+  if (box === undefined) return undefined;
+  const plain = await openSealed(box, keys.publicKey, keys.secretKey);
+  if (plain === undefined) return undefined;
+  try {
+    if (plain[0] !== KEY_BOX_VERSION) return undefined;
+    const length = plain[1] ?? 0;
+    if (plain.length !== 2 + length + PRODUCT_KEY_BYTES) return undefined;
+    if (fromUtf8(plain.subarray(2, 2 + length)) !== productId) return undefined;
+    return plain.slice(2 + length);
+  } finally {
+    await wipeBytes(plain);
+  }
+}
+
+// --- export of several keys ----------------------------------------------------------------------
+
+/** Version byte of the export of several keys (`apk2:`). */
+const EXPORT_VERSION_MANY = 2;
+
+/**
+ * Several product keys of `productId` (the current one first, then the older ones kept after a
+ * renewal) exported under a passphrase: `apk2:` then, in base64url, the version (2), the Argon2id
+ * limits, the salt, the nonce, the number of keys (1 byte), each `key_id` (length on 1 byte, then
+ * UTF-8), the product id (length on 1 byte, then UTF-8) and the ciphertext of the keys, 32 bytes
+ * each, in the same order. Its associated data is `agentplugged/key-export/v1\0` then everything
+ * before the ciphertext. One key alone is still exported as `apk1:`.
+ */
+export async function exportProductKeysWith(
+  keys: readonly Uint8Array[],
+  productId: string,
+  passphrase: string,
+  options: { readonly limits?: PassphraseLimits } & VectorHooks,
+): Promise<string> {
+  if (keys.length === 0 || keys.length > MAX_EXPORTED_KEYS) {
+    throw new TypeError(`an export holds 1 to ${MAX_EXPORTED_KEYS} keys`);
+  }
+  for (const key of keys) checkKey(key);
+  const { opslimit, memlimit } = await limitsOf(options.limits);
+  const salt = options.salt ?? randomBytes(SALT_BYTES);
+  if (salt.length !== SALT_BYTES) throw new TypeError(`a salt has ${SALT_BYTES} bytes`);
+  const nonce = nonceOf(options.nonce);
+  const ids: Uint8Array[] = [];
+  for (const key of keys) ids.push(utf8(await productKeyId(key)));
+  const product = utf8(productId);
+  if (product.length > 255) throw new TypeError("a product id has at most 255 bytes");
+  const idBytes = ids.reduce((size, id) => size + 1 + id.length, 0);
+  const header = new Uint8Array(FIXED_HEADER + 1 + idBytes + 1 + product.length);
+  header[0] = EXPORT_VERSION_MANY;
+  writeUint32(header, 1, opslimit);
+  writeUint32(header, 5, memlimit);
+  header.set(salt, 9);
+  header.set(nonce, 9 + SALT_BYTES);
+  let at = FIXED_HEADER;
+  header[at++] = keys.length;
+  for (const id of ids) {
+    header[at++] = id.length;
+    header.set(id, at);
+    at += id.length;
+  }
+  header[at++] = product.length;
+  header.set(product, at);
+  const plain = concat(...keys);
+  const wrapping = await deriveWrappingKey(passphrase, salt, opslimit, memlimit);
+  try {
+    const ct = await seal(plain, concat(utf8(KEY_EXPORT_AD_LABEL), header), wrapping, nonce);
+    return `${PRODUCT_KEYS_EXPORT_PREFIX}${toBase64url(concat(header, ct))}`;
+  } finally {
+    await wipeBytes(wrapping, plain);
+  }
+}
+
+/**
+ * `keys` of `productId` exported under a passphrase: `apk1:` for one key, `apk2:` for several
+ * (the current one first).
+ */
+export function exportProductKeys(
+  keys: readonly Uint8Array[],
+  productId: string,
+  passphrase: string,
+  options: { readonly limits?: PassphraseLimits } = {},
+): Promise<string> {
+  const [only] = keys;
+  if (keys.length === 1 && only !== undefined) {
+    return exportProductKey(only, productId, passphrase, options);
+  }
+  return exportProductKeysWith(keys, productId, passphrase, options);
+}
+
+interface ParsedManyExport {
+  readonly keyIds: readonly string[];
+  readonly productId: string;
+  readonly opslimit: number;
+  readonly memlimit: number;
+  readonly salt: Uint8Array;
+  readonly nonce: Uint8Array;
+  readonly header: Uint8Array;
+  readonly ct: Uint8Array;
+}
+
+function parseManyExport(text: string): ParsedManyExport | undefined {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith(PRODUCT_KEYS_EXPORT_PREFIX)) return undefined;
+  const bytes = fromBase64url(trimmed.slice(PRODUCT_KEYS_EXPORT_PREFIX.length));
+  if (bytes === undefined || bytes.length < FIXED_HEADER + 3 || bytes[0] !== EXPORT_VERSION_MANY) {
+    return undefined;
+  }
+  let at = FIXED_HEADER;
+  const count = bytes[at++] ?? 0;
+  if (count < 1 || count > MAX_EXPORTED_KEYS) return undefined;
+  const keyIds: string[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const length = bytes[at++] ?? 0;
+    const id = fromUtf8(bytes.subarray(at, at + length));
+    at += length;
+    if (id === undefined || !KEY_ID_PATTERN.test(id)) return undefined;
+    keyIds.push(id);
+  }
+  const productLength = bytes[at++] ?? 0;
+  const productId = fromUtf8(bytes.subarray(at, at + productLength));
+  at += productLength;
+  if (bytes.length !== at + count * PRODUCT_KEY_BYTES + TAG_BYTES) return undefined;
+  if (!productId || new Set(keyIds).size !== keyIds.length) return undefined;
+  return {
+    keyIds,
+    productId,
+    opslimit: readUint32(bytes, 1),
+    memlimit: readUint32(bytes, 5),
+    salt: bytes.slice(9, 9 + SALT_BYTES),
+    nonce: bytes.slice(9 + SALT_BYTES, FIXED_HEADER),
+    header: bytes.slice(0, at),
+    ct: bytes.slice(at),
+  };
+}
+
+/**
+ * What an export (`apk1:` or `apk2:`) names before it is opened: the `key_id`s it holds, the
+ * current one first, and the product; undefined when the text is not an export.
+ */
+export function exportedKeysInfo(
+  text: string,
+): { readonly keyIds: readonly string[]; readonly productId: string } | undefined {
+  const many = parseManyExport(text);
+  if (many !== undefined) return { keyIds: many.keyIds, productId: many.productId };
+  const one = parseExport(text);
+  return one === undefined ? undefined : { keyIds: [one.keyId], productId: one.productId };
+}
+
+/** The keys of an export, the current one first, each checked against the `key_id` it names. */
+export type ImportProductKeysResult =
+  | {
+      readonly ok: true;
+      readonly keys: ReadonlyArray<{ readonly key: Uint8Array; readonly keyId: string }>;
+      readonly productId: string;
+    }
+  | { readonly ok: false; readonly reason: "format" | "passphrase" };
+
+/**
+ * The keys of an export of either format. Same refusals as `importProductKey`: `format` for text
+ * that is not an export, limits other than the expected ones, a derivation that failed or a key
+ * that does not match the `key_id` it names; `passphrase` when the passphrase does not open it.
+ */
+export async function importProductKeys(
+  text: string,
+  passphrase: string,
+  options: { readonly limits?: PassphraseLimits } = {},
+): Promise<ImportProductKeysResult> {
+  const many = parseManyExport(text);
+  if (many === undefined) {
+    const one = await importProductKey(text, passphrase, options);
+    return one.ok
+      ? { ok: true, keys: [{ key: one.key, keyId: one.keyId }], productId: one.productId }
+      : one;
+  }
+  const expected = await limitsOf(options.limits);
+  if (many.opslimit !== expected.opslimit || many.memlimit !== expected.memlimit) {
+    return { ok: false, reason: "format" };
+  }
+  let wrapping: Uint8Array;
+  try {
+    wrapping = await deriveWrappingKey(passphrase, many.salt, many.opslimit, many.memlimit);
+  } catch {
+    return { ok: false, reason: "format" };
+  }
+  try {
+    const plain = await open(
+      many.ct,
+      concat(utf8(KEY_EXPORT_AD_LABEL), many.header),
+      wrapping,
+      many.nonce,
+    );
+    if (plain === undefined) return { ok: false, reason: "passphrase" };
+    const keys: Array<{ key: Uint8Array; keyId: string }> = [];
+    try {
+      for (let index = 0; index < many.keyIds.length; index += 1) {
+        const key = plain.slice(index * PRODUCT_KEY_BYTES, (index + 1) * PRODUCT_KEY_BYTES);
+        const keyId = many.keyIds[index] as string;
+        if (key.length !== PRODUCT_KEY_BYTES || (await productKeyId(key)) !== keyId) {
+          await wipeBytes(key, ...keys.map((kept) => kept.key));
+          return { ok: false, reason: "format" };
+        }
+        keys.push({ key, keyId });
+      }
+    } finally {
+      await wipeBytes(plain);
+    }
+    return { ok: true, keys, productId: many.productId };
   } finally {
     await wipeBytes(wrapping);
   }

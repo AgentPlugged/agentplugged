@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { ErrorCode, type ErrorPayload } from "./error-payload.js";
 import { isCanonicalBase64url, ULID_PATTERN } from "./event-envelope.js";
+import {
+  NOTIFY_SURFACES,
+  NotifyPrefsSchema,
+  PUSH_PLATFORMS,
+  PushNoticeSchema,
+  PushTokenSchema,
+} from "./push.js";
+import { VAULT_CHUNK_BYTES, VAULT_CHUNKS_MAX, VAULT_KINDS } from "./vault.js";
 
 /**
  * The blind relay's wire contract: an envelope carries encrypted bytes and
@@ -58,12 +66,60 @@ export const RelayErrorCode = {
   RELAY_PREKEY_INVALID: "RELAY_PREKEY_INVALID",
   /** The relay could not do what was asked (its storage failed): nothing was done, try again. */
   RELAY_UNAVAILABLE: "RELAY_UNAVAILABLE",
+  /**
+   * The relay refused a vault blob: `details.reason` is `stale` (a lower or equal revision),
+   * `out_of_order` (a change that does not follow the blob the relay holds), `too_large`, `limit`
+   * (too many products or too many bytes for the account) or `forbidden` (not a machine of the account).
+   */
+  VAULT_REFUSED: "VAULT_REFUSED",
+  /**
+   * The relay refused a push registration or a notification: `details.reason` is `forbidden`
+   * (the sender is not the kind of device that may), `rate` (too many) or `limit` (too many
+   * tokens for the account).
+   */
+  PUSH_REFUSED: "PUSH_REFUSED",
   /** The rendezvous does not exist (any more): nothing says whether it ever did. */
   RENDEZVOUS_UNKNOWN: "RENDEZVOUS_UNKNOWN",
   /** The rendezvous cannot be opened or joined (proof, limit, taken): one code for every cause. */
   RENDEZVOUS_REFUSED: "RENDEZVOUS_REFUSED",
   /** The bridge cannot be attached to the account (no joiner of that account, limit, expired). */
   RENDEZVOUS_ATTACH_REFUSED: "RENDEZVOUS_ATTACH_REFUSED",
+  /** The challenge of a creation or a sign-in is too old. */
+  CHALLENGE_EXPIRED: "CHALLENGE_EXPIRED",
+  /** The challenge was already used: a challenge serves once. */
+  CHALLENGE_REUSED: "CHALLENGE_REUSED",
+  /** The page that asked is not an allowed origin, or the passkey was made for another site. */
+  ORIGIN_MISMATCH: "ORIGIN_MISMATCH",
+  /** This passkey already belongs to an account. */
+  CREDENTIAL_ALREADY_REGISTERED: "CREDENTIAL_ALREADY_REGISTERED",
+  /** The code from the e-mail is wrong (a few tries are allowed). */
+  EMAIL_CODE_INVALID: "EMAIL_CODE_INVALID",
+  /** The code is too old, was spent, or too many wrong ones were tried: ask for a new one. */
+  EMAIL_CODE_EXPIRED: "EMAIL_CODE_EXPIRED",
+  /** Another account took this address while the code was being read. */
+  EMAIL_ALREADY_REGISTERED: "EMAIL_ALREADY_REGISTERED",
+  /** The request of an account route breaks its schema. */
+  ACCOUNT_REQUEST_INVALID: "ACCOUNT_REQUEST_INVALID",
+  /** The passkey was not recognized or its proof is wrong: one code for every cause. */
+  ACCOUNT_SIGN_IN_FAILED: "ACCOUNT_SIGN_IN_FAILED",
+  /** The route needs a signed-in session and there is none (or it expired). */
+  ACCOUNT_SESSION_REQUIRED: "ACCOUNT_SESSION_REQUIRED",
+  /** The account of this device was erased: the device must stop connecting. */
+  ACCOUNT_DELETED: "ACCOUNT_DELETED",
+  /** The export asked for is not ready yet (it is being prepared). */
+  EXPORT_NOT_READY: "EXPORT_NOT_READY",
+  /** The export was already downloaded, or its link has expired: ask for a new one. */
+  EXPORT_GONE: "EXPORT_GONE",
+  /** The account already has the most links it may have active: withdraw one first. */
+  SHARE_LIMIT: "SHARE_LIMIT",
+  /** The sealed page is larger than a link may hold. */
+  SHARE_TOO_LARGE: "SHARE_TOO_LARGE",
+  /** The account has the most passkeys it may have: remove one first. */
+  PASSKEY_LIMIT: "PASSKEY_LIMIT",
+  /** The last passkey of an account is kept: without one, nobody could sign in. */
+  PASSKEY_LAST: "PASSKEY_LAST",
+  /** The link does not work (unknown, expired or withdrawn): one code for every cause. */
+  SHARE_UNAVAILABLE: "SHARE_UNAVAILABLE",
 } as const;
 export type RelayErrorCode = (typeof RelayErrorCode)[keyof typeof RelayErrorCode];
 
@@ -75,6 +131,8 @@ export const RELAY_CLOSE_CODES = {
   frameInvalid: 4400,
   originRefused: 4403,
   revoked: 4410,
+  /** The account of the device was erased. Sent to any connection of that account, proved or not. */
+  accountDeleted: 4411,
   serverError: 4500,
 } as const;
 
@@ -255,7 +313,8 @@ const KEY_32 = z.string().length(43).refine(isCanonicalBase64url);
  */
 export const RelayAttachDeclarationSchema = z.strictObject({
   device_id: RelayIdSchema,
-  kind: z.literal("bridge"),
+  /** `bridge` for a machine attached during a rendezvous, `browser` for a browser registering itself. */
+  kind: z.enum(["bridge", "browser"]),
   sig_key: KEY_32,
   enc_key: KEY_32,
   relay: z.string().min(1).max(253),
@@ -362,10 +421,95 @@ export const RelayClientFrameSchema = z.discriminatedUnion("type", [
       .max(base64urlLength(RENDEZVOUS_MAX_DATA_BYTES))
       .refine(isCanonicalBase64url),
   }),
+  /**
+   * A linked browser registers itself as a device of the account whose session it shows (the
+   * cookie of the upgrade request, or `credential`). The declaration is signed with the browser's
+   * own key, so only the holder of that key can register it; registering the same declaration
+   * again changes nothing.
+   */
+  z.strictObject({
+    type: z.literal("device_register"),
+    declaration: RelayAttachDeclarationSchema,
+    signature: SignatureSchema,
+    credential: z.string().min(1).max(4096).optional(),
+  }),
+  /**
+   * A device of the account asks the relay to stop serving another device of the account, named by
+   * its public signing key (the key the creator's journal registers for it): the relay closes its
+   * connections, erases what waits for it and refuses it. The relay does not decide who is
+   * trusted: this only ends its own service, and the bridge refuses the device whatever the relay does.
+   */
+  z
+    .strictObject({
+      type: z.literal("device_revoke"),
+      sig_key: KEY_32.optional(),
+      /** Instead of the key: the relay's own identifier of the device (for a device no journal knows). */
+      device_id: RelayIdSchema.optional(),
+    })
+    .refine((frame) => (frame.sig_key === undefined) !== (frame.device_id === undefined), {
+      message: "name the device by its key or by its identifier, not both",
+    }),
+  /**
+   * A machine deposits one piece of the vault of a product (a blob is cut into chunks of at most
+   * `VAULT_CHUNK_BYTES`). The relay keeps the latest full vault and the changes after it; it reads
+   * none of it.
+   */
+  z.strictObject({
+    type: z.literal("vault_put"),
+    product: RelayIdSchema,
+    kind: z.enum(VAULT_KINDS),
+    /** Rises with every blob of the product. */
+    rev: z.number().int().positive(),
+    /** The revision a change follows; null for a full vault. */
+    base_rev: z.number().int().positive().nullable(),
+    index: z
+      .number()
+      .int()
+      .min(0)
+      .max(VAULT_CHUNKS_MAX - 1),
+    count: z.number().int().min(1).max(VAULT_CHUNKS_MAX),
+    data: z.string().min(1).max(base64urlLength(VAULT_CHUNK_BYTES)).refine(isCanonicalBase64url),
+  }),
+  /** A device of the account asks for the vault of a product. */
+  z.strictObject({ type: z.literal("vault_get"), product: RelayIdSchema }),
+  /** A device asks which of its envelopes still wait for their recipient. */
+  z.strictObject({ type: z.literal("outbox_list") }),
+  /** A phone tells the relay where the push service of its platform reaches it. */
+  z.strictObject({
+    type: z.literal("push_register"),
+    platform: z.enum(PUSH_PLATFORMS),
+    token: PushTokenSchema,
+  }),
+  /** A phone no longer wants to be notified. */
+  z.strictObject({ type: z.literal("push_unregister") }),
+  /** A machine asks the relay to notify the phones of the account: an opaque notice, nothing more. */
+  z.strictObject({ type: z.literal("notify"), ...PushNoticeSchema.shape }),
+  /** A machine says the point behind a notice no longer waits: a notice held back is dropped. */
+  z.strictObject({ type: z.literal("notify_clear"), id: PushNoticeSchema.shape.id }),
+  /**
+   * A view tells the relay whether its surface is active (foreground, interaction within two
+   * minutes). It carries no product and no content, and is repeated while the surface stays active.
+   */
+  z.strictObject({
+    type: z.literal("presence_report"),
+    surface: z.enum(NOTIFY_SURFACES),
+    active: z.boolean(),
+  }),
+  /** A view asks for the notification settings of the account. */
+  z.strictObject({ type: z.literal("notify_prefs_get") }),
+  /** A view changes the notification settings of the account. */
+  z.strictObject({ type: z.literal("notify_prefs_set"), prefs: NotifyPrefsSchema }),
+  /** A device takes back an envelope it sent that its recipient has not received. */
+  z.strictObject({ type: z.literal("outbox_cancel"), id: RelayIdSchema }),
   z.strictObject({
     type: z.literal("rv_attach"),
     declaration: RelayAttachDeclarationSchema,
     signature: SignatureSchema,
+    /**
+     * A bridge already attached to the account that vouches for ANOTHER machine's declaration
+     * (the machine signed it itself): the identifier of the voucher on this relay.
+     */
+    voucher: RelayIdSchema.optional(),
   }),
 ]);
 export type RelayClientFrame = z.infer<typeof RelayClientFrameSchema>;
@@ -373,6 +517,12 @@ export type RelayClientFrame = z.infer<typeof RelayClientFrameSchema>;
 const PresenceEntrySchema = z.strictObject({
   device_id: RelayIdSchema,
   kind: z.enum(RELAY_DEVICE_KINDS),
+  /**
+   * The public signing key of the device: a device of the account's journal is recognised by it (the
+   * relay's identifiers mean nothing to a journal), and a device no journal knows by its key is shown
+   * as not verified.
+   */
+  sig_key: KEY_32.optional(),
   online: z.boolean(),
   /** ISO 8601, `null` when the device never connected. */
   last_seen_at: z.string().nullable(),
@@ -438,5 +588,84 @@ export const RelayServerFrameSchema = z.discriminatedUnion("type", [
   /** The relay's receipt of a message: `delivered` says whether the other side was there. */
   z.strictObject({ type: z.literal("rv_sent"), id: RelayIdSchema, delivered: z.boolean() }),
   z.strictObject({ type: z.literal("rv_attached"), device_id: RelayIdSchema }),
+  /** The registration of a browser as a device was accepted (or was already in place). */
+  z.strictObject({ type: z.literal("device_registered"), device_id: RelayIdSchema }),
+  /** The relay ended its service of the device with this key (`found: false`: no such device in the account). */
+  z.strictObject({
+    type: z.literal("device_revoked"),
+    found: z.boolean(),
+    /** The relay's identifier of the device it stopped serving; null when there was none. */
+    device_id: RelayIdSchema.nullable(),
+  }),
+  /** To the other devices of the account: this one was removed and is no longer listed. */
+  z.strictObject({ type: z.literal("device_gone"), device_id: RelayIdSchema }),
+  /** A blob of the vault was kept (all its chunks arrived and were accepted). */
+  z.strictObject({
+    type: z.literal("vault_stored"),
+    product: RelayIdSchema,
+    rev: z.number().int().positive(),
+  }),
+  /** One chunk of a blob the relay holds for the product, in revision order. */
+  z.strictObject({
+    type: z.literal("vault_blob"),
+    product: RelayIdSchema,
+    rev: z.number().int().positive(),
+    base_rev: z.number().int().positive().nullable(),
+    kind: z.enum(VAULT_KINDS),
+    /** When the relay received it, ISO 8601. */
+    stored_at: z.iso.datetime(),
+    index: z
+      .number()
+      .int()
+      .min(0)
+      .max(VAULT_CHUNKS_MAX - 1),
+    count: z.number().int().min(1).max(VAULT_CHUNKS_MAX),
+    data: z.string().min(1).max(base64urlLength(VAULT_CHUNK_BYTES)).refine(isCanonicalBase64url),
+  }),
+  /** The end of the answer to `vault_get`: `blobs` blobs were sent (0: the relay holds none). */
+  z.strictObject({
+    type: z.literal("vault_end"),
+    product: RelayIdSchema,
+    blobs: z.number().int().min(0),
+  }),
+  /**
+   * To the machines of the account: the relay erased the vaults of the account (a device was
+   * removed, so what was sealed before it is no longer kept); the machine seals them again.
+   */
+  z.strictObject({ type: z.literal("vault_cleared") }),
+  /** The relay keeps the push token of this phone. */
+  z.strictObject({ type: z.literal("push_registered") }),
+  /** The relay forgot the push token of this phone. */
+  z.strictObject({ type: z.literal("push_unregistered") }),
+  /** The notice `id` was handed to the push services for `sent` phones (0: nobody to notify). */
+  z.strictObject({
+    type: z.literal("notified"),
+    id: PushNoticeSchema.shape.id,
+    sent: z.number().int().min(0).max(1000),
+  }),
+  /** The notification settings of the account: the answer to a request, and every change. */
+  z.strictObject({ type: z.literal("notify_prefs"), prefs: NotifyPrefsSchema }),
+  /** To a browser: a notice for its surface (the relay chose it; the words come from the state). */
+  z.strictObject({ type: z.literal("notice"), ...PushNoticeSchema.shape }),
+  /** The envelopes this device sent that their recipient has not received yet. */
+  z.strictObject({
+    type: z.literal("outbox"),
+    items: z
+      .array(
+        z.strictObject({
+          id: RelayIdSchema,
+          to: RelayIdSchema,
+          queued_at: z.iso.datetime(),
+          expires_at: z.iso.datetime(),
+        }),
+      )
+      .max(500),
+  }),
+  /** `cancelled: false`: the envelope was already delivered (or never waited): nothing was taken back. */
+  z.strictObject({
+    type: z.literal("outbox_cancelled"),
+    id: RelayIdSchema,
+    cancelled: z.boolean(),
+  }),
 ]);
 export type RelayServerFrame = z.infer<typeof RelayServerFrameSchema>;

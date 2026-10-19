@@ -29,12 +29,16 @@ export interface GitRun {
   readonly stderr: string;
   /** True when the run was killed at its time limit. */
   readonly timedOut?: boolean;
+  /** True when the output went past the byte limit asked for: it was cut there and the run stopped. */
+  readonly capped?: boolean;
 }
 
 /**
  * Runs one `git` command to completion. Rejects only when `git` cannot be started. `env` adds
  * variables (for example `LC_ALL=C`, so that messages can be recognised). After `timeoutMs`, the
- * process is killed and the run ends with `status: null` and `timedOut: true`.
+ * process is killed and the run ends with `status: null` and `timedOut: true`. With `maxBytes`,
+ * the process is killed once its output goes past that many bytes, and the run ends with
+ * `capped: true` and the output cut at the limit.
  */
 export function runGit(
   cwd: string,
@@ -42,6 +46,7 @@ export function runGit(
   input?: string,
   env: Readonly<Record<string, string>> = {},
   timeoutMs?: number,
+  maxBytes?: number,
 ): Promise<GitRun> {
   return new Promise((resolve, reject) => {
     const child = spawn("git", args, { cwd, env: { ...gitEnv(), ...env }, windowsHide: true });
@@ -55,7 +60,20 @@ export function runGit(
           }, timeoutMs);
     const out: Buffer[] = [];
     const err: Buffer[] = [];
-    child.stdout.on("data", (chunk: Buffer) => out.push(chunk));
+    let size = 0;
+    let capped = false;
+    child.stdout.on("data", (chunk: Buffer) => {
+      if (capped) return;
+      if (maxBytes !== undefined && size + chunk.length > maxBytes) {
+        out.push(chunk.subarray(0, maxBytes - size));
+        size = maxBytes;
+        capped = true;
+        child.kill();
+        return;
+      }
+      size += chunk.length;
+      out.push(chunk);
+    });
     child.stderr.on("data", (chunk: Buffer) => err.push(chunk));
     child.on("error", (error) => {
       clearTimeout(timer);
@@ -65,12 +83,13 @@ export function runGit(
       clearTimeout(timer);
       const stderr = Buffer.concat(err).toString("utf8").trim();
       resolve({
-        status: timedOut ? null : status,
+        status: timedOut ? null : capped ? 0 : status,
         stdout: Buffer.concat(out),
         stderr: timedOut
           ? `${stderr}\nfatal: git ${args[0] ?? ""} took more than ${Math.round((timeoutMs ?? 0) / 1000)} s`.trim()
           : stderr,
         timedOut,
+        ...(capped ? { capped: true } : {}),
       });
     });
     child.stdin.on("error", () => {});

@@ -10,6 +10,7 @@ import {
   type CheckpointAnsweredPayload,
   type CheckpointAutoAppliedPayload,
   type CheckpointBlock,
+  type CheckpointCard,
   type CheckpointClosedPayload,
   type CheckpointCloseReason,
   type CheckpointCriterion,
@@ -26,6 +27,10 @@ import {
   type CheckpointStatus,
   type CheckpointType,
   type CheckpointVerdict,
+  type CheckpointWebAnsweredPayload,
+  type CheckpointWebHeldPayload,
+  type CheckpointWebHoldCancelledPayload,
+  type CheckpointWebHoldFailedPayload,
   CONFIRMATION_MODES,
   type ConfirmationMode,
   type CreatorActionRecord,
@@ -47,6 +52,9 @@ import {
   type ValidationAssurance,
   type ValidationDecision,
   type ValidationSource,
+  WEB_ANSWER_EVENT_TYPES,
+  WEB_ANSWER_STALE_MS,
+  WEB_ANSWER_WINDOW_MS,
 } from "@agentplugged/protocol";
 import { autoOption } from "../chat/auto-apply.js";
 import { citedKey } from "../chat/chat-proof.js";
@@ -54,6 +62,7 @@ import { quoteDigest } from "../chat/chat-text.js";
 import {
   blockScope,
   byOpening,
+  cardOf,
   confirmationFor,
   recipientFor,
   truncate,
@@ -62,6 +71,7 @@ import {
 import { delegationVerdict } from "../checkpoints/point-rules.js";
 import {
   answerable,
+  answeredElsewhere,
   assuranceOf,
   liftsBlocks,
   resolutionProblem,
@@ -231,6 +241,8 @@ export interface CheckpointState {
   readonly memory?: MemoryRecord | null;
   /** The `lessons.recorded` or `lessons.promoted` that carried a memory checkpoint out, or null. */
   memory_done?: { readonly event: string; readonly at: string } | null;
+  /** What the agent wrote for the creator's first read: effect, risks, views; absent when none. */
+  readonly card?: CheckpointCard;
   /** The angle, audience and short version of a `publication` checkpoint, else null. */
   readonly publication?: PublicationRecord | null;
   /**
@@ -243,6 +255,56 @@ export interface CheckpointState {
     readonly at: string;
     readonly event: string;
   } | null;
+  /**
+   * The answer the creator gave from the web that the machine holds for the undo window: the point
+   * stays open (nothing is decided) until the machine carries the answer out or the creator takes
+   * it back. Absent or null otherwise.
+   */
+  pending_answer?: PendingWebAnswer | null;
+  /**
+   * Why the machine could not carry out the last answer held for this point (the merge of a story
+   * the forge refused): the point is open again and says so. Cleared by the next held answer or by
+   * any decision. Absent or null otherwise.
+   */
+  web_failure?: WebAnswerFailure | null;
+}
+
+/** A held answer the machine could not carry out (`checkpoint.web_hold_failed`). */
+export interface WebAnswerFailure {
+  /** The engine's error code (`MERGE_FAILED`) and its short reason (`head_moved`), when it has one. */
+  readonly code: string;
+  readonly reason: string | null;
+  /** The held answer's order and the browser device that signed it. */
+  readonly order: string;
+  readonly device: string;
+  readonly at: string;
+  readonly event: string;
+}
+
+/**
+ * True when an answer from the web is held for the point at `now`: its window lasts, or ended
+ * a moment ago and the machine is about to carry it out. A held answer the machine never carried
+ * out (long past) holds nothing: the point can be answered again.
+ */
+export function heldNow(checkpoint: Pick<CheckpointState, "pending_answer">, now: number): boolean {
+  const pending = checkpoint.pending_answer ?? null;
+  return pending !== null && Date.parse(pending.until) + WEB_ANSWER_STALE_MS > now;
+}
+
+/** An answer from the web held for the undo window (`checkpoint.web_held`). */
+export interface PendingWebAnswer {
+  readonly decision: ResolutionDecision;
+  readonly option: string | null;
+  readonly note: string | null;
+  /** The browser device that signed it. */
+  readonly device: string;
+  /** The identifier of the signed order that carried it. */
+  readonly order: string;
+  /** When the machine began to hold it, and when the undo window ends. */
+  readonly at: string;
+  readonly until: string;
+  /** The `checkpoint.web_held` event. */
+  readonly event: string;
 }
 
 /** The checkpoints of a projection's state, by id (an empty dictionary when there are none). */
@@ -333,6 +395,7 @@ export function closeLiftedBlocks(
       continue;
     }
     checkpoint.status = "closed";
+    checkpoint.pending_answer = null;
     checkpoint.closed = { reason: "block_lifted", ref: null, at: event.at, event: event.id };
     lift(draft, checkpoint);
   }
@@ -413,6 +476,24 @@ function answerOf(event: EventEnvelope): Answer {
       channel: null,
     };
   }
+  if (event.type === WEB_ANSWER_EVENT_TYPES.answered) {
+    // The signed order of a browser the creator trusts, carried out by the machine: the assurance
+    // comes from the event's type, and the order and its device stay in the journal for anyone to check.
+    const payload = event.payload as CheckpointWebAnsweredPayload;
+    return {
+      decision: payload.decision,
+      option: payload.option,
+      note: payload.note,
+      // The payload's schema ties the source to the kind of the device that signed the order.
+      source: payload.source,
+      assurance: "device",
+      quote: null,
+      confirmation_quote: null,
+      relayed_by: null,
+      proof: null,
+      channel: null,
+    };
+  }
   if (event.type === CHECKPOINT_DECIDED_EVENT_TYPES.decided) {
     // Decided by the agent responsible for the point: never the creator's answer.
     const payload = event.payload as CheckpointDecidedPayload;
@@ -488,6 +569,17 @@ function answerProblem(
       if (!(Date.parse(proof.question.at) > Date.parse(checkpoint.opened_at))) return "invalid";
       if (citedOf(draft).has(citedKey(proof.question))) return "invalid";
     }
+    return undefined;
+  }
+  if (event.type === WEB_ANSWER_EVENT_TYPES.answered) {
+    // Written by the machine that carried out the order (a system actor on a machine), and only on a
+    // point the web answers by itself: a story's merge and the action of the creator's that the engine
+    // carries out on approval are answered elsewhere.
+    const payload = event.payload as CheckpointWebAnsweredPayload;
+    if (event.actor.kind !== "system" || !MACHINE_DEVICE_PATTERN.test(event.actor.device)) {
+      return "invalid";
+    }
+    if (answeredElsewhere(checkpoint, payload.decision)) return "invalid";
     return undefined;
   }
   if (event.type === CHAT_EVENT_TYPES.answered) {
@@ -599,6 +691,9 @@ export function applyResolution(
     ...(forced === undefined ? {} : { stack: forced.stack }),
   };
   checkpoint.resolution = resolution;
+  // Whatever was held for this point is moot now: the first answer decided.
+  checkpoint.pending_answer = null;
+  checkpoint.web_failure = null;
   checkpoint.status = answer.decision === "waived" ? "waived" : "resolved";
   if (answer.waiver_until !== undefined) {
     checkpoint.waived_ms += Date.parse(answer.waiver_until) - at;
@@ -947,6 +1042,7 @@ export const CHECKPOINT_REDUCERS: Readonly<Record<string, Reducer>> = {
             memory: JSON.parse(JSON.stringify(payload.memory)) as MemoryRecord,
             memory_done: null,
           }),
+      ...(payload.card === undefined ? {} : { card: cardOf(payload.card) }),
       ...(payload.publication === undefined
         ? {}
         : { publication: { ...payload.publication } as PublicationRecord }),
@@ -1002,6 +1098,101 @@ export const CHECKPOINT_REDUCERS: Readonly<Record<string, Reducer>> = {
    */
   [CHAT_EVENT_TYPES.answered]: (draft, event) => {
     holdOrApply(draft, event, (event.payload as CheckpointAnsweredPayload).checkpoint);
+  },
+  /**
+   * The creator's answer carried by the signed order of a browser: like a chat answer, from the
+   * machine (`answerProblem`), held while its checkpoint is not open yet in projection order.
+   */
+  [WEB_ANSWER_EVENT_TYPES.answered]: (draft, event) => {
+    holdOrApply(draft, event, (event.payload as CheckpointWebAnsweredPayload).checkpoint);
+  },
+  /**
+   * An answer from the web held for the undo window: written by the machine on a point the web
+   * answers by itself that nothing holds yet. The point stays open; nothing is decided.
+   */
+  [WEB_ANSWER_EVENT_TYPES.held]: (draft, event) => {
+    const payload = event.payload as CheckpointWebHeldPayload;
+    const checkpoints = section<CheckpointState>(draft, "checkpoints");
+    const checkpoint = Object.hasOwn(checkpoints, payload.checkpoint)
+      ? (checkpoints[payload.checkpoint] as CheckpointState)
+      : undefined;
+    if (
+      checkpoint === undefined ||
+      event.actor.kind !== "system" ||
+      !MACHINE_DEVICE_PATTERN.test(event.actor.device) ||
+      !answerable(checkpoint, Date.parse(event.at)) ||
+      heldNow(checkpoint, Date.parse(event.at)) ||
+      answeredElsewhere(checkpoint, payload.decision)
+    ) {
+      draft.ignored.push({ id: event.id, reason: "invalid" });
+      return;
+    }
+    checkpoint.pending_answer = {
+      decision: payload.decision,
+      option: payload.option ?? null,
+      note: payload.note ?? null,
+      device: payload.device,
+      order: payload.order,
+      at: event.at,
+      until: new Date(Date.parse(event.at) + WEB_ANSWER_WINDOW_MS).toISOString(),
+      event: event.id,
+    };
+    checkpoint.web_failure = null;
+  },
+  /**
+   * A held answer taken back: written by the machine for the held answer it names. The point was
+   * never answered, so nothing else changes. The order of the journal decides, not the clocks.
+   */
+  [WEB_ANSWER_EVENT_TYPES.holdCancelled]: (draft, event) => {
+    const payload = event.payload as CheckpointWebHoldCancelledPayload;
+    const checkpoints = section<CheckpointState>(draft, "checkpoints");
+    const checkpoint = Object.hasOwn(checkpoints, payload.checkpoint)
+      ? (checkpoints[payload.checkpoint] as CheckpointState)
+      : undefined;
+    if (
+      checkpoint === undefined ||
+      event.actor.kind !== "system" ||
+      !MACHINE_DEVICE_PATTERN.test(event.actor.device) ||
+      checkpoint.status === "resolved" ||
+      checkpoint.status === "closed" ||
+      checkpoint.pending_answer?.order !== payload.held
+    ) {
+      draft.ignored.push({ id: event.id, reason: "invalid" });
+      return;
+    }
+    checkpoint.pending_answer = null;
+  },
+  /**
+   * A held answer the machine could not carry out (a merge the forge refuses, a gate that closed):
+   * written by the machine for the held answer it names. Nothing was decided; the point is open
+   * again for everyone and keeps the reason, until it is answered or held again.
+   */
+  [WEB_ANSWER_EVENT_TYPES.holdFailed]: (draft, event) => {
+    const payload = event.payload as CheckpointWebHoldFailedPayload;
+    const checkpoints = section<CheckpointState>(draft, "checkpoints");
+    const checkpoint = Object.hasOwn(checkpoints, payload.checkpoint)
+      ? (checkpoints[payload.checkpoint] as CheckpointState)
+      : undefined;
+    if (
+      checkpoint === undefined ||
+      event.actor.kind !== "system" ||
+      !MACHINE_DEVICE_PATTERN.test(event.actor.device) ||
+      checkpoint.status === "resolved" ||
+      checkpoint.status === "closed" ||
+      checkpoint.pending_answer?.order !== payload.held
+    ) {
+      draft.ignored.push({ id: event.id, reason: "invalid" });
+      return;
+    }
+    checkpoint.pending_answer = null;
+    checkpoint.web_failure = {
+      code: payload.code,
+      reason: payload.reason ?? null,
+      order: payload.held,
+      device: payload.device,
+      at: event.at,
+      event: event.id,
+    };
   },
   /**
    * The creator's answer clicked in the AI tool's form: like a chat answer, from the

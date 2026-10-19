@@ -1,6 +1,6 @@
 {
   "name": "@agentplugged/crypto",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "private": true,
   "license": "FSL-1.1-MIT",
   "type": "module",
@@ -9,6 +9,16 @@
       "@agentplugged/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./notify-id": {
+      "@agentplugged/source": "./src/notify-id.ts",
+      "types": "./dist/notify-id.d.ts",
+      "default": "./dist/notify-id.js"
+    },
+    "./share-box": {
+      "@agentplugged/source": "./src/share-box.ts",
+      "types": "./dist/share-box.d.ts",
+      "default": "./dist/share-box.js"
     },
     "./webauthn-verify": {
       "@agentplugged/source": "./src/webauthn-verify.ts",
@@ -39,6 +49,7 @@
   },
   "dependencies": {
     "@agentplugged/protocol": "workspace:*",
+    "@cipherman/pake-js": "0.1.1",
     "@noble/hashes": "catalog:",
     "@simplewebauthn/server": "catalog:",
     "canonicalize": "catalog:",

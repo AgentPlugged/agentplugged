@@ -102,9 +102,8 @@ describe("the shipped model table", () => {
       fast: { model: "flash" },
       multimodal: { model: "pro" },
     });
-    for (const tier of ["reasoning", "code", "fast", "multimodal"] as const) {
-      expect(table["gemini-cli"][tier]).toEqual({ model: "inherit" });
-    }
+    // The retired Gemini CLI has no table any more.
+    expect(Object.hasOwn(table, "gemini-cli")).toBe(false);
     expect(table.cursor).toEqual({
       reasoning: { model: "inherit" },
       code: { model: "inherit" },
@@ -179,7 +178,7 @@ describe("the shipped model table", () => {
 });
 
 describe("sync: model of each agent", () => {
-  it("writes the model of Iris's tier (reasoning) in each tool, and announces Gemini CLI", async () => {
+  it("writes the model of Iris's tier (reasoning) in each tool, with no fallback by default", async () => {
     const files = await installed();
     const result = await sync(files);
     expect(frontmatter(files, CLAUDE)).toBe(
@@ -189,13 +188,10 @@ describe("sync: model of each agent", () => {
     expect(codexModel(files)).toEqual([]);
     expect(frontmatter(files, ANTIGRAVITY)).toBe(`name: iris\n${DESCRIPTION}\nmodel: pro\n`);
     expect(frontmatter(files, CURSOR)).toBe(`name: iris\n${DESCRIPTION}\nmodel: inherit\n`);
-    // `inherit` for Gemini CLI: no `model` key, as for Codex.
-    expect(frontmatter(files, GEMINI)).toBe(`name: iris\n${DESCRIPTION}\nkind: local\n`);
+    // Nothing is written for the retired Gemini CLI.
+    expect(files.files.has(GEMINI)).toBe(false);
 
-    const model = result.fallbacks.filter((f) => f.capability === "model");
-    expect(model.map((f) => f.client)).toEqual(["gemini-cli"]);
-    expect(model[0]?.reason).toBe(MODEL_INHERIT_REASON);
-    expect(files.reference()).toContain(`- Gemini CLI, model: ${MODEL_INHERIT_REASON}`);
+    expect(result.fallbacks.filter((f) => f.capability === "model")).toEqual([]);
     expect(result.preferredTools).toEqual([]);
   });
 
@@ -219,7 +215,6 @@ describe("sync: model of each agent", () => {
     expect(codexModel(files)).toEqual([]);
     expect(frontmatter(files, ANTIGRAVITY)).toContain("\nmodel: flash\n");
     expect(frontmatter(files, CURSOR)).toContain("\nmodel: inherit\n");
-    expect(frontmatter(files, GEMINI)).not.toContain("model:");
 
     const same = await agent(files, { action: "edit", id: "iris", tier: "fast" });
     expect(same).toMatchObject({ settings: { status: "unchanged", model_tier: "fast" } });
@@ -265,7 +260,6 @@ describe("sync: model of each agent", () => {
     );
     expect(result.fallbacks.filter((f) => f.capability === "model").map((f) => f.client)).toEqual([
       "claude-code",
-      "gemini-cli",
     ]);
     const constitution = files.reference();
     expect(constitution).toContain(`- Claude Code, model: ${MODEL_INHERIT_REASON}`);
@@ -274,18 +268,17 @@ describe("sync: model of each agent", () => {
     expect(constitution).not.toContain("- Cursor, model: ");
   });
 
-  it("drops the Gemini CLI fallback once the creator gives it a model", async () => {
+  it("still reads a Gemini CLI table of an older method.yaml, says so and writes nothing for it", async () => {
     const files = await installed();
     const tiers = ["reasoning", "code", "fast", "multimodal"]
       .map((tier) => `    ${tier}:\n      model: gemini-3-pro\n`)
       .join("");
     files.seed(CONFIG, `${text(files, CONFIG)}models:\n  gemini-cli:\n${tiers}`);
     const result = await sync(files);
-    expect(
-      result.fallbacks.some((f) => f.capability === "model" && f.client === "gemini-cli"),
-    ).toBe(false);
-    expect(frontmatter(files, GEMINI)).toContain("\nmodel: gemini-3-pro\n");
-    expect(files.reference()).not.toContain("- Gemini CLI, model: ");
+    expect(result.fallbacks.some((f) => f.capability === "model")).toBe(false);
+    expect(result.warnings).toContainEqual({ kind: "gemini_legacy", path: ".gemini" });
+    expect(files.files.has(GEMINI)).toBe(false);
+    expect(files.reference()).not.toContain("Gemini CLI, model: ");
     expect(files.reference()).not.toContain("model: the model table");
   });
 
@@ -325,7 +318,7 @@ describe("sync: model of each agent", () => {
     expect((await initCommand.run(context(files), {})).ok).toBe(true);
     const constitution = files.reference();
     expect(constitution).toContain(`- Claude Code, model: ${MODEL_INHERIT_REASON}`);
-    expect(constitution).toContain(`- Gemini CLI, model: ${MODEL_INHERIT_REASON}`);
+    expect(constitution).not.toContain("Gemini CLI");
     // sync agrees: nothing to rewrite.
     const result = await sync(files);
     expect(result.entries.find((e) => e.path === "AGENTS.md")?.action).toBe("unchanged");
@@ -399,7 +392,7 @@ describe("sync: preferred tool", () => {
     // Quoted in YAML: the sentence holds ": ".
     const described =
       'description: "Product analyst who frames a new product. Preferred tool: Codex."';
-    for (const path of [CLAUDE, ANTIGRAVITY, GEMINI, CURSOR]) {
+    for (const path of [CLAUDE, ANTIGRAVITY, CURSOR]) {
       expect(frontmatter(files, path), path).toContain(`\n${described}\n`);
     }
     expect(text(files, CODEX)).toContain(

@@ -8,7 +8,13 @@ import {
   prepareAppend,
   prepareEngineEvents,
 } from "./prepare-event.js";
-import { announcedKey, forgetProductKey, sensitiveProductKey } from "./product-key.js";
+import {
+  adoptRotatedKey,
+  announcedKey,
+  forgetProductKey,
+  hasRotation,
+  sensitiveProductKey,
+} from "./product-key.js";
 import type {
   AppendOptions,
   EventDraft,
@@ -83,6 +89,16 @@ export class MemoryStateStore implements StateStore {
     await options.precondition?.(await this.list());
     const key = await loadMachineKey(this.#keys);
     const events = this.#current();
+    const product = drafts.find((draft) => draft.payload !== undefined)?.product;
+    if (product !== undefined && hasRotation(events)) {
+      // A renewal sealed for this machine is taken in before it writes sensitive content.
+      await forgetProductKey(
+        await adoptRotatedKey(this.#keys, product, {
+          events,
+          allowTestTypes: this.#allowTestTypes,
+        }).catch(() => undefined),
+      );
+    }
     const productKey = await sensitiveProductKey(this.#keys, drafts);
     try {
       const announced =

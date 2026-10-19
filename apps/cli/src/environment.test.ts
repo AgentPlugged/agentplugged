@@ -106,6 +106,12 @@ async function run(args: string[], options: Options = {}) {
 
 const config = () => readFile(join(cwd, ".agentplugged/method.yaml"), "utf8");
 
+/** `init` ends with its next-step sentence, a blank line, then the line that links the product to the web app. */
+function endOfInit(stdout: string): { sentence: string | undefined; hint: string | undefined } {
+  const lines = stdout.trimEnd().split("\n");
+  return { sentence: lines.at(-3), hint: lines.at(-1) };
+}
+
 describe("doctor", () => {
   it("is ✓ everywhere on a machine that is fine, exit code 0", async () => {
     const { status, stdout } = await run(["doctor"], { machine: healthy() });
@@ -544,7 +550,7 @@ describe("init", () => {
     expect(stdout).toContain("What Claude Code asks before it acts");
     expect(stdout).toContain("Write the files of your AI tools now (sync)? (Y/n) ");
     expect(stdout).toContain("Files of your AI tools written (");
-    expect(stdout.trimEnd().split("\n").at(-1)).toBe(
+    expect(endOfInit(stdout).sentence).toBe(
       "Ready. Open one of your tools (Claude Code, Codex, Antigravity CLI, Cursor) in this folder and write: noah ?",
     );
     const yaml = await config();
@@ -564,9 +570,7 @@ describe("init", () => {
     expect(await config()).toContain("tools:\n  - cursor\n");
     // Claude Code is not wired in: nothing to say of its permissions.
     expect(stdout).not.toContain("What Claude Code asks before it acts");
-    expect(stdout.trimEnd().split("\n").at(-1)).toBe(
-      "Ready. Open Cursor in this folder and write: noah ?",
-    );
+    expect(endOfInit(stdout).sentence).toBe("Ready. Open Cursor in this folder and write: noah ?");
   });
 
   it("offers the free mode with what it leaves without a guard, and keeps the choice", async () => {
@@ -632,9 +636,10 @@ describe("init", () => {
     expect(machine.terminalRuns).toEqual([]);
     expect(stdout).toContain("Repair: This folder is not a Git repository yet");
     expect(stdout).toContain("Files of your AI tools written (");
-    expect(stdout.trimEnd().split("\n").at(-1)).toBe(
+    expect(endOfInit(stdout).sentence).toBe(
       "Ready. Open Claude Code in this folder and write: noah ?",
     );
+    expect(endOfInit(stdout).hint).toBe("To link it to your web app: `npx agentplugged pair`");
     expect(await config()).toContain("tools:\n  - claude-code\n");
   });
 
@@ -651,7 +656,7 @@ describe("init", () => {
     });
     expect(status).toBe(0);
     expect(stdout).toContain("No sync for now: run `npx agentplugged sync` whenever you want.");
-    expect(stdout.trimEnd().split("\n").at(-1)).toBe(
+    expect(endOfInit(stdout).sentence).toBe(
       "Next: run `npx agentplugged sync`, then open Codex in this folder and write: noah ?",
     );
     await expect(readFile(join(cwd, "AGENTS.md"), "utf8")).resolves.toContain("agentplugged");

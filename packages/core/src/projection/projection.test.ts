@@ -145,12 +145,14 @@ describe("registry and reducers", () => {
       // `cost.reported` is at version 2, `creator_action.executed` at 6, `checkpoint.closed` at 2.
       expect(EVENT_TYPE_REGISTRY[type]?.version, type).toBe(
         type === "checkpoint.opened"
-          ? 14
+          ? 16
           : type === "creator_action.executed"
             ? 12
             : type === "story.merged"
-              ? 3
+              ? 5
               : type === "cost.reported" ||
+                  type === "checkpoint.web_answered" ||
+                  type === "checkpoint.web_held" ||
                   type === "checkpoint.closed" ||
                   type === "checkpoint.answered" ||
                   type === "checkpoint.elicited" ||

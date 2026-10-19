@@ -228,12 +228,48 @@ export const MeasuresSchema = z
   });
 export type Measures = z.infer<typeof MeasuresSchema>;
 
+/** The longest `effect` of a card: one or two plain sentences. */
+export const CARD_EFFECT_MAX = 300;
+/** The longest risk or opinion of a card: one plain sentence. */
+export const CARD_LINE_MAX = 200;
+/** The most risks a card holds: the creator reads it in seconds. */
+export const CARD_RISKS_MAX = 3;
+/** The most opinions a card holds. */
+export const CARD_OPINIONS_MAX = 4;
+
+/**
+ * What the creator reads first on a checkpoint, in plain words: what changes for the people who
+ * use the product (`effect`), what could go wrong (`risks`) and what the agents consulted think
+ * (`opinions`, one sentence each). Optional: a checkpoint without a card is read from its
+ * `summary`. The fuller text stays in `summary`, one click away. `why` answers "why this?" in
+ * place: one sentence for the reason, one for the alternative set aside.
+ */
+export const CheckpointCardSchema = z.strictObject({
+  effect: text(CARD_EFFECT_MAX),
+  why: z
+    .strictObject({
+      reason: text(CARD_LINE_MAX),
+      /** Absent when nothing else was weighed. */
+      rejected: text(CARD_LINE_MAX).optional(),
+    })
+    .optional(),
+  risks: z.array(text(CARD_LINE_MAX)).min(1).max(CARD_RISKS_MAX).optional(),
+  opinions: z
+    .array(z.strictObject({ agent: AgentIdSchema.max(64), view: text(CARD_LINE_MAX) }))
+    .min(1)
+    .max(CARD_OPINIONS_MAX)
+    .optional(),
+});
+export type CheckpointCard = z.infer<typeof CheckpointCardSchema>;
+
 /** The fields an agent gives, whose defaults `core` fixes (recipient, confirmation). */
 const describedFields = {
   type: z.enum(CHECKPOINT_TYPES),
   risk: z.enum(CHECKPOINT_RISKS),
   title: text(120),
   summary: text(2000),
+  /** The first lines the creator reads: the effect for the users, the risks, the agents' views. */
+  card: CheckpointCardSchema.optional(),
   documents: z.array(CheckpointDocumentSchema).max(20),
   blocks: z.array(CheckpointBlockSchema).max(10),
   options: z.array(CheckpointOptionSchema).min(2).max(4).optional(),

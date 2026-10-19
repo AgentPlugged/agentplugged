@@ -17,7 +17,7 @@ Report it privately, in one of two ways:
 Please include:
 
 - the version of `agentplugged` you use, your operating system and the AI
-  tool involved (Claude Code, Codex, Antigravity CLI / Gemini CLI, Cursor);
+  tool involved (Claude Code, Codex, Antigravity CLI, Cursor);
 - what an attacker can do, and what they need first (local access, a crafted file, a malicious
   issue, write access to the repository...);
 - the steps to reproduce it, ideally a minimal repository or journal;

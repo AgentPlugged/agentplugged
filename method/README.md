@@ -747,7 +747,7 @@ models:
       effort: none
 ```
 
-- Tools: `claude-code`, `codex`, `antigravity`, `gemini-cli`, `cursor`.
+- Tools: `claude-code`, `codex`, `antigravity`, `cursor`.
 - `effort` exists for Claude Code (`low`, `medium`, `high`, `xhigh`, `max`) and Codex (`minimal`,
   `low`, `medium`, `high`, `xhigh`, `max`, `ultra`). `effort: none` removes the effort of the
   table: no effort line is written.

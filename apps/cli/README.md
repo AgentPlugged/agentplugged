@@ -1,7 +1,7 @@
 # agentplugged
 
 Installs the AgentPlugged method in a repository, then makes its agents callable by name from
-Claude Code, Codex, Antigravity CLI / Gemini CLI and Cursor. No account, no server, no native
+Claude Code, Codex, Antigravity CLI and Cursor. No account, no server, no native
 module: Node.js 24 or later is all it needs, on Windows, macOS and Linux.
 
 ## Quick start
@@ -204,8 +204,7 @@ Set `AGENTPLUGGED_LANG=fr` for French messages.
 
 `sync` declares the `agentplugged` MCP server in each targeted tool's project configuration:
 `.mcp.json` (Claude Code), `[mcp_servers.agentplugged]` in `.codex/config.toml` (Codex),
-`.agents/mcp_config.json` (Antigravity CLI), `.cursor/mcp.json` (Cursor), and
-`.gemini/settings.json` (older Gemini CLI installations) only when that file already exists.
+`.agents/mcp_config.json` (Antigravity CLI) and `.cursor/mcp.json` (Cursor).
 By default the tools start it with `npx -y agentplugged@<engine_version> mcp`.
 
 - **Windows:** AI tools cannot start `npx` directly there, so `sync` run on Windows declares
@@ -222,7 +221,7 @@ By default the tools start it with `npx -y agentplugged@<engine_version> mcp`.
 - **Approval and trust:** Claude Code asks you to approve a project MCP server the first time
   (or run `claude mcp reset-project-choices` to be asked again); Cursor asks too (the Cursor CLI
   has `--approve-mcps`). Codex reads `.codex/config.toml` only in a project you marked as
-  trusted, and Gemini CLI connects project servers only in a trusted folder (`gemini trust`).
+  trusted.
 - **Agent identity:** the agent id each call gives is declared, not proven. The journal records
   the machine that signed each event, not which agent sent it: any session can report as any
   active agent. The tool's main session, which is not an agent of the method, uses the reserved

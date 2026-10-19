@@ -339,6 +339,8 @@ export interface CostTotals {
 export interface CostsState {
   readonly total: CostTotals;
   readonly by_story: Record<string, CostTotals>;
+  /** The totals of each agent that reported a cost, all its stories together (absent until one does). */
+  readonly by_agent?: Record<string, CostTotals>;
   readonly runs?: Record<string, CostPayload>;
 }
 
@@ -600,12 +602,18 @@ export const AGENT_REDUCERS: Readonly<Record<string, Reducer>> = {
         : Object.hasOwn(costs.by_story, event.story)
           ? (costs.by_story[event.story] as CostTotals)
           : emptyTotals();
+    const byAgent = costs.by_agent ?? dictionary<CostTotals>();
+    if (costs.by_agent === undefined)
+      (costs as { by_agent?: Record<string, CostTotals> }).by_agent = byAgent;
+    const own = Object.hasOwn(byAgent, agent) ? (byAgent[agent] as CostTotals) : emptyTotals();
+    byAgent[agent] = own;
     if (payload.cumulative === true && payload.run !== undefined) {
       const runs = costs.runs ?? dictionary<CostPayload>();
       const key = runKey(agent, event.story, payload.run);
       const previous = Object.hasOwn(runs, key) ? runs[key] : undefined;
       if (previous !== undefined) {
         applyCost(costs.total, previous, -1);
+        applyCost(own, previous, -1);
         if (story !== undefined) applyCost(story, previous, -1);
       }
       runs[key] = { ...payload };
@@ -613,6 +621,8 @@ export const AGENT_REDUCERS: Readonly<Record<string, Reducer>> = {
     }
     applyCost(costs.total, payload, 1);
     costs.total.reports += 1;
+    applyCost(own, payload, 1);
+    own.reports += 1;
     if (story !== undefined && event.story !== undefined) {
       applyCost(story, payload, 1);
       story.reports += 1;

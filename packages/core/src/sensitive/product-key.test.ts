@@ -306,9 +306,36 @@ describe("product key: sensitive events", () => {
       tokens_in: 5678,
       reports: 1,
     });
+    // The same cost is told per agent, for the views that show who spent what.
+    expect((projection.state.costs as CostsState).by_agent?.iris).toMatchObject({
+      usd: 12.34,
+      tokens_in: 5678,
+      reports: 1,
+    });
     const view = await first.state();
     expect(view).not.toHaveProperty("costs");
     expect(view.warnings).toEqual([]);
+  });
+
+  it("tells each agent's cost apart, a cumulative report replacing the previous one of its task", async () => {
+    const { first, product } = await twoMachines();
+    const run = { estimated: false, cumulative: true, run: "r1" };
+    for (const input of [
+      { ...COST, ...run, usd: 1 },
+      { ...COST, ...run, usd: 3 },
+      { ...COST, agent: "main", usd: 2 },
+    ]) {
+      const result = await first.call("report_cost", input);
+      expect(result.ok ? "ok" : JSON.stringify(result.error)).toBe("ok");
+    }
+    const productKey = await readProductKey(first.keys, product);
+    const projection = await computeProjection(first.journal.events, {
+      ...(productKey === undefined ? {} : { productKey }),
+    });
+    const costs = projection.state.costs as CostsState;
+    expect(costs.by_agent?.iris).toMatchObject({ usd: 3, reports: 2 });
+    expect(costs.by_agent?.main).toMatchObject({ usd: 2, reports: 1 });
+    expect(costs.total.usd).toBe(5);
   });
 
   it("without the key: projected, the costs missing, sensitive_unreadable in the result only", async () => {

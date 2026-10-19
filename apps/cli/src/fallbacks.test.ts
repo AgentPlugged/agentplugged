@@ -11,11 +11,10 @@ describe("French fallback reasons", () => {
     const produced = [
       ...fallbacksFor(tools),
       ...fallbacksFor(tools, { codexConfigKept: true, mcpConflicts: conflicts }),
-      ...fallbacksFor(tools, { mcpConflicts: conflicts, mcpFileAbsent: new Set() }),
+      ...fallbacksFor(tools, { mcpConflicts: conflicts }),
     ].filter((fallback) => fallback.capability === "mcp");
     const ids = new Set(produced.map((fallback) => fallback.id));
     expect(ids).toContain("codex.mcp.config-kept");
-    expect(ids).toContain("gemini-cli.mcp");
     for (const file of MCP_JSON_FILES) expect(ids).toContain(`${file.client}.mcp.conflict`);
     for (const fallback of produced) {
       const french = fallbackReason("fr", fallback.id, "ENGLISH", fallback.params);

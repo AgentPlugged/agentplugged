@@ -2,6 +2,29 @@
 
 All notable changes to `agentplugged`, newest first. Versions follow semantic versioning.
 
+## 1.1.0 - 2026-10-19
+
+### New features
+
+- Tell the bridge when the creator's account was deleted, so that the machine says so, stops reconnecting, forgets its link and keeps working on its own.
+- Carry out a checkpoint answer given from a phone only if the checkpoint is unchanged since the creator saw it, so answers given offline wait for the machine and are refused as stale when the checkpoint moved.
+- Replace Gemini CLI with Antigravity CLI everywhere (detection, models, MCP, texts), keep reading old Gemini CLI files without writing them, and add sync --clean-gemini to remove only the files AgentPlugged wrote for it.
+- Let the creator pause, resume, stop and instruct the agents; instructions need the engine published with this version, so the bridge refuses them while a product runs an older one.
+- Let the creator follow, from the web view, what a Claude Code session opened in their own terminal reads, changes and runs, through a new hook that sync writes and that never slows or blocks the session.
+- Follow what an agent costs while it works, warn at the alert ratio of the story's budget, pause the team at the ceiling until the creator answers the budget checkpoint, and count the last known cost of a run that was cut short.
+- Merge a story's pull request from the web view with one click and a 10-second undo, or send the story back to its agent with a reason.
+- Keep the last state received in a sealed copy on the device and queue orders given with no network, sent in order when the network is back.
+- Write in the journal the orders a machine refused after checking their signature, so that every view shows what became of them.
+- Let the creator renew the product key in one click after removing a machine, keeping every older key to read the history, and export all the keys with key export.
+- Let the creator type a secret in the web view, encrypted in the browser for one machine and kept in that machine's keychain, never queued and never seen by the relay.
+- Answer a checkpoint from the phone with one touch or one swipe, with the same 10-second undo; the journal records the source as the phone, and an engine older than this version asks to be updated when it reads such an answer.
+- Talk to your team and hear your briefing in the web view, with the browser's local recognition or, if turned on, your machine transcribing through the command set in AGENTPLUGGED_TRANSCRIBE_COMMAND.
+- Let the creator watch an agent work and talk to it from the web view, or reopen its session in their own terminal and hand the work back; a session left open on the machine can be closed from afar.
+
+### Fixes
+
+- Show a freshly linked product in the web view within about a second instead of several seconds.
+
 ## 1.0.6 - 2026-10-15
 
 ### Fixes

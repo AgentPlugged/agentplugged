@@ -9,6 +9,7 @@ import { CommonLessonIdSchema, ErrorCode, type MemoryInvalidReason } from "@agen
 import type { CommandContext } from "../command.js";
 import { AgentPluggedError } from "../errors.js";
 import { readMachineKey } from "../journal/key-store.js";
+import { type ProductKey, productKeyById } from "../journal/product-key.js";
 import { fileBinding, workspacePath } from "../sensitive/sensitive-files.js";
 import type { CommonMemory } from "./common-memory.js";
 import { type LessonRecord, lessonFile, parseLessonRecord, recordDigest } from "./memory-rules.js";
@@ -53,14 +54,14 @@ function commonBinding(id: string) {
 export async function writeLessonFile(
   context: CommandContext,
   product: string,
-  key: Uint8Array,
+  key: ProductKey,
   record: LessonRecord,
 ): Promise<void> {
   const text = `${JSON.stringify(record)}\n`;
   const sealed = await encryptFile(
     text,
     fileBinding(product, "memory", lessonFile(record.id)),
-    key,
+    key.key,
   );
   await context.files.writeText(workspacePath("memory", lessonFile(record.id)), sealed);
 }
@@ -73,7 +74,7 @@ export type LessonRead =
 export async function readLessonFile(
   context: CommandContext,
   product: string,
-  key: Uint8Array,
+  key: ProductKey,
   id: string,
   digest: string,
 ): Promise<LessonRead> {
@@ -85,8 +86,16 @@ export async function readLessonFile(
   } catch {
     return { ok: false, reason: "missing" };
   }
-  if (encryptedFileKeyId(text) === undefined) return { ok: false, reason: "altered" };
-  const opened = await decryptFile(text, fileBinding(product, "memory", lessonFile(id)), key);
+  const fileKeyId = encryptedFileKeyId(text);
+  if (fileKeyId === undefined) return { ok: false, reason: "altered" };
+  // The key the file names: the current one, or one kept from before a renewal.
+  const fileKey = await productKeyById(key, fileKeyId);
+  if (fileKey === undefined) return { ok: false, reason: "altered" };
+  const opened = await decryptFile(
+    text,
+    fileBinding(product, "memory", lessonFile(id)),
+    fileKey.key,
+  );
   if (!opened.ok) return { ok: false, reason: "altered" };
   const record = parseLessonRecord(opened.content);
   if (record === undefined || record.id !== id || recordDigest(record) !== digest) {

@@ -75,4 +75,5 @@ export const NO_KEYCHAIN: KeyStore = {
   readProductSecret: noKeychain,
   writeProductSecret: noKeychain,
   writeProductBackup: noKeychain,
+  readProductBackup: noKeychain,
 };

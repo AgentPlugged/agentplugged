@@ -132,13 +132,30 @@ export function formatProductKey(
     const lines = [t("key.export.done", { key_id: result.key_id })];
     if (file === undefined) lines.push("", result.exported, "");
     else lines.push(t("key.export.file", { path: file }));
+    if (result.key_ids !== undefined) {
+      lines.push(t("key.export.many", { count: String(result.key_ids.length) }));
+    }
+    if (result.missing !== undefined) {
+      lines.push(
+        t("key.export.missing", {
+          count: String(result.missing.length),
+          key_ids: result.missing.join(", "),
+        }),
+      );
+    }
     lines.push(t("key.export.hint"), "");
     return lines.join("\n");
+  }
+  if (result.status === "older") {
+    return `${t("key.import.older", { key_id: result.key_id })}\n`;
   }
   const done = result.status === "already" ? "key.import.already" : "key.import.done";
   const lines = [t(done, { key_id: result.key_id })];
   if (result.replaced !== undefined) {
     lines.push(t("key.import.replaced", { held_key_id: result.replaced }));
+  }
+  if (result.key_ids !== undefined) {
+    lines.push(t("key.import.many", { key_ids: result.key_ids.join(", ") }));
   }
   return `${lines.join("\n")}\n`;
 }

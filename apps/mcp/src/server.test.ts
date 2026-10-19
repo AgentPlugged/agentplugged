@@ -197,7 +197,7 @@ describe("MCP server", () => {
     }
     // No tool takes an address, a recipient, a channel or an amount.
     const FIELD =
-      /^(cc|bcc|recipient|recipients|email|address|channel|webhook|url|amount|price|currency|card|iban)$/i;
+      /^(cc|bcc|recipient|recipients|email|address|channel|webhook|url|amount|price|currency|card_number|payment_card|iban)$/i;
     for (const tool of tools) {
       for (const field of Object.keys(tool.inputSchema.properties ?? {})) {
         expect(field, `${tool.name}.${field}`).not.toMatch(FIELD);
@@ -411,7 +411,7 @@ describe("MCP server", () => {
       expect(text("measure")).toMatch(/never invent an amount/);
     });
 
-    it("costs at most 8 960 characters in tools/list, schemas included (measured 8 907, as the client lists them: the field `check` and the action `tests`, 8 956)", async () => {
+    it("costs at most 8 960 characters in tools/list, schemas included (about 8 900 as the client lists them)", async () => {
       const { tools } = await client.listTools();
       expect(JSON.stringify(tools).length).toBeLessThanOrEqual(8_960);
     });

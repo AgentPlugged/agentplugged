@@ -90,7 +90,7 @@ export async function memoryPreviews(
         const read =
           anchor === undefined
             ? undefined
-            : await readLessonFile(context, product, key.key, anchor.id, anchor.digest);
+            : await readLessonFile(context, product, key, anchor.id, anchor.digest);
         previews[checkpoint.id] = {
           kind: "promotion",
           lesson:

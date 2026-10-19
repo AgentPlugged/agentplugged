@@ -9,6 +9,7 @@ import {
   StoryStatusChangedPayloadSchema,
 } from "./agent-activity.js";
 import { BUDGET_EVENT_TYPES, BudgetThresholdReachedPayloadSchema } from "./budget.js";
+import { CHAIN_EVENT_TYPES, InstructionGivenPayloadSchema } from "./chain.js";
 import {
   CHAT_EVENT_TYPES,
   CheckpointAnsweredPayloadSchema,
@@ -29,6 +30,13 @@ import {
   CHECKPOINT_DECIDED_EVENT_TYPES,
   CheckpointDecidedPayloadSchema,
 } from "./checkpoint-decided.js";
+import {
+  CheckpointWebAnsweredPayloadSchema,
+  CheckpointWebHeldPayloadSchema,
+  CheckpointWebHoldCancelledPayloadSchema,
+  CheckpointWebHoldFailedPayloadSchema,
+  WEB_ANSWER_EVENT_TYPES,
+} from "./checkpoint-web.js";
 import { CI_EVENT_TYPES, CiReportedPayloadSchema, CiWaivedPayloadSchema } from "./ci.js";
 import {
   COURSE_EVENT_TYPES,
@@ -98,6 +106,7 @@ import {
   LoopResumedPayloadSchema,
   LoopStoppedPayloadSchema,
 } from "./loop.js";
+import { MACHINE_EVENT_TYPES, PrimaryChangedPayloadSchema } from "./machines.js";
 import {
   LESSON_EVENT_TYPES,
   LessonsPromotedPayloadSchema,
@@ -113,8 +122,14 @@ import {
 } from "./merge-order.js";
 import { METHOD_EVENT_TYPES, MethodMigratedPayloadSchema } from "./migration.js";
 import {
+  ORDER_EVENT_TYPES,
+  OrderAppliedPayloadSchema,
+  OrderRejectedPayloadSchema,
+} from "./orders.js";
+import {
   PRODUCT_KEY_EVENT_TYPES,
   ProductKeyCreatedPayloadSchema,
+  ProductKeyRotatedPayloadSchema,
   SENSITIVE_EVENT_DOMAINS,
 } from "./product-key.js";
 import {
@@ -192,6 +207,12 @@ export const EVENT_TYPE_REGISTRY: Readonly<Record<string, EventTypeSpec>> = {
     version: currentVersionOf(AGENT_EVENT_TYPES.statusReported),
     payload: StatusReportedPayloadSchema,
   },
+  /** An instruction of the creator to an agent: their own words, encrypted with the product key. */
+  [CHAIN_EVENT_TYPES.instructionGiven]: {
+    version: 1,
+    payload: InstructionGivenPayloadSchema,
+    sensitive: true,
+  },
   [AGENT_EVENT_TYPES.progressReported]: { version: 1, payload: ProgressReportedPayloadSchema },
   // Version 2: billing, quota, run and cumulative reports (version 1 converts as is).
   [AGENT_EVENT_TYPES.costReported]: {
@@ -213,6 +234,7 @@ export const EVENT_TYPE_REGISTRY: Readonly<Record<string, EventTypeSpec>> = {
   [HUMAN_EVENT_TYPES.presenceLinked]: { version: 1, payload: HumanPresenceLinkedPayloadSchema },
   [HUMAN_EVENT_TYPES.keyEndorsed]: { version: 1, payload: HumanKeyEndorsedPayloadSchema },
   [PRODUCT_KEY_EVENT_TYPES.keyCreated]: { version: 1, payload: ProductKeyCreatedPayloadSchema },
+  [PRODUCT_KEY_EVENT_TYPES.keyRotated]: { version: 1, payload: ProductKeyRotatedPayloadSchema },
   /**
    * The registry of trusted devices: a device paired, revoked, confirmed, the
    * root certified by the first phone, and an alert dismissed by the creator. Clear: every
@@ -226,6 +248,12 @@ export const EVENT_TYPE_REGISTRY: Readonly<Record<string, EventTypeSpec>> = {
   },
   [DEVICE_TRUST_EVENT_TYPES.confirmed]: { version: 1, payload: DeviceConfirmedPayloadSchema },
   [DEVICE_TRUST_EVENT_TYPES.dismissed]: { version: 1, payload: TrustDismissedPayloadSchema },
+  /** The main bridge of the product, chosen by the creator. */
+  [MACHINE_EVENT_TYPES.primaryChanged]: { version: 1, payload: PrimaryChangedPayloadSchema },
+  /** An order a bridge applied, with the creator's signed order kept as the proof. */
+  [ORDER_EVENT_TYPES.applied]: { version: 1, payload: OrderAppliedPayloadSchema },
+  /** A signed order a bridge refused, with the code the creator saw. */
+  [ORDER_EVENT_TYPES.rejected]: { version: 1, payload: OrderRejectedPayloadSchema },
   /** Reserved to tests: any payload. */
   [TEST_EVENT_TYPE]: { version: 1, payload: z.record(z.string(), z.unknown()) },
   [METHOD_EVENT_TYPES.migrated]: { version: 1, payload: MethodMigratedPayloadSchema },
@@ -324,6 +352,27 @@ export const EVENT_TYPE_REGISTRY: Readonly<Record<string, EventTypeSpec>> = {
   [ELICITATION_EVENT_TYPES.answered]: {
     version: currentVersionOf(ELICITATION_EVENT_TYPES.answered),
     payload: CheckpointElicitedPayloadSchema,
+  },
+  /** The creator's answer carried by the signed order of a browser (the web view). */
+  // Version 2 adds the source `mobile` (a phone's signed order); version 1 converts as is.
+  [WEB_ANSWER_EVENT_TYPES.answered]: {
+    version: currentVersionOf(WEB_ANSWER_EVENT_TYPES.answered),
+    payload: CheckpointWebAnsweredPayloadSchema,
+  },
+  /** An answer from the web held for the undo window: the point stays open meanwhile. */
+  [WEB_ANSWER_EVENT_TYPES.held]: {
+    version: currentVersionOf(WEB_ANSWER_EVENT_TYPES.held),
+    payload: CheckpointWebHeldPayloadSchema,
+  },
+  /** A held answer taken back by the creator: the point was never answered. */
+  [WEB_ANSWER_EVENT_TYPES.holdCancelled]: {
+    version: 1,
+    payload: CheckpointWebHoldCancelledPayloadSchema,
+  },
+  /** A held answer the machine could not carry out: released, the point is open again and says why. */
+  [WEB_ANSWER_EVENT_TYPES.holdFailed]: {
+    version: 1,
+    payload: CheckpointWebHoldFailedPayloadSchema,
   },
   /** A story merged by the engine once the creator approved its merge checkpoint. */
   // Version 2: a merge without a pull request (`direct`); version 1 converts as is.

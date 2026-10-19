@@ -406,8 +406,8 @@ export async function buildVectors() {
     ],
     [
       "upgrade-required",
-      "Envelope version 15, beyond every version this engine knows (checkpoint.opened is at 14).",
-      { ...edPayload, v: 15 },
+      "Envelope version 17, beyond every version this engine knows (checkpoint.opened is at 16).",
+      { ...edPayload, v: 17 },
       ED,
       { ok: false, code: "UPGRADE_REQUIRED" },
     ],

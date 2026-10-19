@@ -269,7 +269,7 @@ export const promoteLessonCommand = defineCommand<LessonPromoted>({
       }
       if (anchor === undefined)
         return fail(memoryInvalid("lesson_unknown", { lesson: plan.lesson }));
-      const read = await readLessonFile(context, target.product, key.key, anchor.id, anchor.digest);
+      const read = await readLessonFile(context, target.product, key, anchor.id, anchor.digest);
       if (!read.ok) return fail(memoryInvalid("lesson_altered", { lesson: plan.lesson }));
       let recorded: { id: string; at: string; type: string };
       let promotedAt: string;

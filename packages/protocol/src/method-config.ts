@@ -120,6 +120,33 @@ export const ProfileSchema = z
 
 export type Profile = z.infer<typeof ProfileSchema>;
 
+/** What a starting profile switches on: its domains, its phases and the developers' specialties. */
+export interface PresetSpec {
+  readonly domains: readonly (typeof DOMAIN_IDS)[number][];
+  readonly phases: readonly (typeof PHASE_IDS)[number][];
+  readonly specialties: readonly DeveloperSpecialty[];
+}
+
+/** The starting profiles. */
+export const PROFILE_PRESET_SPECS: Readonly<Record<ProfilePresetId, PresetSpec>> = {
+  "new-product": { domains: DOMAIN_IDS, phases: PHASE_IDS, specialties: ["backend", "frontend"] },
+  maintenance: {
+    domains: ["code", "quality", "security", "delivery", "docs"],
+    phases: ["design", "build", "delivery"],
+    specialties: ["backend", "frontend"],
+  },
+  "launch-only": {
+    domains: ["product", "creativity", "marketing", "sales"],
+    phases: ["framing", "launch"],
+    specialties: [],
+  },
+  prototype: {
+    domains: ["product", "ux", "code"],
+    phases: ["framing", "build"],
+    specialties: ["backend", "frontend"],
+  },
+};
+
 function idList() {
   return z
     .array(SkillNameSchema)

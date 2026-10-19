@@ -2,6 +2,7 @@ import {
   type AgentResult,
   type BlockableAction,
   type CheckpointBlock,
+  type CheckpointCard,
   type CheckpointCriterion,
   type CheckpointOpenedPayload,
   type CheckpointRisk,
@@ -86,6 +87,7 @@ export function checkpointPayload(
     confirmation: confirmationFor(input.risk),
     title: input.title,
     summary: input.summary,
+    ...(input.card === undefined ? {} : { card: cardOf(input.card) }),
     documents: input.documents ?? [],
     blocks: input.blocks ?? [],
     ...(input.options === undefined ? {} : { options: input.options }),
@@ -277,4 +279,16 @@ export function verdictOf(
         ? "pass_with_reservations"
         : "pass";
   return { result, reasons, criteria: judged };
+}
+
+/** A copy of a card, so that the journal's payload shares nothing with the agent's input. */
+export function cardOf(card: CheckpointCard): CheckpointCard {
+  return {
+    effect: card.effect,
+    ...(card.why === undefined ? {} : { why: { ...card.why } }),
+    ...(card.risks === undefined ? {} : { risks: [...card.risks] }),
+    ...(card.opinions === undefined
+      ? {}
+      : { opinions: card.opinions.map((opinion) => ({ ...opinion })) }),
+  };
 }

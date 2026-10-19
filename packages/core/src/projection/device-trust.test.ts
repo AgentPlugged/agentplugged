@@ -773,7 +773,7 @@ describe("revocation: only the ancestors of chain_head count", () => {
     expect(ids(result.deviceTrust)).not.toContain(w.phone.device);
   });
 
-  it("never a device whose handover is confirmed", async () => {
+  it("a trusted machine removes a device whose handover is confirmed, like any trusted device", async () => {
     const w = await world();
     const confirmed = await w.bridge.write(20, DEVICE_TRUST_EVENT_TYPES.confirmed, {
       device: w.phone.device,
@@ -785,9 +785,9 @@ describe("revocation: only the ancestors of chain_head count", () => {
       await revoked(w.phone, w.bridge, null, 21),
     );
     const result = await w.project([...w.events, confirmed, attempt]);
-    expect(reasonsOf(result)[attempt.id]).toBe("untrusted_authorization");
-    expect(ids(result.deviceTrust)).toContain(w.phone.device);
-    // Another trusted device (the browser) still may.
+    expect(reasonsOf(result)[attempt.id]).toBeUndefined();
+    expect(ids(result.deviceTrust)).not.toContain(w.phone.device);
+    // A trusted browser removes it too.
     const byBrowser = await w.bridge.write(
       22,
       DEVICE_TRUST_EVENT_TYPES.revoked,
@@ -854,6 +854,56 @@ describe("device.confirmed and device.root_certified", () => {
     expect(reasonsOf(bad)[forged.id]).toBe("untrusted_authorization");
     // The certification that verifies counts (the first one); the forged one does not.
     expect(bad.deviceTrust?.root_certified_by).toBe(w.phone.device);
+  });
+});
+
+describe("the first device recognises the creator's key as the root", () => {
+  async function certifiedBy(signer: Party, w: Awaited<ReturnType<typeof world>>, at: number) {
+    const unsigned = {
+      root: { device: w.root.device, key: toBase64url(w.root.sig.publicKey) },
+      issued_at: stamp(at),
+    };
+    const sig = await signTrustRecord(
+      rootCertifiedRecord(unsigned),
+      TRUST_SIGNATURE_TAGS.rootCertified,
+      signer.sig.secretKey,
+    );
+    return w.bridge.write(at, DEVICE_TRUST_EVENT_TYPES.rootCertified, {
+      ...unsigned,
+      authorization: { signer: signer.device, alg: "ed25519", sig },
+    });
+  }
+
+  it("counts when a browser signs it, and changes the validity of nothing", async () => {
+    const w = await world();
+    const certified = await certifiedBy(w.browser, w, 20);
+    const without = await w.project();
+    const withCert = await w.project([...w.events, certified]);
+    expect(withCert.deviceTrust?.root_certified_by).toBe(w.browser.device);
+    expect(withCert.deviceTrust?.devices).toEqual(without.deviceTrust?.devices);
+    expect(withCert.projection.ignored).toEqual(without.projection.ignored);
+    expect(withCert.projection.state).toEqual(without.projection.state);
+  });
+
+  it("does not count when a machine signs it", async () => {
+    const w = await world();
+    const certified = await certifiedBy(w.bridge, w, 20);
+    const result = await w.project([...w.events, certified]);
+    expect(reasonsOf(result)[certified.id]).toBe("untrusted_authorization");
+    expect(result.deviceTrust?.root_certified_by).toBeNull();
+  });
+
+  it("does not count when the device that signed it was revoked", async () => {
+    const w = await world();
+    // The browser is taken out first, then something is signed with its key.
+    const gone = await w.bridge.write(
+      19,
+      DEVICE_TRUST_EVENT_TYPES.revoked,
+      await revoked(w.browser, w.root, null, 19),
+    );
+    const certified = await certifiedBy(w.browser, w, 20);
+    const result = await w.project([...w.events, gone, certified]);
+    expect(result.deviceTrust?.root_certified_by).toBeNull();
   });
 });
 

@@ -31,10 +31,14 @@ export async function measureProduct(
 ): Promise<MeasureOutcome> {
   const none = { read: 0, skipped: 0, written: 0, stories: [] as string[] };
   if (context.usageTraces === undefined) return { ...none, available: false, readable: true };
-  const access = await projectionKey(context, target.product);
+  const listing = await target.journal.list();
+  const access = await projectionKey(context, target.product, {
+    events: listing.events,
+    problems: listing.problems,
+    allowTestTypes: context.allowTestTypes === true,
+  });
   if (access.key === undefined) return { ...none, available: true, readable: false };
   try {
-    const listing = await target.journal.list();
     const detailed = await computeProjectionDetailed(listing.events, {
       problems: listing.problems,
       head: listing.head,

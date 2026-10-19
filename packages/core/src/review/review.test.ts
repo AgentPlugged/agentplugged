@@ -1,6 +1,6 @@
 import { gitBlobId, toBase64url, utf8 } from "@agentplugged/crypto";
 import { SoftwareAuthenticator } from "@agentplugged/crypto/webauthn-software";
-import { ErrorCode, type PhaseId } from "@agentplugged/protocol";
+import { type AnswerCheckpointParams, ErrorCode, type PhaseId } from "@agentplugged/protocol";
 import { describe, expect, it } from "vitest";
 import type { ChatMessage } from "../chat/chat-proof.js";
 import { messageDigest, normalizeChatText } from "../chat/chat-text.js";
@@ -12,8 +12,10 @@ import {
   type CommandContext,
   type CommitHookInstall,
   type CreatorPrompt,
+  carryOutWebAnswers,
   computeProjection,
   createCommandRegistry,
+  engineMerging,
   type ForgeCliState,
   type ForgeInspection,
   type ForgeMergeOutcome,
@@ -42,7 +44,9 @@ import {
   type StoryWorkspaceTarget,
   syncCommand,
   type ToolProbe,
+  undoWebAnswer,
   type WorktreeRemoval,
+  writeWebAnswer,
 } from "../index.js";
 import {
   MemoryFiles,
@@ -3404,5 +3408,283 @@ describe("the reader of verification gaps runs short passes", () => {
         "assertions",
       ]),
     ).toEqual([{ reader: "security", lenses: ["security"], judge: false }]);
+  });
+});
+
+describe("the merge of a story approved from the web view", () => {
+  const WEB_ORDER = "01J9ZQ4V8E3M5N7P9R1S3T5V80";
+  const OTHER_ORDER = "01J9ZQ4V8E3M5N7P9R1S3T5V81";
+  const WEB_DEVICE = "browser:abcdefghijklmnop";
+
+  /** A story reviewed on a green CI, its merge checkpoint open, and the machine's side of the web. */
+  async function reviewed() {
+    const setup = await product();
+    await setup.toReview();
+    const passed = resultValue<{ checkpoint: string }>(await setup.review("quentin", "qa"));
+    const point = passed.checkpoint;
+    const story = async () =>
+      ((await setup.projection()).stories as Record<string, StoryState> | undefined)?.[
+        "1-1"
+      ] as StoryState;
+    const checkpoint = async () =>
+      ((await setup.projection()).checkpoints as Record<string, CheckpointState>)[
+        point
+      ] as CheckpointState;
+    const merging = engineMerging(setup.human);
+    const answer = (
+      params: { decision: "approved" | "changes_requested" | "rejected"; note?: string },
+      at: number,
+      order = WEB_ORDER,
+      device = WEB_DEVICE,
+    ) =>
+      writeWebAnswer(
+        setup.journal,
+        setup.productId,
+        {
+          params: { checkpoint: point, ...params } as AnswerCheckpointParams,
+          order,
+          device,
+        },
+        () => at,
+      );
+    const carry = (at: number, withMerging = true) =>
+      carryOutWebAnswers(
+        setup.journal,
+        setup.productId,
+        () => at,
+        withMerging ? merging : undefined,
+      );
+    const typed = async (type: string) =>
+      (await setup.journal.list()).events.filter((event) => event.type === type);
+    return { ...setup, point, story, checkpoint, answer, carry, typed };
+  }
+
+  /** When the held answer's window ends, and a moment after. */
+  const windowOf = (held: { event: { at: string } }) => Date.parse(held.event.at) + 10_000;
+
+  it("merges after the window, never before, and records the answer and the merge in one write", async () => {
+    const { answer, carry, forge, workspace, checkpoint, story, typed, point, journal } =
+      await reviewed();
+    const written = await answer({ decision: "approved" }, Date.now());
+    expect(written).toMatchObject({ ok: true, held: true });
+    if (!written.ok) throw new Error("not written");
+    // Held: the point is open for everyone and nothing touched the forge.
+    expect((await checkpoint()).status).toBe("open");
+    expect((await checkpoint()).pending_answer).toMatchObject({ decision: "approved" });
+    expect(await carry(windowOf(written) - 1_000)).toMatchObject({ decided: 0 });
+    expect(forge.merges).toEqual([]);
+    // The window is over: the engine merges the commit reviewed, once, then the answer is written.
+    expect(await carry(windowOf(written) + 500)).toMatchObject({ decided: 1, failed: 0 });
+    expect(forge.merges).toEqual([{ number: 41, request: { commit: HEAD, method: "merge" } }]);
+    expect((await checkpoint()).resolution).toMatchObject({
+      decision: "approved",
+      source: "web",
+      assurance: "device",
+      by: expect.stringMatching(/^machine:/),
+    });
+    expect((await story()).merged).toMatchObject({
+      checkpoint: point,
+      pr: 41,
+      commit: HEAD,
+      merge_commit: MERGE_COMMIT,
+      source: "web",
+      already: false,
+    });
+    expect(workspace.worktrees.has("feat/1-1-work")).toBe(false);
+    // Both events, from the machine, in order.
+    const events = (await journal.list()).events;
+    const at = (type: string) => events.findIndex((event) => event.type === type);
+    expect(at("checkpoint.web_answered")).toBeGreaterThan(-1);
+    expect(at("story.merged")).toBe(at("checkpoint.web_answered") + 1);
+    expect((await typed("story.merged"))[0]?.actor.kind).toBe("system");
+    // A second pass finds nothing to do and never merges twice.
+    expect(await carry(windowOf(written) + 5_000)).toMatchObject({ decided: 0 });
+    expect(forge.merges).toHaveLength(1);
+  });
+
+  it("merges nothing when the creator takes the answer back inside the window", async () => {
+    const { answer, carry, forge, checkpoint, story, journal, point, productId } = await reviewed();
+    const written = await answer({ decision: "approved" }, Date.now());
+    if (!written.ok) throw new Error("not written");
+    const undone = await undoWebAnswer(
+      journal,
+      productId,
+      { params: { checkpoint: point }, order: OTHER_ORDER, device: WEB_DEVICE },
+      () => Date.parse(written.event.at) + 4_000,
+    );
+    expect(undone.ok).toBe(true);
+    expect(await carry(windowOf(written) + 500)).toMatchObject({ decided: 0, failed: 0 });
+    expect(forge.merges).toEqual([]);
+    expect((await checkpoint()).status).toBe("open");
+    expect((await story()).merged).toBeUndefined();
+  });
+
+  it("releases the answer with the reason when the forge refuses, and the point can be answered again", async () => {
+    const { answer, carry, forge, checkpoint, story, typed, point } = await reviewed();
+    forge.mergeRefusal = {
+      reason: "not_mergeable",
+      message: "HTTP 405: conflicts, token ghp_secret",
+    };
+    const first = await answer({ decision: "approved" }, Date.now());
+    if (!first.ok) throw new Error("not written");
+    expect(await carry(windowOf(first) + 500)).toMatchObject({ decided: 0, failed: 1 });
+    expect(forge.merges).toHaveLength(1);
+    const open = await checkpoint();
+    expect(open.status).toBe("open");
+    expect(open.pending_answer).toBeNull();
+    expect(open.web_failure).toMatchObject({ code: "MERGE_FAILED", reason: "not_mergeable" });
+    // The journal keeps a code and a reason, never the forge’s words.
+    const failure = (await typed("checkpoint.web_hold_failed"))[0];
+    expect(failure?.payload).toMatchObject({ checkpoint: point, code: "MERGE_FAILED" });
+    expect(JSON.stringify(failure?.payload)).not.toContain("ghp_secret");
+    expect((await story()).merged).toBeUndefined();
+    // The creator tries again once the forge agrees: held again, then merged.
+    forge.mergeRefusal = undefined;
+    const second = await answer({ decision: "approved" }, windowOf(first) + 1_000, OTHER_ORDER);
+    expect(second).toMatchObject({ ok: true, held: true });
+    if (!second.ok) throw new Error("not written");
+    expect((await checkpoint()).web_failure ?? null).toBeNull();
+    expect(await carry(windowOf(second) + 500)).toMatchObject({ decided: 1, failed: 0 });
+    expect((await story()).merged).toMatchObject({ source: "web" });
+  });
+
+  it("records a merge the creator already did at the forge without merging again", async () => {
+    const { answer, carry, forge, story } = await reviewed();
+    forge.prState = "merged";
+    const written = await answer({ decision: "approved" }, Date.now());
+    if (!written.ok) throw new Error("not written");
+    expect(await carry(windowOf(written) + 500)).toMatchObject({ decided: 1 });
+    expect(forge.merges).toEqual([]);
+    expect((await story()).merged).toMatchObject({ already: true, source: "web" });
+  });
+
+  it("merges the story for the signed order of a phone too, and records the source mobile on both events", async () => {
+    const { answer, carry, forge, checkpoint, story, typed } = await reviewed();
+    const written = await answer(
+      { decision: "approved" },
+      Date.now(),
+      WEB_ORDER,
+      "phone:abcdefghijklmnop",
+    );
+    if (!written.ok) throw new Error("not written");
+    expect(await carry(windowOf(written) + 500)).toMatchObject({ decided: 1, failed: 0 });
+    expect(forge.merges).toHaveLength(1);
+    expect((await checkpoint()).resolution).toMatchObject({
+      decision: "approved",
+      source: "mobile",
+      assurance: "device",
+    });
+    expect((await story()).merged).toMatchObject({ source: "mobile", already: false });
+    expect((await typed("story.merged"))[0]?.actor.kind).toBe("system");
+  });
+
+  it("sends the story back to its agent with the reason, merging nothing", async () => {
+    const { answer, carry, forge, checkpoint, story } = await reviewed();
+    const written = await answer(
+      { decision: "changes_requested", note: "Handle the empty profile before the merge." },
+      Date.now(),
+    );
+    if (!written.ok) throw new Error("not written");
+    expect(await carry(windowOf(written) + 500)).toMatchObject({ decided: 1 });
+    expect(forge.merges).toEqual([]);
+    expect((await checkpoint()).resolution).toMatchObject({
+      decision: "changes_requested",
+      note: "Handle the empty profile before the merge.",
+      source: "web",
+    });
+    expect(await story()).toMatchObject({
+      status: "in_progress",
+      merge_feedback: {
+        decision: "changes_requested",
+        note: "Handle the empty profile before the merge.",
+      },
+    });
+    expect((await story()).merged).toBeUndefined();
+  });
+
+  it("refuses at the click a merge whose gate is closed, with its own code, and releases one whose gate closed during the window", async () => {
+    const setup = await reviewed();
+    const red = () =>
+      setup.journal.appendAll([
+        {
+          type: "story.ci_reported",
+          actor: { kind: "system" },
+          product: setup.productId,
+          story: "1-1",
+          provenance: "trusted",
+          payload: {
+            forge: "github",
+            status: "fail",
+            checks: 4,
+            failed: ["build"],
+            pr: 41,
+            commit: HEAD,
+            read_at: new Date().toISOString(),
+          },
+        },
+      ]);
+    // Held while the gate is open, then the CI goes red during the window: nothing reaches the forge.
+    const held = await setup.answer({ decision: "approved" }, Date.now());
+    if (!held.ok) throw new Error("not written");
+    await red();
+    expect(await setup.carry(windowOf(held) + 500)).toMatchObject({ decided: 0, failed: 1 });
+    expect(setup.forge.merges).toEqual([]);
+    expect((await setup.typed("checkpoint.web_hold_failed"))[0]?.payload).toMatchObject({
+      code: "MERGE_NOT_READY",
+    });
+    // And a new click is refused at once, without a window.
+    expect(
+      await setup.answer({ decision: "approved" }, windowOf(held) + 1_000, OTHER_ORDER),
+    ).toEqual({ ok: false, code: "MERGE_NOT_READY" });
+  });
+
+  it("leaves an approval alone on a machine that cannot merge, and never decides it later by itself", async () => {
+    const { answer, carry, checkpoint, forge } = await reviewed();
+    const written = await answer({ decision: "approved" }, Date.now());
+    if (!written.ok) throw new Error("not written");
+    expect(await carry(windowOf(written) + 500, false)).toMatchObject({ decided: 0, failed: 0 });
+    expect((await checkpoint()).status).toBe("open");
+    expect(forge.merges).toEqual([]);
+  });
+
+  it("ignores a merge, a held answer and a release written by anyone but the machine", async () => {
+    const { journal, productId, story, point, checkpoint } = await reviewed();
+    const forged = (
+      type: string,
+      actor: Record<string, unknown>,
+      payload: Record<string, unknown>,
+    ) =>
+      journal.appendAll([
+        { type, actor, product: productId, story: "1-1", provenance: "trusted", payload } as never,
+      ]);
+    const agent = { kind: "agent", agent: "sam" };
+    // An agent writes the machine's words: a merge of a point nobody answered, a held answer, a release.
+    await forged("story.merged", agent, {
+      checkpoint: point,
+      forge: "github",
+      pr: 41,
+      url: "https://github.com/ada/shop/pull/41",
+      commit: HEAD,
+      method: "merge",
+      files: [],
+      source: "web",
+    });
+    await forged("checkpoint.web_held", agent, {
+      checkpoint: point,
+      decision: "approved",
+      source: "web",
+      order: WEB_ORDER,
+      device: WEB_DEVICE,
+    });
+    await forged("checkpoint.web_hold_failed", agent, {
+      checkpoint: point,
+      held: WEB_ORDER,
+      device: WEB_DEVICE,
+      code: "MERGE_FAILED",
+    });
+    expect((await story()).merged).toBeUndefined();
+    expect((await checkpoint()).pending_answer ?? null).toBeNull();
+    expect((await checkpoint()).web_failure ?? null).toBeNull();
+    expect((await checkpoint()).status).toBe("open");
   });
 });

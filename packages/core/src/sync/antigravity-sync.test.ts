@@ -386,9 +386,5 @@ describe("compatibility: Antigravity CLI", () => {
     expect(result.fallbacks.find((f) => f.id === "antigravity.mcp.plugin-kept")?.reason).toBe(
       ANTIGRAVITY_PLUGIN_KEPT_REASON,
     );
-    // Gemini CLI's fallbacks are its own, whatever becomes of the plugin.
-    expect(result.fallbacks.filter((f) => f.client === "gemini-cli").map((f) => f.id)).toContain(
-      "gemini-cli.permissions",
-    );
   });
 });

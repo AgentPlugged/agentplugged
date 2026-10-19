@@ -58,7 +58,6 @@ const NOAH_SUB_AGENTS = [
   ".claude/agents/noah.md",
   ".codex/agents/noah.toml",
   ".agents/agents/noah.md",
-  ".gemini/agents/noah.md",
   ".cursor/agents/noah.md",
 ];
 
@@ -74,7 +73,7 @@ const READS: Readonly<Record<string, readonly [string, string][]>> = {
 const HANDOVER: Readonly<Record<string, string>> = {
   "claude-code": "- Claude Code: your full definition is the skill `noah`",
   codex: "- Codex: your full definition is",
-  antigravity: "- Antigravity CLI and Gemini CLI:",
+  antigravity: "- Antigravity CLI:",
   cursor: "- Cursor: your full definition is",
 };
 

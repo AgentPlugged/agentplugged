@@ -35,8 +35,14 @@ describe("ModelTableSchema", () => {
     delete (value.cursor as Record<string, unknown>).fast;
     expect(ModelTableSchema.safeParse(value).error?.issues[0]?.path).toEqual(["cursor", "fast"]);
     const without = table();
-    delete without["gemini-cli"];
-    expect(ModelTableSchema.safeParse(without).error?.issues[0]?.path).toEqual(["gemini-cli"]);
+    delete (without as Record<string, unknown>).antigravity;
+    expect(ModelTableSchema.safeParse(without).error?.issues[0]?.path).toEqual(["antigravity"]);
+  });
+
+  it("still reads the retired Gemini CLI key of an older table, without requiring it", () => {
+    const older = { ...table(), "gemini-cli": table()["antigravity"] };
+    expect(ModelTableSchema.safeParse(older).success).toBe(true);
+    expect(ModelTableSchema.safeParse(table()).success).toBe(true);
   });
 
   it("refuses an effort where the tool has none, an empty model and an unknown tool", () => {

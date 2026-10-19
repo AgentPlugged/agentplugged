@@ -278,7 +278,7 @@ describe("measuring an Antigravity session", () => {
   });
 
   it("prices Gemini at the table's prices, and leaves a model without a price without an amount", () => {
-    expect(PRICE_TABLE.version).toBe("2026-10-07");
+    expect(PRICE_TABLE.version).toBe("2026-10-17");
     expect(priceOf("gemini-3.1-pro")).toMatchObject({ input: 2, output: 12, cache_read: 0.2 });
     const priced = priceModels([
       {

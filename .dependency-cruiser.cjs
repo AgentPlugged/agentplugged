@@ -22,7 +22,7 @@ const appsOrAdapters = internal(
 );
 
 const cryptoLibs =
-  "^(?:node:)?crypto$|(?:^|/node_modules/|^node_modules/)(?:libsodium[^/]*|sodium-[^/]+|tweetnacl[^/]*|@noble/[^/]+|@scure/[^/]+|@stablelib/[^/]+|@simplewebauthn/[^/]+|crypto-js|node-forge)(?:/|$)";
+  "^(?:node:)?crypto$|(?:^|/node_modules/|^node_modules/)(?:libsodium[^/]*|sodium-[^/]+|tweetnacl[^/]*|@noble/[^/]+|@cipherman/[^/]+|@scure/[^/]+|@stablelib/[^/]+|@simplewebauthn/[^/]+|crypto-js|node-forge)(?:/|$)";
 
 /** @type {import('dependency-cruiser').IConfiguration} */
 module.exports = {

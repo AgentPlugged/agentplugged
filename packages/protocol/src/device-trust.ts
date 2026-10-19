@@ -99,6 +99,7 @@ export const TRUST_SIGNATURE_TAGS = {
   rootCertified: "device.root_certified.auth/v1",
   message: "msg.inner/v1",
   linkWelcome: "link.welcome/v1",
+  vaultBlob: "vault.blob/v1",
 } as const;
 export type TrustSignatureTag = (typeof TRUST_SIGNATURE_TAGS)[keyof typeof TRUST_SIGNATURE_TAGS];
 
@@ -113,7 +114,11 @@ export function isTrustSignatureTag(tag: unknown): tag is TrustSignatureTag {
  * its authority, once.
  */
 export const PairOfferSchema = z.strictObject({
-  x: z.string().regex(RANDOM_16).refine(isCanonicalBase64url),
+  /** The rendezvous: 16 random bytes in base64url, or the 8-symbol address of a short code. */
+  x: z.union([
+    z.string().regex(RANDOM_16).refine(isCanonicalBase64url),
+    z.string().regex(/^[0-9A-HJKMNP-TV-Z]{8}$/),
+  ]),
   expires_at: utcDatetime,
 });
 export type PairOffer = z.infer<typeof PairOfferSchema>;

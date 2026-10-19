@@ -7,6 +7,7 @@ import {
   MACHINE_DEVICE_PATTERN,
   MERGE_EVENT_TYPES,
   type StoryMergedPayload,
+  WEB_ANSWER_EVENT_TYPES,
 } from "@agentplugged/protocol";
 import { liftsBlocks } from "../checkpoints/resolution-rules.js";
 import { type StoryState, section } from "./agent-reducers.js";
@@ -36,6 +37,10 @@ const SOURCE_OF_ANSWER: Readonly<Record<string, string>> = {
   terminal: "terminal",
   // A merge the agent responsible decided, the creator not keeping the merges.
   agent: "agent",
+  // A merge the machine did for the signed order of a browser the creator trusts.
+  web: "web",
+  // The same, for the signed order of a phone.
+  mobile: "mobile",
 };
 
 /**
@@ -124,6 +129,15 @@ function mergedRefusal(draft: ProjectionDraft, event: EventEnvelope): string | u
   if (payload.source === "terminal") {
     if (event.actor.kind !== "human" || event.actor.device !== resolution.by) return "invalid";
     return untrustedAnswer(draft, event);
+  }
+  // From the web or the phone: written by the machine (a system actor on a machine) in the same
+  // write as the answer of the signed order it carried out.
+  if (payload.source === "web" || payload.source === "mobile") {
+    return event.actor.kind === "system" &&
+      MACHINE_DEVICE_PATTERN.test(event.actor.device) &&
+      event.actor.device === resolution.by
+      ? undefined
+      : "invalid";
   }
   // From the chat, with or without the hook's proof: the merge is undone by a
   // `git revert`, and the answer's assurance (`chat` or `chat_unverified`) says how it was proved.
@@ -220,6 +234,7 @@ const ANSWER_TYPES = [
   CHAT_EVENT_TYPES.answered,
   ELICITATION_EVENT_TYPES.answered,
   CHECKPOINT_DECIDED_EVENT_TYPES.decided,
+  WEB_ANSWER_EVENT_TYPES.answered,
 ] as const;
 
 /**

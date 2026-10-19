@@ -5,6 +5,7 @@ import {
   type CursorCliConfigSchema,
   ErrorCode,
 } from "@agentplugged/protocol";
+import { ACTIVITY_HOOK_NAME, ACTIVITY_SPOOL_DIR } from "../chat/activity-hook.js";
 import { ANTIGRAVITY_HOOK_NAME } from "../chat/antigravity-hook.js";
 import { CODEX_HOOK_NAME } from "../chat/codex-hook.js";
 import { CURSOR_HOOK_NAME } from "../chat/cursor-hook.js";
@@ -67,6 +68,7 @@ const FORBIDDEN_COMMANDS: ReadonlyArray<readonly [string, string]> = [
   // creator's.
   ["node", `*${PROMPT_HOOK_NAME}*`],
   ["node", `*${DECISION_HOOK_NAME}*`],
+  ["node", `*${ACTIVITY_HOOK_NAME}*`],
   ["node", `*${ANTIGRAVITY_HOOK_NAME}*`],
   ["node", `*${CODEX_HOOK_NAME}*`],
   ["node", `*${CURSOR_HOOK_NAME}*`],
@@ -118,6 +120,9 @@ const AI_TOOL_LOGIN_PATHS = [
  * creator who wants more chooses the `strict` level.
  */
 const CHAT_STORE_PATH = `~/${CHAT_STORE_DIR}/**`;
+
+/** The lines the activity hook appends: agents neither write them (they would invent activity) nor read them. */
+const ACTIVITY_SPOOL_PATH = `~/${ACTIVITY_SPOOL_DIR}/**`;
 
 /**
  * What the engine's updates keep on the machine: the installed versions, the two
@@ -207,6 +212,7 @@ function protectedPaths({
     ...secrets,
     { kind: "home", path: "~/.ssh/**" },
     { kind: "home", path: CHAT_STORE_PATH },
+    { kind: "home", path: ACTIVITY_SPOOL_PATH },
     ...ENGINE_UPDATE_PATHS.map((path): PathRule => ({ kind: "home", path })),
     ...PAIRING_PATHS.map((path): PathRule => ({ kind: "home", path })),
   );
@@ -232,6 +238,8 @@ function protectedPaths({
     ...FORGE_LOGIN_PATHS.map((path): PathRule => ({ kind: "home", path })),
     ...AI_TOOL_LOGIN_PATHS.map((path): PathRule => ({ kind: "home", path })),
     ...PAIRING_PATHS.map((path): PathRule => ({ kind: "home", path })),
+    // The commands of the creator's other sessions.
+    { kind: "home", path: ACTIVITY_SPOOL_PATH },
   ];
   return { write, read };
 }

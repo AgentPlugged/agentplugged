@@ -8,8 +8,6 @@ export interface ToolSpec {
   readonly name: string;
   /** Commands that run the tool, in order of preference. */
   readonly commands: readonly string[];
-  /** Product name to show instead of `name` when a given command matched. */
-  readonly commandNames?: Readonly<Record<string, string>>;
   /** Prefix of its extension folders (`<prefix>-<version>-<platform>`). */
   readonly extensionPrefix?: string;
   /** Command of an editor that embeds the tool. */
@@ -37,8 +35,7 @@ export const TOOL_CATALOG: readonly ToolSpec[] = [
   {
     id: "antigravity",
     name: "Antigravity CLI",
-    commands: ["agy", "gemini"],
-    commandNames: { gemini: "Gemini CLI" },
+    commands: ["agy"],
     driveFiles: ["GEMINI.md", ".gemini/"],
   },
   {

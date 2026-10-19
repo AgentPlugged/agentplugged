@@ -23,7 +23,7 @@ afterEach(async () => {
 
 // Whatever a test left, even when it failed: every entry of its services.
 afterAll(async () => {
-  await removeTestKeys([service, `${service}-products`]);
+  await removeTestKeys([service, `${service}-products`, `${service}-connections`]);
 });
 
 describe("NodeKeyStore", () => {
@@ -109,6 +109,37 @@ describe("NodeKeyStore", () => {
       expect(await store.readProductSecret("01JZ1111111111111111111111")).toBeUndefined();
       expect(await store.deleteAll()).toBe(true);
       expect(await store.readProductSecret("01JZ0000000000000000000000")).toBeUndefined();
+    } finally {
+      await store.deleteAll().catch(cleanupFailed);
+    }
+  });
+
+  it("keeps a connection secret under connection:<name>, apart from the keys, and deleteAll removes it", async (context) => {
+    const connectionService = `${service}-connections`;
+    const store = new NodeKeyStore({ service: connectionService });
+    try {
+      expect(await store.readConnectionSecret("forge.github")).toBeUndefined();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (
+        !/platform secure storage|no storage access|secret service|dbus|keyutils/i.test(message)
+      ) {
+        throw error;
+      }
+      context.skip(`no system keychain service on this machine: ${message}`);
+    }
+    try {
+      await store.writeConnectionSecret("forge.github", "token-value");
+      const again = new NodeKeyStore({ service: connectionService });
+      expect(await again.readConnectionSecret("forge.github")).toBe("token-value");
+      // It is not one of the machine's or the creator's keys.
+      expect(await again.readMachineSecret()).toBeUndefined();
+      expect(await again.readHumanSecret()).toBeUndefined();
+      expect(await store.deleteConnectionSecret("forge.github")).toBe(true);
+      expect(await store.readConnectionSecret("forge.github")).toBeUndefined();
+      await store.writeConnectionSecret("data.analytics", "x");
+      expect(await store.deleteAll()).toBe(true);
+      expect(await store.readConnectionSecret("data.analytics")).toBeUndefined();
     } finally {
       await store.deleteAll().catch(cleanupFailed);
     }

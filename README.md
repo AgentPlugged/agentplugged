@@ -30,7 +30,7 @@ method once. Run it again to refresh the method; your documents, stories, settin
 
 - Claude Code
 - Codex
-- Antigravity CLI / Gemini CLI
+- Antigravity CLI
 - Cursor
 
 `sync` generates, for each tool, the files it reads and declares the engine's MCP server in the

@@ -1,7 +1,7 @@
 {
   "name": "agentplugged",
-  "version": "1.0.6",
-  "description": "Install the AgentPlugged method in a repository and make its agents callable from Claude Code, Codex, Antigravity/Gemini CLI and Cursor.",
+  "version": "1.1.0",
+  "description": "Install the AgentPlugged method in a repository and make its agents callable from Claude Code, Codex, Antigravity CLI and Cursor.",
   "releaseSummary": "The engine updates itself: your session moves to a newer version between two calls, with nothing to reconnect.",
   "license": "FSL-1.1-MIT",
   "author": "Innovel Studio SASU",
@@ -20,7 +20,7 @@
     "ai",
     "claude-code",
     "codex",
-    "gemini-cli",
+    "antigravity-cli",
     "cursor",
     "cli"
   ],

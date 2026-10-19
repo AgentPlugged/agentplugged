@@ -225,6 +225,21 @@ export {
   waiverRefusal,
 } from "./checkpoints/resolution-rules.js";
 export {
+  answeredElsewhere,
+  carryOutWebAnswers,
+  undoWebAnswer,
+  type WebAnswer,
+  type WebAnswerCheck,
+  type WebAnswerWrite,
+  type WebCarryOut,
+  type WebMerging,
+  type WebUndo,
+  type WebUndoWrite,
+  webAnswerCheck,
+  writeWebAnswer,
+} from "./checkpoints/web-answer.js";
+export { engineMerging } from "./checkpoints/web-merge.js";
+export {
   type Actor,
   type Command,
   type CommandContext,
@@ -294,6 +309,11 @@ export {
   isDocumentPath,
   readDocumentFiles,
 } from "./docs/docs-command.js";
+export {
+  type DocumentSearchResult,
+  searchDocuments,
+  searchTerms,
+} from "./docs/document-search.js";
 export { forgeDocumentChecks, isForgeFile } from "./docs/forge-documents.js";
 export {
   type ApprovedStoryDocument,
@@ -337,6 +357,18 @@ export {
   syncLateNotices,
   withLateNotice,
 } from "./docs/knowledge-notice.js";
+export {
+  KB_SELECT_MAX_CHARS,
+  KB_SELECT_MAX_PASSAGES,
+  type KnowledgeBaseView,
+  type KnowledgePassage,
+  knowledgeBaseView,
+  passagesOf,
+  type SelectedPassages,
+  selectPassages,
+  type VerifiedAnswer,
+  verifyAnswer,
+} from "./docs/knowledge-search.js";
 export {
   deliverableStatus,
   isLaunchContent,
@@ -430,6 +462,15 @@ export {
   type UpdateAvailable,
 } from "./engine-update.js";
 export { AgentPluggedError } from "./errors.js";
+export {
+  cursorOfEvents,
+  type ImportTotals,
+  type PublishedStateOptions,
+  type PublishedStateRead,
+  publishedPhases,
+  readPublishedState,
+} from "./feed/published-state.js";
+export { publishedStoryDocs, STORY_FILES_DIR, type StoryFileText } from "./feed/story-docs.js";
 export {
   type DetectedFacts,
   type DetectedWorkflow,
@@ -581,7 +622,7 @@ export {
   REFERENCE_DIR,
   referenceFilePath,
 } from "./init/layout.js";
-export { ROOT_FIELD, writeEngineVersion } from "./init/method-config.js";
+export { loadMethodConfig, ROOT_FIELD, writeEngineVersion } from "./init/method-config.js";
 export {
   BACKUP_BLOCKS,
   type BackupBlock,
@@ -642,15 +683,19 @@ export {
   writeProductId,
 } from "./journal/product-id.js";
 export {
+  type AdoptionJournal,
   type AnnouncedKey,
+  adoptRotatedKey,
   announcedKey,
   backupProductKey,
   checkAnnounced,
   createProductKey,
   forgetProductKey,
+  hasRotation,
   keychainUnavailable,
   type ProductKey,
   type ProjectionKey,
+  productKeyById,
   productKeyMismatch,
   productKeyMissing,
   productKeyOf,
@@ -659,7 +704,9 @@ export {
   readProductKey,
   sensitiveProductKey,
   storeProductKey,
+  writingKey,
 } from "./journal/product-key.js";
+export { type RotationResult, rotateProductKey } from "./journal/product-key-rotation.js";
 export type {
   AppendOptions,
   AppendPrecondition,
@@ -695,6 +742,22 @@ export {
   skipsOf,
 } from "./journey/journey-rules.js";
 export { type JourneyView, journeyView, type SkippedView } from "./journey/journey-view.js";
+export {
+  electPrimary,
+  type PrimaryCandidate,
+  type PrimaryChangeInput,
+  type PrimaryChangePlan,
+  planPrimaryChange,
+  publishesFor,
+  publishesProjection,
+  type RoutedOrder,
+  routeOrder,
+} from "./machines/primary.js";
+export {
+  type PrimaryJournalFacts,
+  readPrimaryFacts,
+  writePrimaryChange,
+} from "./machines/primary-write.js";
 export {
   AGENT_FILE,
   ANNEX_DIRS,
@@ -751,6 +814,15 @@ export {
   nextCommand,
   TOOL_MARKERS,
 } from "./next/next-command.js";
+export { computeBasis } from "./orders/basis.js";
+export {
+  appliedOrders,
+  findOrderApplied,
+  lastAppliedSequences,
+  type OrderAppliedWrite,
+  writeOrderApplied,
+  writeOrderRejected,
+} from "./orders/order-events.js";
 export {
   ARCHITECTURE_PATH,
   ARCHITECTURE_SECURITY_REVIEW_PATH,
@@ -962,7 +1034,6 @@ export {
 } from "./sync/sync-command.js";
 export {
   ANTIGRAVITY_AGENTS_DIR,
-  GEMINI_AGENTS_DIR,
   GEMINI_MD_PATH,
 } from "./sync/targets/antigravity.js";
 export {
@@ -999,16 +1070,23 @@ export {
 export { targetedTools, toolsFromDetection } from "./tools/targeted-tools.js";
 export type { CommandMatch, Editor, ExtensionMatch, ToolProbe } from "./tools/tool-probe.js";
 export {
+  buildOfferAuthorizedPayload,
   buildPairedPayload,
   buildProvisionalRevocation,
+  buildRevocation,
+  buildRootCertifiedPayload,
   type PairedDeviceDescription,
   pairedHeadIfTrusted,
   type RootSigner,
   readDeviceTrust,
+  revocationPayload,
+  rootCertificationHolds,
   type TrustWrite,
   writeConfirmedDevice,
   writePairedDevice,
   writeProvisionalRevocation,
+  writeRevocation,
+  writeRootCertified,
 } from "./trust-devices/pairing-events.js";
 export {
   assertOrdersAllowed,
@@ -1099,6 +1177,23 @@ export {
   noahActive,
   roleForbidden,
 } from "./agents/noah-role.js";
+export {
+  type AutonomyState,
+  dialedText,
+  readAutonomyState,
+  setAutonomyDial,
+  setPermissionRule,
+} from "./autonomy/autonomy.js";
+export {
+  ACTIVITY_FILE_MAX_BYTES,
+  ACTIVITY_HOOK_COMMAND,
+  ACTIVITY_HOOK_PATH,
+  ACTIVITY_SECRET_SHAPES,
+  ACTIVITY_SPOOL_DIR,
+  isActivityHook,
+  renderActivityHookScript,
+  settingsHaveActivityHook,
+} from "./chat/activity-hook.js";
 export {
   type AnswerRecorded,
   answerCheckpointCommand,
@@ -1408,6 +1503,12 @@ export {
   delegationInvalid,
 } from "./delegation/delegate-command.js";
 export {
+  type DocumentsInputs,
+  documentStanding,
+  documentsList,
+  requirementTrace,
+} from "./docs/documents-view.js";
+export {
   type FastTrackOutcome,
   fastTrackEvents,
   outcomeOf,
@@ -1470,6 +1571,7 @@ export type { LessonPromoted } from "./memory/promotion.js";
 export type { RetrospectiveProposed } from "./memory/propose-retrospective.js";
 export type { MemoryRead, ServedAction, ServedLesson } from "./memory/read-memory.js";
 export type { LessonsRecorded } from "./memory/record-lessons.js";
+export { retroStatus, retrospectivesView } from "./memory/retro-view.js";
 export { hasConflictMarkers, parseConflictMarkers } from "./merge/conflict-markers.js";
 export {
   analyseConflict,
@@ -2234,7 +2336,13 @@ export {
   antigravityPlace,
   antigravityTraceInfo,
 } from "./usage/antigravity-reader.js";
-export { type ModelPrice, PRICE_TABLE, type PriceTable } from "./usage/price-table.js";
+export {
+  type ModelPrice,
+  PRICE_TABLE,
+  type PriceTable,
+  priceOf,
+  usdOf,
+} from "./usage/price-table.js";
 export {
   type BreakEven,
   breakEvenOf,

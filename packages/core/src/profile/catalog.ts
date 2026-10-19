@@ -7,6 +7,7 @@ import {
   PHASE_IDS,
   type PhaseId,
   PROFILE_PRESET_IDS,
+  PROFILE_PRESET_SPECS,
   type Profile,
   type ProfilePresetId,
 } from "@agentplugged/protocol";
@@ -54,31 +55,10 @@ export const DEVELOPER_SPECIALTY = {
 /** The method's developers, in catalog order. */
 export const DEVELOPER_AGENTS = Object.keys(DEVELOPER_SPECIALTY) as readonly string[];
 
-export interface PresetSpec {
-  readonly domains: readonly DomainId[];
-  readonly phases: readonly PhaseId[];
-  readonly specialties: readonly DeveloperSpecialty[];
-}
+export type { PresetSpec } from "@agentplugged/protocol";
 
-/** Starting profiles (validated 2026-10-02; specialties since 2026-10-03). */
-export const PROFILE_PRESETS: Readonly<Record<ProfilePresetId, PresetSpec>> = {
-  "new-product": { domains: DOMAIN_IDS, phases: PHASE_IDS, specialties: ["backend", "frontend"] },
-  maintenance: {
-    domains: ["code", "quality", "security", "delivery", "docs"],
-    phases: ["design", "build", "delivery"],
-    specialties: ["backend", "frontend"],
-  },
-  "launch-only": {
-    domains: ["product", "creativity", "marketing", "sales"],
-    phases: ["framing", "launch"],
-    specialties: [],
-  },
-  prototype: {
-    domains: ["product", "ux", "code"],
-    phases: ["framing", "build"],
-    specialties: ["backend", "frontend"],
-  },
-};
+/** Starting profiles: the same table the creator's devices read to propose the boxes of a profile. */
+export const PROFILE_PRESETS = PROFILE_PRESET_SPECS;
 
 /** Preset applied when the creator just presses Enter, or when nobody can be asked. */
 export const DEFAULT_PRESET: ProfilePresetId = "new-product";

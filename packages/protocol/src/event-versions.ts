@@ -193,6 +193,21 @@ export const EVENT_CONVERSIONS: readonly EventConversion[] = [
     convert: (payload) => ({ ...payload }),
   },
   {
+    // Version 15 of `checkpoint.opened`: the optional `card`, the effect for the users, the risks
+    // and the agents' views the creator reads first. A version 14 payload is a version 15 payload
+    // as is.
+    type: "checkpoint.opened",
+    from: 14,
+    convert: (payload) => ({ ...payload }),
+  },
+  {
+    // Version 16 of `checkpoint.opened`: the `card` may carry a `why`, the reason of the proposal
+    // and the alternative set aside. A version 15 payload is a version 16 payload as is.
+    type: "checkpoint.opened",
+    from: 15,
+    convert: (payload) => ({ ...payload }),
+  },
+  {
     // Version 12 of `creator_action.executed`: same additions to its `action`. A
     // version 11 payload is a version 12 payload as is.
     type: "creator_action.executed",
@@ -219,6 +234,33 @@ export const EVENT_CONVERSIONS: readonly EventConversion[] = [
     // 2 payload is a version 3 payload as is.
     type: "story.merged",
     from: 2,
+    convert: (payload) => ({ ...payload }),
+  },
+  {
+    // Version 4 of `story.merged` adds the source `web` (a merge the machine did for the signed
+    // order of a browser). A version 3 payload is a version 4 payload as is.
+    type: "story.merged",
+    from: 3,
+    convert: (payload) => ({ ...payload }),
+  },
+  {
+    // Version 5 of `story.merged` adds the source `mobile` (a merge the machine did for the signed
+    // order of a phone). A version 4 payload is a version 5 payload as is.
+    type: "story.merged",
+    from: 4,
+    convert: (payload) => ({ ...payload }),
+  },
+  {
+    // Version 2 of `checkpoint.web_answered` and of `checkpoint.web_held` adds the source `mobile`
+    // (an answer given by the signed order of a phone). A version 1 payload is a version 2 payload
+    // as is: its source is `web`.
+    type: "checkpoint.web_answered",
+    from: 1,
+    convert: (payload) => ({ ...payload }),
+  },
+  {
+    type: "checkpoint.web_held",
+    from: 1,
     convert: (payload) => ({ ...payload }),
   },
   {
@@ -280,19 +322,21 @@ export const EVENT_CONVERSIONS: readonly EventConversion[] = [
  * raised when a payload gains fields a strict schema of an older engine would refuse: that
  * engine then asks for an upgrade (`UPGRADE_REQUIRED`) instead of ignoring the event as invalid.
  * `checkpoint.opened` is at 2 and at 3 and at 4
- * and at 5 and at 6 and at 7 and at 8 and at 9 and at 10 and at 11 and at 12 and at 13 and at 14, `requirement.proved` at 2, `story.merged` at 2 and at 3, `cost.reported` at 2,
+ * and at 5 and at 6 and at 7 and at 8 and at 9 and at 10 and at 11 and at 12 and at 13 and at 14 and at 15 and at 16, `requirement.proved` at 2, `story.merged` at 2, at 3, at 4 and at 5, `checkpoint.web_answered` and `checkpoint.web_held` at 2, `cost.reported` at 2,
  * `creator_action.executed` at 2, at 3, at 4 and at 5 and at 6 and at 7 and at 8 and at 9 and at 10 and at 11 and at 12, `checkpoint.closed` at 2 (and `checkpoint.answered` at 2),
  * `checkpoint.elicited` and `stack.answered` at 2, `usage.measured` and
  * `agent.status_reported` at 2.
  */
 export const EVENT_TYPE_VERSIONS: Readonly<Record<string, number>> = {
-  "checkpoint.opened": 14,
+  "checkpoint.opened": 16,
   "checkpoint.closed": 2,
   "checkpoint.answered": 2,
   "cost.reported": 2,
   "requirement.proved": 2,
   "creator_action.executed": 12,
-  "story.merged": 3,
+  "story.merged": 5,
+  "checkpoint.web_answered": 2,
+  "checkpoint.web_held": 2,
   "checkpoint.elicited": 2,
   "stack.answered": 2,
   "usage.measured": 2,

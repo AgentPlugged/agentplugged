@@ -13,6 +13,12 @@ import { AgentIdSchema } from "./method-config.js";
 export const PRODUCT_KEY_EVENT_TYPES = {
   /** The product key was created: its `key_id`, signed by the machine that created it. */
   keyCreated: "product.key_created",
+  /**
+   * The product key was renewed: a new key follows the one named by `previous_key_id`. The old key
+   * stays valid for reading everything written before; only new content is written under the new
+   * one. Each trusted machine gets the new key in a box sealed for its own encryption key.
+   */
+  keyRotated: "product.key_rotated",
 } as const;
 
 /** `pk:` then the first 16 base64url characters of the key's `apkeyid1` subkey (`crypto_kdf`). */
@@ -33,6 +39,46 @@ export const ProductKeyCreatedPayloadSchema = z.strictObject({
   proof: z.string().regex(PROOF_PATTERN),
 });
 export type ProductKeyCreatedPayload = z.infer<typeof ProductKeyCreatedPayloadSchema>;
+
+/** A trusted machine's identifier, the name of its box in a renewal. */
+const MACHINE_BOX_OWNER = /^machine:[A-Za-z0-9_-]{16}$/;
+
+/** A sealed box (libsodium `crypto_box_seal`) in base64url: at most 256 characters. */
+const KEY_BOX = z.string().regex(/^[A-Za-z0-9_-]{60,256}$/);
+
+/** The most machines a renewal seals the new key for. */
+export const MAX_KEY_BOXES = 64;
+
+/**
+ * `payload` of `product.key_rotated`: the new `key_id`, the key it follows, the `proof` that the
+ * writer held the new key (the same proof as the first announcement), and `boxes`: the new key
+ * sealed, one box per trusted machine, for that machine's encryption key. No key is ever in clear.
+ */
+export const ProductKeyRotatedPayloadSchema = z.strictObject({
+  key_id: KeyIdSchema,
+  previous_key_id: KeyIdSchema,
+  proof: z.string().regex(PROOF_PATTERN),
+  /**
+   * The proof that the writer held the key this one follows (made with that key, for this renewal
+   * only): a machine that holds the previous key ignores a renewal that does not carry it.
+   */
+  chain_proof: z.string().regex(PROOF_PATTERN),
+  /**
+   * The signed order that asked for the renewal, when it came from a creator's device: the
+   * `order.applied` of the same journal keeps that order. A renewal run again for the same order
+   * is recognised by it and not made twice.
+   */
+  order: z
+    .string()
+    .regex(/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)
+    .optional(),
+  boxes: z
+    .record(z.string().regex(MACHINE_BOX_OWNER), KEY_BOX)
+    .refine((boxes) => Object.keys(boxes).length <= MAX_KEY_BOXES, {
+      message: `at most ${MAX_KEY_BOXES} boxes`,
+    }),
+});
+export type ProductKeyRotatedPayload = z.infer<typeof ProductKeyRotatedPayloadSchema>;
 
 /** The algorithm of `payload_enc` and of the sensitive files: XChaCha20-Poly1305 (IETF). */
 export const PAYLOAD_ENCRYPTION_ALG = "xchacha20poly1305";
@@ -55,6 +101,12 @@ export const ENCRYPTED_FILE_PREFIX = "agentplugged-enc:1:";
 
 /** Prefix of an exported product key (`key export`). */
 export const PRODUCT_KEY_EXPORT_PREFIX = "apk1:";
+
+/** Prefix of an export that holds several keys: the current one first, then the older ones. */
+export const PRODUCT_KEYS_EXPORT_PREFIX = "apk2:";
+
+/** The most keys one export holds: the current key and the older ones kept after renewals. */
+export const MAX_EXPORTED_KEYS = 32;
 
 /** The shortest passphrase `key export` accepts, in characters. */
 export const MIN_PASSPHRASE_LENGTH = 12;

@@ -47,7 +47,7 @@ const gemini = (input: number, output: number, cacheRead: number): ModelPrice =>
 });
 
 /**
- * Claude: read on 2026-10-06 at https://platform.claude.com/docs/en/about-claude/pricing (US dollars per
+ * Claude: read again on 2026-10-17 (Haiku 5.5 added, Sonnet 5.5 cache hits corrected) at https://platform.claude.com/docs/en/about-claude/pricing (US dollars per
  * million tokens; standard speed, global routing, no batch discount). Cache hits cost 0.1x the
  * input price, except Opus 5.5 (0.05x) and Fable 5.1 (0.025x).
  *
@@ -58,8 +58,8 @@ const gemini = (input: number, output: number, cacheRead: number): ModelPrice =>
  * another maker that Antigravity offers (GPT-OSS) has no public price here: no amount.
  */
 export const PRICE_TABLE: PriceTable = {
-  version: "2026-10-07",
-  as_of: "2026-10-07",
+  version: "2026-10-17",
+  as_of: "2026-10-17",
   source:
     "https://platform.claude.com/docs/en/about-claude/pricing and https://ai.google.dev/gemini-api/docs/pricing",
   models: {
@@ -73,11 +73,14 @@ export const PRICE_TABLE: PriceTable = {
     "claude-opus-4-5": price(5, 25, 0.5),
     "claude-opus-4-1": price(15, 75, 1.5),
     "claude-opus-4": price(15, 75, 1.5),
-    "claude-sonnet-5-5": price(2, 10, 0.2),
+    "claude-sonnet-5-5": price(2, 10, 0.1),
     "claude-sonnet-5": price(2, 10, 0.2),
     "claude-sonnet-4-6": price(3, 15, 0.3),
     "claude-sonnet-4-5": price(3, 15, 0.3),
     "claude-sonnet-4": price(3, 15, 0.3),
+    // Haiku 5.5: the price for prompts up to 100 000 tokens (over that: 0.50 / 2.50 / 0.05), so a
+    // longer prompt costs more than shown here.
+    "claude-haiku-5-5": price(0.1, 0.5, 0.01),
     "claude-haiku-4-5": price(1, 5, 0.1),
     "claude-haiku-3-5": price(0.8, 4, 0.08),
     "gemini-3.1-pro": gemini(2, 12, 0.2),

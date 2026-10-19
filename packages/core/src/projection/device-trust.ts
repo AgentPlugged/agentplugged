@@ -507,16 +507,8 @@ async function evaluate(
     if (root !== undefined && payload.device === root.device) return "untrusted_authorization";
     const key = signerKey(payload.author);
     if (key === undefined) return "untrusted_authorization";
-    const target = devices.get(payload.device);
-    // A machine revokes only itself, or a device it still holds `provisional`.
-    if (
-      isTrustedMachine(payload.author) &&
-      !(root !== undefined && payload.author === root.device)
-    ) {
-      const own = payload.author === payload.device;
-      const provisional = target?.provisional === true && target.bridge === payload.author;
-      if (!own && !provisional) return "untrusted_authorization";
-    }
+    // Any device the journal trusts may remove another, itself included (the key must be that of
+    // an admitted signer, checked above): the creator removes a lost device from any device.
     const { authorization, ...unsigned } = payload;
     const verified = await verifyTrustRecord(
       deviceRevokedRecord(unsigned),
@@ -546,7 +538,9 @@ async function evaluate(
       return "untrusted_authorization";
     }
     const signer = devices.get(payload.authorization.signer);
-    if (signer === undefined || signer.kind !== "phone" || revoked.has(signer.device)) {
+    // The first device linked certifies the root: a phone or a browser, never a machine.
+    const viewer = signer?.kind === "phone" || signer?.kind === "browser";
+    if (signer === undefined || !viewer || revoked.has(signer.device)) {
       return "untrusted_authorization";
     }
     const { authorization, ...unsigned } = payload;

@@ -481,8 +481,8 @@ describe("agents' commands", () => {
       // Only the estimates are shown, from the method's reference.
       usage: {
         table: {
-          version: "2026-10-07",
-          as_of: "2026-10-07",
+          version: "2026-10-17",
+          as_of: "2026-10-17",
           source:
             "https://platform.claude.com/docs/en/about-claude/pricing and https://ai.google.dev/gemini-api/docs/pricing",
         },

@@ -34,6 +34,21 @@ export interface KeyStore {
    */
   writeProductBackup(productId: string, keyId: string, secret: string): Promise<void>;
   /**
+   * A product key kept under `product:<product_id>:previous:<key_id>` (replaced by `key import`, or
+   * from before a renewal): its 32 bytes in base64url, or undefined when none is kept under that
+   * identifier. What was written under it stays readable.
+   */
+  readProductBackup?(productId: string, keyId: string): Promise<string | undefined>;
+  /**
+   * A token or login kept for a connection to a code platform or a data source (account
+   * `connection:<name>`). Only the system keychain holds them: never the repository, the journal,
+   * the projection or the relay. Absent where the store cannot keep such an entry.
+   */
+  readConnectionSecret?(name: string): Promise<string | undefined>;
+  writeConnectionSecret?(name: string, secret: string): Promise<void>;
+  /** Removes the entry; true when there was one. */
+  deleteConnectionSecret?(name: string): Promise<boolean>;
+  /**
    * Waits before re-read number `attempt` (from 0) of an entry that reads empty, or not as just
    * written (after a write, and before a key is created), and resolves true; false when there is
    * no re-read left. A system keychain may answer empty for a moment under concurrent access
@@ -127,6 +142,25 @@ export class MemoryKeyStore implements KeyStore {
 
   async writeProductBackup(productId: string, keyId: string, secret: string): Promise<void> {
     this.backups.set(`${productId}:${keyId}`, secret);
+  }
+
+  async readProductBackup(productId: string, keyId: string): Promise<string | undefined> {
+    return this.backups.get(`${productId}:${keyId}`);
+  }
+
+  /** Connection secrets by name. */
+  readonly connections = new Map<string, string>();
+
+  async readConnectionSecret(name: string): Promise<string | undefined> {
+    return this.connections.get(name);
+  }
+
+  async writeConnectionSecret(name: string, secret: string): Promise<void> {
+    this.connections.set(name, secret);
+  }
+
+  async deleteConnectionSecret(name: string): Promise<boolean> {
+    return this.connections.delete(name);
   }
 }
 

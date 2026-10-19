@@ -91,7 +91,7 @@ describe("history lines", () => {
       story: null,
     });
     expect(line).toBe(
-      `${when(BASE.at)} · human:BBBBBBBBBBBBBBBB (endorsed on ${localDateTime("2026-10-02T08:30:00.000Z")}) · terminal · option chosen (option postgres) · assurance presence (Windows Hello) · G-AAAAAAAAAA (decision, medium risk): Pick a database · no story`,
+      `${when(BASE.at)} · human:BBBBBBBBBBBBBBBB (endorsed on ${localDateTime("2026-10-02T08:30:00.000Z")}) · at the terminal · option chosen (option postgres) · assurance presence (Windows Hello) · G-AAAAAAAAAA (decision, medium risk): Pick a database · no story`,
     );
   });
 
@@ -121,7 +121,7 @@ describe("history lines", () => {
       waiver_until: "2026-10-05T10:00:00.000Z",
     });
     expect(line).toBe(
-      `${when(BASE.at)} · human:AAAAAAAAAAAAAAAA (clé racine) · terminal · dérogé (jusqu'au ${localDateTime("2026-10-05T10:00:00.000Z")}) · assurance locale (la clé du trousseau de cette machine) · G-AAAAAAAAAA (story, risque faible) : Story 2-6 done · story 2-6`,
+      `${when(BASE.at)} · human:AAAAAAAAAAAAAAAA (clé racine) · au terminal · dérogé (jusqu'au ${localDateTime("2026-10-05T10:00:00.000Z")}) · assurance locale (la clé du trousseau de cette machine) · G-AAAAAAAAAA (story, risque faible) : Story 2-6 done · story 2-6`,
     );
   });
 

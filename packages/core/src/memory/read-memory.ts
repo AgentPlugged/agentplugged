@@ -111,13 +111,7 @@ export const readMemoryCommand = defineCommand<MemoryRead>({
         const altered: string[] = [];
         for (const anchor of Object.values(anchors)) {
           if (status.get(anchor.id) !== "active") continue;
-          const read = await readLessonFile(
-            context,
-            target.product,
-            key.key,
-            anchor.id,
-            anchor.digest,
-          );
+          const read = await readLessonFile(context, target.product, key, anchor.id, anchor.digest);
           if (!read.ok) {
             (read.reason === "missing" ? missing : altered).push(anchor.id);
             continue;

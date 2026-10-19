@@ -71,13 +71,13 @@ describe("event envelope and signature messages", () => {
   });
 
   it("renders UPGRADE_REQUIRED with the version and the supported one", () => {
-    const payload = parseError({ v: 15 });
+    const payload = parseError({ v: 17 });
     expect(payload.code).toBe("UPGRADE_REQUIRED");
     expect(render("fr", payload)).toBe(
-      "Cet événement utilise la version 15 de l'enveloppe, plus récente que celle que ce moteur connaît (version 14). Mets agentplugged à jour pour le lire.",
+      "Cet événement utilise la version 17 de l'enveloppe, plus récente que celle que ce moteur connaît (version 16). Mets agentplugged à jour pour le lire.",
     );
     expect(render("en", payload)).toBe(
-      "This event uses envelope version 15, newer than this engine knows (version 14). Update agentplugged to read it.",
+      "This event uses envelope version 17, newer than this engine knows (version 16). Update agentplugged to read it.",
     );
   });
 

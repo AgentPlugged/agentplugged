@@ -382,3 +382,31 @@ export function resolutionProblem(
   }
   return undefined;
 }
+
+/** A permission point whose request the card shows cut: the end could hide what it does. */
+const LONG_REQUEST = 500;
+
+/**
+ * Why a point is not answered from the web, or undefined: an action of the creator's that the
+ * engine carries out on approval (its execution needs the machine's own adapters; refusing or
+ * sending it back is still answered from the web), a change of the memory (its content is
+ * encrypted: the card cannot show it), a request too long to be read whole. Those wait for the chat
+ * or the terminal. A story's merge is answered from the web: the machine merges it before it writes
+ * the answer. The write and the projection both ask it.
+ */
+export function answeredElsewhere(
+  checkpoint: {
+    readonly type: string;
+    readonly source?: string | null;
+    readonly request?: { readonly detail: string } | null;
+    readonly creator_action?: unknown;
+  },
+  decision: string,
+): boolean {
+  if (checkpoint.type === "memory") return true;
+  if ((checkpoint.creator_action ?? null) !== null && decision === "approved") return true;
+  return (
+    checkpoint.source === "untrusted_action" &&
+    (checkpoint.request?.detail.length ?? 0) >= LONG_REQUEST
+  );
+}

@@ -51,17 +51,6 @@ antigravity:
   multimodal:
     model: pro
 
-# Gemini CLI, the predecessor of Antigravity CLI, for older installations.
-gemini-cli:
-  reasoning:
-    model: inherit
-  code:
-    model: inherit
-  fast:
-    model: inherit
-  multimodal:
-    model: inherit
-
 cursor:
   reasoning:
     model: inherit

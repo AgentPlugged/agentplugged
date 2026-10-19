@@ -62,6 +62,16 @@ async function product() {
   return { files, journal, agent, call, recorded, state };
 }
 
+/** The same product, whose engine knows its folder on this machine. */
+async function rooted(projectRoot: string) {
+  const made = await product();
+  return {
+    journal: made.journal,
+    agent: { ...made.agent, projectRoot },
+    registry: createCommandRegistry(),
+  };
+}
+
 const OPTIONS = [
   { id: "stripe", label: "Stripe", consequence: "Fast to ship." },
   { id: "paddle", label: "Paddle", consequence: "Handles VAT for us." },
@@ -165,6 +175,19 @@ describe("open_checkpoint", () => {
     expect(result.error.code).toBe(ErrorCode.INVALID_ARGUMENTS);
     expect(result.error.details.field).toBe(field);
     expect(journal.events).toEqual([]);
+  });
+
+  it("writes an absolute path inside the product as a relative one, and keeps the others", async () => {
+    const { journal, agent, registry } = await rooted("C:\\Users\\jane\\Desktop\\shop");
+    const opened = await registry.run("open_checkpoint", agent, {
+      ...DECISION,
+      summary:
+        "Read C:/Users/jane/Desktop/shop/.agentplugged/docs/vision.md, not C:/Users/jane/elsewhere/a.md.",
+    });
+    expect(opened.ok).toBe(true);
+    expect(journal.events.at(-1)?.payload).toMatchObject({
+      summary: "Read .agentplugged/docs/vision.md, not C:/Users/jane/elsewhere/a.md.",
+    });
   });
 
   it("sends a high, irreversible release to tech_lead, with presence and nothing more", async () => {

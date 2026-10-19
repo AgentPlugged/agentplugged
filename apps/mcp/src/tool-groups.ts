@@ -17,23 +17,22 @@ export const MAX_DESCRIPTION = 400;
  */
 export const TOOL_DESCRIPTIONS: Readonly<Record<string, string>> = {
   state:
-    "Read-only. Actions: get (ONE option only), next, trace, merge_order, environment. See reference/tool-state.md",
+    "Read-only. Actions: get (ONE option only), next, trace, merge_order, environment. Ref: tool-state",
   checkpoint:
-    "Validation points. Actions: open (before asking the creator), decide (only a point the creator did not keep), measures, gap. Never answer for the creator. See reference/tool-checkpoint.md",
-  chat: "Ask the creator. Actions: ask, answer (only the creator's own words in quote, or via question_tool), stack_open, stack_ask, stack_answer, table. Never answer, reword or waive for the creator. See reference/tool-chat.md",
+    "Validation points. Actions: open (before asking the creator; files in documents, as paths from the product root), decide (only a point the creator did not keep), measures, gap. Never answer for the creator. Ref: tool-checkpoint",
+  chat: "Ask the creator. Actions: ask, answer (only the creator's own words in quote, or via question_tool), stack_open, stack_ask, stack_answer, table. Never answer, reword or waive for the creator. Ref: tool-chat",
   story:
-    "Actions: start (only in its workdir), status, progress, result (end with it), pr (never merge), ci, deviation, lift_deviation, leave_fast_track, merge_conflict, criterion, loop. Never skip hooks or push the main branch. See reference/tool-story.md",
+    "Actions: start (only in its workdir), status, progress, result (end with it), pr (never merge), ci, deviation, lift_deviation, leave_fast_track, merge_conflict, criterion, loop. Never skip hooks or push the main branch. Ref: tool-story",
   review:
-    "Actions: start, submit, triage, get, publish, audit, critique, tests, qa, ready, export. Never review a story you built. See reference/tool-review.md",
-  agent:
-    "Activity, handovers. Actions: status, delegate (Noah only), workshop. agent = your own id. See reference/tool-agent.md",
+    "Actions: start, submit, triage, get, publish, audit, critique, tests, qa, ready, export. Never review a story you built. Ref: tool-review",
+  agent: "Actions: status, delegate (Noah only), workshop. agent = your own id. Ref: tool-agent",
   guard:
-    "Creator-only actions, sensitive data. Actions: request, check (refused means never), external_read, creator_action (only with their yes), read_sensitive, write_sensitive (never read salle/ or memory/ files directly). what = action. See reference/tool-guard.md",
-  plan: "Actions: sprint (the creator approves), defer, complete_deferred, course (change of mind). Never start a story an open deferred item locks. See reference/tool-plan.md",
+    "Creator-only actions, sensitive data. Actions: request, check (refused means never), external_read, creator_action (only with their yes), read_sensitive, write_sensitive (never read salle/ or memory/ files directly). what = action. Ref: tool-guard",
+  plan: "Actions: sprint (the creator approves), defer, complete_deferred, course (change of mind). Never start a story an open deferred item locks. Ref: tool-plan",
   memory:
-    "Lessons. Actions: read (before your first answer), retrospective, record, promote_propose, promote. Never record or promote a lesson before the creator approved it. See reference/tool-memory.md",
+    "Lessons. Actions: read (before your first answer), retrospective, record, promote_propose, promote. Never record or promote a lesson before the creator approved it. Ref: tool-memory",
   measure:
-    "Actions: cost (never invent an amount), usage, requirements, proof (real results only), run (a command the creator accepted). See reference/tool-measure.md",
+    "Actions: cost (never invent an amount), usage, requirements, proof (real results only), run (a command the creator accepted). Ref: tool-measure",
 };
 
 type Json = Record<string, unknown>;

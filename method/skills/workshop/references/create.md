@@ -41,5 +41,5 @@ every tool by `sync`, outside the creator's text.
 
 The engine writes `.agentplugged/agents/<id>/` (`SKILL.md`, `agent.yaml`) or `.agentplugged/skills/<id>/`
 (`SKILL.md`, `references/`) and runs `sync`: the same render as the shipped ones, for Claude Code, Codex,
-Cursor, Antigravity and Gemini CLI. Then `verify` (its `evals` proposes behaviour cases: `references/evaluate.md`). To change it later, `analyze`, then a new `agent_edit`
+Cursor and Antigravity CLI. Then `verify` (its `evals` proposes behaviour cases: `references/evaluate.md`). To change it later, `analyze`, then a new `agent_edit`
 with the whole corrected `content`, shown and approved the same way.

@@ -18,7 +18,10 @@ export const CLAUDE_MCP_PATH = ".mcp.json";
  * the entry it added (`legacy`). The server is declared in the plugin (`targets/antigravity-plugin.ts`).
  */
 export const ANTIGRAVITY_MCP_PATH = ".agents/mcp_config.json";
-/** Gemini CLI's project settings, whose `mcpServers` it reads (older installations). */
+/**
+ * The retired Gemini CLI's project settings. `sync` no longer writes it; an older installation may
+ * still hold the entry an earlier `sync` added, which only the cleanup removes.
+ */
 export const GEMINI_SETTINGS_PATH = ".gemini/settings.json";
 /** Cursor's project MCP servers (`mcpServers`), read by the editor and the Cursor CLI. */
 export const CURSOR_MCP_PATH = ".cursor/mcp.json";
@@ -61,14 +64,6 @@ export const MCP_JSON_FILES: readonly McpJsonFile[] = [
     legacy: true,
   },
   {
-    path: GEMINI_SETTINGS_PATH,
-    client: "gemini-cli",
-    tool: "antigravity",
-    group: "antigravity",
-    typed: false,
-    existingOnly: true,
-  },
-  {
     path: CURSOR_MCP_PATH,
     client: "cursor",
     tool: "cursor",
@@ -77,6 +72,20 @@ export const MCP_JSON_FILES: readonly McpJsonFile[] = [
     existingOnly: false,
   },
 ];
+
+/**
+ * The retired Gemini CLI's settings file as the cleanup reads it: never part of the files `sync`
+ * writes, and merged into only when it exists.
+ */
+export const LEGACY_GEMINI_SETTINGS: McpJsonFile = {
+  path: GEMINI_SETTINGS_PATH,
+  client: "antigravity",
+  tool: "antigravity",
+  group: "antigravity",
+  typed: false,
+  existingOnly: true,
+  legacy: true,
+};
 
 /** How the AI tools start the server: a command and its arguments. */
 export interface McpServerLaunch {

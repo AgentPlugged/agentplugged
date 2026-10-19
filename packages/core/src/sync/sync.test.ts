@@ -126,6 +126,7 @@ function manifestPaths(files: MemoryFiles): { others: string[]; reference: strin
 /** The script of the chat's hook, generated for Claude Code. */
 const PROMPT_HOOK = ".claude/hooks/agentplugged-prompt.mjs";
 const DECISION_HOOK = ".claude/hooks/agentplugged-decision.mjs";
+const ACTIVITY_HOOK = ".claude/hooks/agentplugged-activity.mjs";
 
 const settingsOf = (files: MemoryFiles) => JSON.parse(files.files.get(SETTINGS) ?? "{}");
 
@@ -196,6 +197,7 @@ describe("sync to Claude Code", () => {
       [SETTINGS]: "created",
       ".mcp.json": "created",
       [PROMPT_HOOK]: "created",
+      [ACTIVITY_HOOK]: "created",
       [DECISION_HOOK]: "created",
     });
     expect(result.warnings).toEqual([]);
@@ -266,7 +268,7 @@ describe("sync to Claude Code", () => {
     const manifest = JSON.parse(files.files.get(SYNC_MANIFEST_PATH) ?? "{}");
     const recorded = manifestPaths(files);
     expect(recorded.others.sort()).toEqual(
-      [AGENT, SKILL, "AGENTS.md", "CLAUDE.md", PROMPT_HOOK, DECISION_HOOK].sort(),
+      [AGENT, SKILL, "AGENTS.md", "CLAUDE.md", PROMPT_HOOK, DECISION_HOOK, ACTIVITY_HOOK].sort(),
     );
     // One file per section of the reference.
     expect(recorded.reference).toContain(".agentplugged/reference/reporting.md");
@@ -301,6 +303,7 @@ describe("sync to Claude Code", () => {
       [SETTINGS]: "unchanged",
       ".mcp.json": "unchanged",
       [PROMPT_HOOK]: "unchanged",
+      [ACTIVITY_HOOK]: "unchanged",
       [DECISION_HOOK]: "unchanged",
     });
     expect(result.warnings).toEqual([]);
@@ -346,6 +349,7 @@ describe("sync to Claude Code", () => {
       [SETTINGS]: "unchanged",
       ".mcp.json": "unchanged",
       [PROMPT_HOOK]: "unchanged",
+      [ACTIVITY_HOOK]: "unchanged",
       [DECISION_HOOK]: "unchanged",
     });
     expect(files.files.has(SKILL)).toBe(false);
@@ -353,6 +357,7 @@ describe("sync to Claude Code", () => {
     expect(files.dirs.has(".claude/skills/iris")).toBe(false);
     expect(files.dirs.has(".claude/skills")).toBe(true);
     expect(manifestPaths(files).others).toEqual([
+      ACTIVITY_HOOK,
       DECISION_HOOK,
       PROMPT_HOOK,
       "AGENTS.md",
@@ -402,7 +407,12 @@ describe("sync to Claude Code", () => {
     expect(settings.$schema).toBeUndefined();
     expect(settings.env).toEqual({ FOO: "bar" });
     // The creator's (empty) hooks receive those of untrusted content.
-    expect(Object.keys(settings.hooks)).toEqual(["PreToolUse", "PostToolUse", "UserPromptSubmit"]);
+    expect(Object.keys(settings.hooks)).toEqual([
+      "PreToolUse",
+      "PostToolUse",
+      "PostToolUseFailure",
+      "UserPromptSubmit",
+    ]);
     expect(settings.permissions.allow[0]).toBe("Bash(npm test)");
     expect(settings.permissions.allow).toContain("Edit(/**)");
     expect(settings.permissions.defaultMode).toBe("plan");
@@ -603,6 +613,7 @@ describe("sync to Claude Code", () => {
       [SETTINGS]: "unchanged",
       ".mcp.json": "unchanged",
       [PROMPT_HOOK]: "unchanged",
+      [ACTIVITY_HOOK]: "unchanged",
       [DECISION_HOOK]: "unchanged",
     });
     expect(files.files.get(SKILL)).toContain("\n- Users first.\n");

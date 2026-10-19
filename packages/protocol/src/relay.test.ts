@@ -184,3 +184,26 @@ describe("l'enveloppe du relais", () => {
     ).toBe(true);
   });
 });
+
+describe("the request to stop serving a device", () => {
+  const KEY = bytes64(32, 7);
+
+  it("names the device by its signing key, or by its identifier at the relay, never by both or neither", () => {
+    const parse = (frame: unknown) => RelayClientFrameSchema.safeParse(frame).success;
+    expect(parse({ type: "device_revoke", sig_key: KEY })).toBe(true);
+    expect(parse({ type: "device_revoke", device_id: ID })).toBe(true);
+    expect(parse({ type: "device_revoke" })).toBe(false);
+    expect(parse({ type: "device_revoke", sig_key: KEY, device_id: ID })).toBe(false);
+    expect(parse({ type: "device_revoke", sig_key: "court" })).toBe(false);
+    expect(parse({ type: "device_revoke", sig_key: KEY, extra: 1 })).toBe(false);
+  });
+
+  it("is answered with what the relay did, and the others hear that the device is gone", () => {
+    const parse = (frame: unknown) => RelayServerFrameSchema.safeParse(frame).success;
+    expect(parse({ type: "device_revoked", found: true, device_id: ID })).toBe(true);
+    expect(parse({ type: "device_revoked", found: false, device_id: null })).toBe(true);
+    expect(parse({ type: "device_revoked", found: true })).toBe(false);
+    expect(parse({ type: "device_gone", device_id: ID })).toBe(true);
+    expect(parse({ type: "device_gone" })).toBe(false);
+  });
+});

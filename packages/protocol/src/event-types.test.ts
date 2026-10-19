@@ -32,10 +32,12 @@ describe("event type registry", () => {
   it("knows the engine's types and the test type, at version 1 but checkpoint.opened (10)", () => {
     expect(KNOWN_EVENT_TYPES).toEqual([
       "agent.delegated",
+      "agent.instruction_given",
       "agent.progress_reported",
       "agent.result_recorded",
       "agent.status_reported",
       "audit.reported",
+      "bridge.primary_changed",
       "budget.threshold_reached",
       "checkpoint.answered",
       "checkpoint.auto_applied",
@@ -46,6 +48,10 @@ describe("event type registry", () => {
       "checkpoint.opened",
       "checkpoint.reopened",
       "checkpoint.resolved",
+      "checkpoint.web_answered",
+      "checkpoint.web_held",
+      "checkpoint.web_hold_cancelled",
+      "checkpoint.web_hold_failed",
       "cost.reported",
       "course.closed",
       "course.decided",
@@ -76,8 +82,11 @@ describe("event type registry", () => {
       "loop.stopped",
       "memory.retrospective_proposed",
       "method.migrated",
+      "order.applied",
+      "order.rejected",
       "product.created",
       "product.key_created",
+      "product.key_rotated",
       "readiness.reported",
       "readiness.settled",
       "requirement.gap_settled",
@@ -115,17 +124,19 @@ describe("event type registry", () => {
       "write.refused",
     ]);
     for (const type of KNOWN_EVENT_TYPES) {
-      // `creator_action.executed` is at version 12 (customised skills), `checkpoint.opened` at 14,
+      // `creator_action.executed` is at version 12 (customised skills), `checkpoint.opened` at 16,
       // `requirement.proved` at 2.
       // `checkpoint.elicited` and `stack.answered` are at version 2 (the question tool).
       expect(EVENT_TYPE_REGISTRY[type]?.version, type).toBe(
         type === "checkpoint.opened"
-          ? 14
+          ? 16
           : type === "creator_action.executed"
             ? 12
             : type === "story.merged"
-              ? 3
+              ? 5
               : type === "cost.reported" ||
+                  type === "checkpoint.web_answered" ||
+                  type === "checkpoint.web_held" ||
                   type === "checkpoint.closed" ||
                   type === "checkpoint.answered" ||
                   type === "checkpoint.elicited" ||
@@ -187,10 +198,16 @@ describe("event type registry", () => {
       ["checkpoint.opened", 12],
       ["creator_action.executed", 10],
       ["checkpoint.opened", 13],
+      ["checkpoint.opened", 14],
+      ["checkpoint.opened", 15],
       ["creator_action.executed", 11],
       ["requirement.proved", 1],
       ["story.merged", 1],
       ["story.merged", 2],
+      ["story.merged", 3],
+      ["story.merged", 4],
+      ["checkpoint.web_answered", 1],
+      ["checkpoint.web_held", 1],
       ["checkpoint.closed", 1],
       ["checkpoint.answered", 1],
       ["checkpoint.elicited", 1],
@@ -215,9 +232,9 @@ describe("event type registry", () => {
       success: false,
       error: { code: "EVENT_INVALID", details: { field: "v" } },
     });
-    expect(parseEventEnvelope({ ...event, v: 15 })).toMatchObject({
+    expect(parseEventEnvelope({ ...event, v: 17 })).toMatchObject({
       success: false,
-      error: { code: "UPGRADE_REQUIRED", details: { type: TEST_EVENT_TYPE, version: 15 } },
+      error: { code: "UPGRADE_REQUIRED", details: { type: TEST_EVENT_TYPE, version: 17 } },
     });
     // Version 2 exists for another type: the registry asks for the upgrade.
     expect(currentEvent({ ...event, v: 2 })).toMatchObject({

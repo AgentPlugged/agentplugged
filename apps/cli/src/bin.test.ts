@@ -148,7 +148,6 @@ function generatedFiles(agent: string): string[] {
     `.agents/skills/${agent}/SKILL.md`,
     `.codex/agents/${agent}.toml`,
     `.agents/agents/${agent}.md`,
-    `.gemini/agents/${agent}.md`,
     `.cursor/agents/${agent}.md`,
   ];
 }
@@ -517,12 +516,12 @@ describe("agentplugged init: AI tools", () => {
   it("cites both sources on one line, and speaks French", async () => {
     await fakeCommand("claude", "2.1.300 (Claude Code)");
     await fakeExtension("anthropic.claude-code-2.1.287-win32-x64", "2.1.287");
-    await fakeCommand("gemini", "0.62.0");
+    await fakeCommand("agy", "1.2.3");
     const section = toolsSection(run(["init"], "fr").stdout);
     expect(section).toContain(
       "  Claude Code 2.1.300 — commande `claude`, extension VS Code\n    Piloté par CLAUDE.md + .claude/",
     );
-    expect(section).toContain("  Gemini CLI 0.62.0 — commande `gemini`\n");
+    expect(section).toContain("  Antigravity CLI 1.2.3 — commande `agy`\n");
     expect(section).toContain("  Cursor : non trouvé\n");
     expect(section).not.toContain("Aucun outil");
   });
@@ -792,9 +791,8 @@ describe("agentplugged sync", () => {
     );
     expect(await read(".codex/config.toml")).toContain('sandbox_mode = "workspace-write"\n');
     expect(await read(".agents/agents/iris.md")).toMatch(/^---\nname: iris\n.*\nmodel: pro\n---\n/);
-    expect(await read(".gemini/agents/iris.md")).toMatch(
-      /^---\nname: iris\n.*\nkind: local\n---\n/,
-    );
+    // Nothing is written for the retired Gemini CLI.
+    expect(has(".gemini")).toBe(false);
     expect(await read(".cursor/agents/iris.md")).toMatch(
       /^---\nname: iris\n.*\nmodel: inherit\n---\n/,
     );
@@ -813,7 +811,7 @@ describe("agentplugged sync", () => {
     expect(constitution).toContain("\n## Tool fallbacks\n");
     expect(constitution).toContain("- Codex, rules: ");
     expect(constitution).toContain("- Cursor, usage: ");
-    expect(constitution).toContain("- Gemini CLI, model: the model table ");
+    expect(constitution).not.toContain("Gemini CLI");
 
     const lines = summary(stdout);
     expect(stdout).toMatch(/^AI tool files synchronized in /);
@@ -861,7 +859,6 @@ describe("agentplugged sync", () => {
       ".codex/hooks/agentplugged-policy.json": "created",
       ".codex/rules/agentplugged.rules": "created",
       ...perAgent(".agents/agents/<id>.md"),
-      ...perAgent(".gemini/agents/<id>.md"),
       "GEMINI.md": "created",
       ...perAgent(".cursor/agents/<id>.md"),
       ".cursor/rules/agentplugged.mdc": "created",
@@ -871,8 +868,7 @@ describe("agentplugged sync", () => {
       ".cursor/hooks/agentplugged-cursor.mjs": "created",
       ".cursor/hooks/agentplugged-policy.json": "created",
       ".cursorignore": "created",
-      // The agentplugged MCP server, declared in each tool's project configuration (Gemini CLI's
-      // settings only when they already exist).
+      // The agentplugged MCP server, declared in each tool's project configuration.
       ".mcp.json": "created",
       // Antigravity CLI reads its MCP server and its hooks from a plugin.
       ".agents/plugins/agentplugged/plugin.json": "created",
@@ -886,7 +882,7 @@ describe("agentplugged sync", () => {
       "Shared by several tools",
       "Claude Code",
       "Codex",
-      "Antigravity CLI + Gemini CLI",
+      "Antigravity CLI",
       "Cursor",
     ]) {
       expect(stdout).toContain(`\n${group}\n`);
@@ -897,15 +893,12 @@ describe("agentplugged sync", () => {
     // Antigravity CLI enforces its permissions through its plugin: only its worktrees and forms are fallbacks (its proof of the chat is native).
     expect(stdout).not.toContain("\n  Antigravity CLI, proof of the chat: ");
     expect(stdout).not.toContain("\n  Antigravity CLI, permissions: ");
-    expect(stdout).toContain("\n  Gemini CLI, permissions: ");
+    expect(stdout).not.toContain("Gemini CLI");
     // Cursor's hooks apply the permissions: what is left is its usage, said.
     expect(stdout).not.toContain("\n  Cursor, permissions: ");
     expect(stdout).toContain("\n  Cursor, consumption measured: ");
     expect(stdout).toContain(
       "\nCursor runs the hooks of `.cursor/hooks.json` only in a workspace you trust",
-    );
-    expect(stdout).toContain(
-      "\n  Gemini CLI, model: the model table (`.agentplugged/models.yaml`, or `models` in `method.yaml`) gives `inherit`",
     );
     expect(stdout).not.toContain("Preferred tools");
     expect(stdout).toContain("\nCodex reads `.codex/config.toml` only in a trusted project");
@@ -1003,12 +996,9 @@ describe("agentplugged sync", () => {
     expect(stdout).toContain(
       "\n  Cursor, consommation mesurée : Cursor ne garde aucun nombre de jetons nulle part sur la machine",
     );
-    expect(stdout).toContain(
-      "\n  Gemini CLI, modèle : la table des modèles (`.agentplugged/models.yaml`, ou `models` dans `method.yaml`) donne `inherit`",
-    );
     const lines = stdout.split("\n");
     const codex = lines.indexOf("Codex");
-    const next = lines.indexOf("Antigravity CLI + Gemini CLI");
+    const next = lines.indexOf("Antigravity CLI");
     const config = lines.findIndex((line) => line.endsWith("  .codex/config.toml"));
     expect(codex).toBeGreaterThan(0);
     expect(config).toBeGreaterThan(codex);
@@ -1044,6 +1034,32 @@ describe("agentplugged sync", () => {
     expect(stdout).not.toContain("Replis");
     expect(stdout).not.toContain("Codex");
     expect(await read("AGENTS.md")).not.toContain("Tool fallbacks");
+  });
+
+  it("warns about the retired Gemini CLI's files, then removes only its own with --clean-gemini", async () => {
+    expect(run(["init"]).status).toBe(0);
+    expect(run(["sync"]).status).toBe(0);
+    await put(".gemini/agents/iris.md", `---\nname: iris\n---\n${HEADER}\n# Iris\n`);
+    await put(".gemini/agents/mine.md", "# my own\n");
+    const warned = run(["sync"]);
+    expect(warned.status).toBe(0);
+    expect(warned.stdout).toContain(
+      "Gemini CLI is no longer supported by Google; AgentPlugged now uses Antigravity CLI.",
+    );
+    expect(has(".gemini/agents/iris.md")).toBe(true);
+
+    const cleaned = run(["sync", "--clean-gemini"]);
+    expect(cleaned.status).toBe(0);
+    expect(summary(cleaned.stdout).get(".gemini/agents/iris.md")).toBe("deleted");
+    expect(has(".gemini/agents/iris.md")).toBe(false);
+    expect(has(".gemini/agents/mine.md")).toBe(true);
+    expect(has("GEMINI.md")).toBe(true);
+    expect(run(["sync", "--clean-gemini"], "fr").stdout).toContain("Rien à nettoyer");
+  });
+
+  it("refuses --clean-gemini outside sync", () => {
+    expect(run(["init"]).status).toBe(0);
+    expect(run(["doctor", "--clean-gemini"]).status).not.toBe(0);
   });
 
   it("deletes the files of a tool removed from the list and keeps the creator's cli.json", async () => {
@@ -1193,7 +1209,6 @@ describe("agentplugged agent", () => {
     `.agents/skills/${id}/SKILL.md`,
     `.codex/agents/${id}.toml`,
     `.agents/agents/${id}.md`,
-    `.gemini/agents/${id}.md`,
     `.cursor/agents/${id}.md`,
   ];
   const OVERRIDE = ".agentplugged/overrides/agents/iris.yaml";
@@ -1415,7 +1430,6 @@ describe("agentplugged agent edit --tier --tool", () => {
     expect(await read(".codex/agents/iris.toml")).not.toContain("\nmodel");
     expect(await read(".agents/agents/iris.md")).toContain("\nmodel: flash\n");
     expect(await read(".cursor/agents/iris.md")).toContain("\nmodel: inherit\n");
-    expect(await read(".gemini/agents/iris.md")).not.toContain("\nmodel:");
 
     // The same settings again: said as unchanged, without the next step.
     const again = run(["agent", "edit", "iris", "--tier", "fast"]);

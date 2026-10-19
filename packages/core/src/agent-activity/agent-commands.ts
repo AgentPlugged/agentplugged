@@ -53,6 +53,7 @@ import {
   openBlockedResultCheckpoint,
 } from "../checkpoints/checkpoint-rules.js";
 import { type PointsView, pointsView } from "../checkpoints/point-rules.js";
+import { relativizeCheckpointText } from "../checkpoints/product-paths.js";
 import { answerable, statusAt, waiverExpired } from "../checkpoints/resolution-rules.js";
 import { reasonHolds } from "../checkpoints/settled-rules.js";
 import { type Command, type CommandContext, defineCommand, fail, ok } from "../command.js";
@@ -542,6 +543,11 @@ export async function projectWithKey(
   const access = await projectionKey(
     context,
     config.product_id ?? journalProduct(listing.events)?.product,
+    {
+      events: listing.events,
+      problems: listing.problems,
+      allowTestTypes: context.allowTestTypes === true,
+    },
   );
   try {
     const detailed = await computeProjectionDetailed(listing.events, {
@@ -1202,6 +1208,8 @@ interface OpenPrepared {
   readonly design?: DesignWorkingCopy;
   /** The requirements the documents say, for a release point. */
   readonly registry?: RequirementEntry[];
+  /** The product's folder, to write an absolute path of a file of the product as a relative one. */
+  readonly root?: string;
 }
 
 export const openCheckpointCommand = agentEventCommand<
@@ -1210,10 +1218,11 @@ export const openCheckpointCommand = agentEventCommand<
 >({
   name: "open_checkpoint",
   description:
-    "Ask for a decision: open a checkpoint (document, decision, story, permission, release, publication or phase_end) with its risk, a title, a summary, the documents to read and the actions it blocks until the creator answers. A blocked action targets its own `story`, else the checkpoint's. story.review and story.complete are enforced; the other actions are recorded. A decision needs 2 to 4 options and the id of the one you recommend. Criteria are judged on report_measures. Returns the checkpoint id (G-…). A checkpoint the creator refused or sent back for changes keeps its blocks: address it, then open a new one with `supersedes` set to the refused one's id (same story; a document has none); once the creator approves the new one, both stop blocking. A phase_end checkpoint closes the current phase (`phase`, from get_state): no story, no blocks; only the agent that closes that phase opens it (AGENT_NOT_CLOSER); refused with PHASE_NOT_CURRENT, while the phase's end is already open, and with DOCUMENT_REVIEW_OPEN while a structuring `document` checkpoint of the phase still waits. Every document an end of phase cites is committed first (DOCUMENT_NOT_COMMITTED); while Chloé is active, the end of design cites the architecture and her security review (SECURITY_REVIEW_MISSING). The constitution gives the rules. Only the creator, or the agent responsible for a point they did not keep (decide_checkpoint), resolves a checkpoint. A `publication` checkpoint presents a deliverable of launch, marketing or sales: it needs `publication` (`angle`, `audience`, `short_version`: 80 words at most, one paragraph) and 1 to 20 `documents` (the full text under `.agentplugged/docs/`, at their current blob); no options, no criteria; it replaces a sent-back one only with `supersedes` set to a `publication` you produced. Nothing publishes, sends or pays. Then call next: it says whether to decide the point (step point_decision), ask the creator (ask_creator when `validation.channels.available` holds more than chat) or go on with other work.",
+    "Ask for a decision: open a checkpoint (document, decision, story, permission, release, publication or phase_end) with its risk, a title, a summary, the documents to read (cite each file in `documents`, by its path from the product root; never an absolute path in any text) and the actions it blocks until the creator answers. A blocked action targets its own `story`, else the checkpoint's. story.review and story.complete are enforced; the other actions are recorded. A decision needs 2 to 4 options and the id of the one you recommend. Give a `card`, what the creator reads first, in plain words and without jargon: `effect` (one or two sentences, 300 characters at most, on what changes for the people who use the product, before anything about the code), `risks` (up to 3 sentences, only the real ones) and `opinions` (up to 4: `agent` and one sentence `view` of the agents you consulted, such as the review or the security check), and `why` (`reason`: one sentence on why you propose this; `rejected`: one sentence on the alternative you set aside and why; 200 characters each); the `summary` keeps the detail. Criteria are judged on report_measures. Returns the checkpoint id (G-…). A checkpoint the creator refused or sent back for changes keeps its blocks: address it, then open a new one with `supersedes` set to the refused one's id (same story; a document has none); once the creator approves the new one, both stop blocking. A phase_end checkpoint closes the current phase (`phase`, from get_state): no story, no blocks; only the agent that closes that phase opens it (AGENT_NOT_CLOSER); refused with PHASE_NOT_CURRENT, while the phase's end is already open, and with DOCUMENT_REVIEW_OPEN while a structuring `document` checkpoint of the phase still waits. Every document an end of phase cites is committed first (DOCUMENT_NOT_COMMITTED); while Chloé is active, the end of design cites the architecture and her security review (SECURITY_REVIEW_MISSING). The constitution gives the rules. Only the creator, or the agent responsible for a point they did not keep (decide_checkpoint), resolves a checkpoint. A `publication` checkpoint presents a deliverable of launch, marketing or sales: it needs `publication` (`angle`, `audience`, `short_version`: 80 words at most, one paragraph) and 1 to 20 `documents` (the full text under `.agentplugged/docs/`, at their current blob); no options, no criteria; it replaces a sent-back one only with `supersedes` set to a `publication` you produced. Nothing publishes, sends or pays. Then call next: it says whether to decide the point (step point_decision), ask the creator (ask_creator when `validation.channels.available` holds more than chat) or go on with other work.",
   inputSchema: OpenCheckpointInputSchema,
   needsState: ({ type }) => type === "story" || type === "release",
-  events: ({ agent: _agent, story, ...fields }, state, prepared) => {
+  events: ({ agent: _agent, story, ...given }, state, prepared) => {
+    const fields = relativizeCheckpointText(given, prepared?.root);
     // A `story` point on a story nobody started, citing its file, validates the file: a
     // `document` point, which is what makes it startable. As a `story` point it ended the story.
     const retyped =
@@ -1247,15 +1256,16 @@ export const openCheckpointCommand = agentEventCommand<
   // The end of the design reads the review and the architecture of the working copy;
   // a release reads the requirements of the documents.
   prepare: async ({ type, phase }, context, agents): Promise<OpenPrepared> => {
-    if (type === "release") return { registry: await readRegistry(context.files) };
+    const root = context.projectRoot === undefined ? {} : { root: context.projectRoot };
+    if (type === "release") return { ...root, registry: await readRegistry(context.files) };
     if (type !== "phase_end" || phase !== "design" || !agents.has(SECURITY_REVIEWER)) {
-      return {};
+      return root;
     }
     const workingCopy: DesignWorkingCopy = {
       review: await readWorkingBytes(context.files, ARCHITECTURE_SECURITY_REVIEW_PATH),
       architecture: await readWorkingBytes(context.files, ARCHITECTURE_PATH),
     };
-    return { design: workingCopy };
+    return { ...root, design: workingCopy };
   },
   check: async (
     { agent, supersedes, story, type, phase, documents, publication, title },

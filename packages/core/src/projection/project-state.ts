@@ -104,6 +104,11 @@ export async function projectState(
   const access = await projectionKey(
     options.keys === undefined ? {} : { keys: options.keys },
     options.productId ?? journalProduct(listing.events)?.product,
+    {
+      events: listing.events,
+      problems: listing.problems,
+      allowTestTypes: options.allowTestTypes === true,
+    },
   );
   let shown = written;
   if (access.key !== undefined) {

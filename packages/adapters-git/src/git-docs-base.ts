@@ -11,6 +11,7 @@ export type GitRunner = (
   input?: string,
   env?: Readonly<Record<string, string>>,
   timeoutMs?: number,
+  maxBytes?: number,
 ) => Promise<GitRun>;
 
 /** What an adapter needs to run Git in a folder: the folder, and a runner (tests give theirs). */

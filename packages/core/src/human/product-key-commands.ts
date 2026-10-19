@@ -1,9 +1,9 @@
 import {
   encryptedFileKeyId,
   encryptFile,
-  exportedKeyInfo,
-  exportProductKey,
-  importProductKey,
+  exportedKeysInfo,
+  exportProductKeys,
+  importProductKeys,
   productKeyProof,
 } from "@agentplugged/crypto";
 import {
@@ -21,18 +21,21 @@ import { METHOD_CONFIG_PATH, METHOD_DIR } from "../init/layout.js";
 import { loadMethodConfig, productOf } from "../init/method-config.js";
 import {
   type AnnouncedKey,
+  adoptRotatedKey,
   announcedKey,
   backupProductKey,
-  checkAnnounced,
   createProductKey,
   forgetProductKey,
+  hasRotation,
   type ProductKey,
+  productKeyById,
   productKeyMismatch,
   productKeyMissing,
   productKeyOf,
   readHeldProductKey,
   readProductKey,
   storeProductKey,
+  writingKey,
 } from "../journal/product-key.js";
 import type { JournalListing, StateStore } from "../journal/state-store.js";
 import { methodNotInstalled } from "../profile/profile-command.js";
@@ -126,6 +129,23 @@ export async function installProductKey(
         }
         repository = false;
       }
+      if (listing !== undefined && hasRotation(listing.events)) {
+        // A renewal sealed for this machine is taken in: the key held is then the announced one.
+        await forgetProductKey(
+          await adoptRotatedKey(keys, product, {
+            events: listing.events,
+            problems: listing.problems,
+            allowTestTypes: context.allowTestTypes === true,
+          }).catch(() => undefined),
+        );
+        await forgetProductKey(stored);
+        try {
+          stored = await readProductKey(keys, product);
+        } catch (error) {
+          stored = undefined;
+          return { status: "keychain_unavailable", publishReason: reasonOf(error) };
+        }
+      }
       if (listing !== undefined) {
         announced = await announcedKey(listing.events, {
           product,
@@ -138,6 +158,11 @@ export async function installProductKey(
     if (announced !== null) {
       if (stored === undefined) return { status: "missing", journal_key_id: announced.key_id };
       if (stored.keyId !== announced.key_id) {
+        // An earlier key of this product (from before a renewal) is not another key: the current
+        // one is still to come, like on a machine that holds none.
+        if (announced.history.some((step) => step.key_id === stored?.keyId)) {
+          return { status: "missing", key_id: stored.keyId, journal_key_id: announced.key_id };
+        }
         return { status: "mismatch", key_id: stored.keyId, journal_key_id: announced.key_id };
       }
       return { status: "ready", key_id: stored.keyId, published: "already" };
@@ -219,17 +244,31 @@ export async function installProductKey(
 export interface KeyExportResult {
   readonly action: "export";
   readonly key_id: string;
-  /** `apk1:…`: the key encrypted under the passphrase (Argon2id, XChaCha20-Poly1305). */
+  /**
+   * `apk1:…` (one key) or `apk2:…` (several): the keys encrypted under the passphrase (Argon2id,
+   * XChaCha20-Poly1305).
+   */
   readonly exported: string;
+  /** Every key the export holds, the current one first; absent when it holds only the current one. */
+  readonly key_ids?: readonly string[];
+  /** Keys the product had that this machine does not hold: the export cannot read what they wrote. */
+  readonly missing?: readonly string[];
 }
 
 /** What `key import` did: the key stored now (the one replaced kept aside), or held already. */
 export interface KeyImportResult {
   readonly action: "import";
   readonly key_id: string;
-  readonly status: "imported" | "already";
+  /**
+   * `imported`: the current key is held now; `already`: held already; `older`: the export holds
+   * keys from before a renewal only, kept to read the old history (the current key is still to
+   * come).
+   */
+  readonly status: "imported" | "already" | "older";
   /** The key replaced, kept in the keychain under `product:<id>:previous:<key_id>`. */
   readonly replaced?: string;
+  /** Every key kept now, when the export held several. */
+  readonly key_ids?: readonly string[];
 }
 
 /** What `key seal` did, file by file. */
@@ -315,19 +354,49 @@ export async function exportKey(context: CommandContext): Promise<CommandResult<
   if (target instanceof AgentPluggedError) return fail(target);
   let key: ProductKey | undefined;
   try {
+    const listing = await target.journal.list();
+    // A renewal sealed for this machine is taken in first: the export holds what the journal says.
+    await forgetProductKey(
+      await adoptRotatedKey(target.human.keys, target.product, {
+        events: listing.events,
+        problems: listing.problems,
+        allowTestTypes: context.allowTestTypes === true,
+      }).catch(() => undefined),
+    );
     key = await readHeldProductKey(target.human.keys, target.product);
     if (key === undefined) {
       return fail(productKeyMissing(target.product, (await journalKey(context, target))?.key_id));
     }
-    checkAnnounced(await journalKey(context, target, key), key);
+    const announced = await journalKey(context, target, key);
+    const current = await writingKey(announced, key);
+    // Every key the product had, the current one first, so that the whole history is readable
+    // wherever the export is imported. A key this machine never received is named, not skipped.
+    const keys: Uint8Array[] = [current.key];
+    const keyIds: string[] = [current.keyId];
+    const missing: string[] = [];
+    for (const step of [...(announced?.history ?? [])].reverse()) {
+      if (step.key_id === current.keyId) continue;
+      const older = await productKeyById(key, step.key_id);
+      if (older === undefined) missing.push(step.key_id);
+      else {
+        keys.push(older.key);
+        keyIds.push(older.keyId);
+      }
+    }
     const passphrase = await target.human.askPassphrase("new");
     if ([...passphrase].length < MIN_PASSPHRASE_LENGTH) return fail(passphraseInvalid("too_short"));
     const again = await target.human.askPassphrase("again");
     if (again !== passphrase) return fail(passphraseInvalid("mismatch"));
-    const exported = await exportProductKey(key.key, target.product, passphrase, {
+    const exported = await exportProductKeys(keys, target.product, passphrase, {
       limits: target.human.passphraseLimits ?? "moderate",
     });
-    return ok({ action: "export", key_id: key.keyId, exported });
+    return ok({
+      action: "export",
+      key_id: current.keyId,
+      exported,
+      ...(keyIds.length > 1 ? { key_ids: keyIds } : {}),
+      ...(missing.length > 0 ? { missing } : {}),
+    });
   } catch (error) {
     if (error instanceof AgentPluggedError) return fail(error);
     throw error;
@@ -350,11 +419,11 @@ export async function importKey(
   const target = await keyTarget(context);
   if (target instanceof AgentPluggedError) return fail(target);
   let held: ProductKey | undefined;
-  let candidate: ProductKey | undefined;
+  let opened: ProductKey[] = [];
   try {
     const text =
       typeof input.text === "string" ? input.text : await target.human.askPassphrase("export");
-    const info = exportedKeyInfo(text);
+    const info = exportedKeysInfo(text);
     if (info === undefined) return fail(exportUnusable("not_exported"));
     if (info.productId !== target.product) {
       return fail(
@@ -373,13 +442,23 @@ export async function importKey(
         }),
       );
     }
-    if (announced.key_id !== info.keyId)
-      return fail(productKeyMismatch(announced.key_id, info.keyId));
-    if (held?.keyId === info.keyId) {
-      return ok({ action: "import", key_id: info.keyId, status: "already" });
+    // Every key of the export must be one the journal announced, at some point: an export of
+    // another product's key, or of a key nobody announced, is refused before the passphrase.
+    const chain = new Set(announced.history.map((step) => step.key_id));
+    const foreign = info.keyIds.find((keyId) => !chain.has(keyId));
+    if (foreign !== undefined) return fail(productKeyMismatch(announced.key_id, foreign));
+    const exportsCurrent = info.keyIds.includes(announced.key_id);
+    // All the keys of the export are held already: nothing to ask, nothing to change.
+    const heldAll =
+      held !== undefined &&
+      (
+        await Promise.all(info.keyIds.map((keyId) => productKeyById(held as ProductKey, keyId)))
+      ).every((found) => found !== undefined);
+    if (heldAll && held?.keyId === announced.key_id) {
+      return ok({ action: "import", key_id: announced.key_id, status: "already" });
     }
     const passphrase = await target.human.askPassphrase("enter");
-    const imported = await importProductKey(text, passphrase, {
+    const imported = await importProductKeys(text, passphrase, {
       limits: target.human.passphraseLimits ?? "moderate",
     });
     if (!imported.ok) {
@@ -389,18 +468,29 @@ export async function importKey(
           : exportUnusable("export_damaged"),
       );
     }
-    candidate = await productKeyOf(imported.key);
-    // The key must prove the announcement: a forged one (another key, its proof) is refused.
-    const proven = await journalKey(context, target, candidate);
-    if (proven?.key_id !== candidate.keyId) {
+    opened = await Promise.all(imported.keys.map((entry) => productKeyOf(entry.key)));
+    // The keys must prove the announcements: a forged one (another key, its proof) is refused.
+    // They are looked up together, so that a renewal is proven by the key it announced.
+    const ring = ringOf(opened);
+    const proven = await journalKey(context, target, ring);
+    const expectedId = exportsCurrent ? announced.key_id : (opened[0]?.keyId ?? announced.key_id);
+    if (
+      proven === null ||
+      proven.key_id !== announced.key_id ||
+      proven.history.length !== announced.history.length
+    ) {
       return fail(
         new AgentPluggedError(ErrorCode.PRODUCT_KEY_MISMATCH, "error.product_key_proof_invalid", {
           journal_key_id: proven?.key_id ?? announced.key_id,
-          held_key_id: candidate.keyId,
+          held_key_id: expectedId,
         }),
       );
     }
-    if (held !== undefined) {
+    const current = opened.find((key) => key.keyId === announced.key_id);
+    // A key held here that the product really had is only kept: it stays readable, nothing is
+    // lost, so nothing is asked. Any other key held here is replaced only on the creator's word.
+    const heldIsChain = held !== undefined && chain.has(held.keyId);
+    if (held !== undefined && current !== undefined && !heldIsChain) {
       const ask = target.human.askConfirmation;
       const answer =
         ask === undefined
@@ -408,26 +498,61 @@ export async function importKey(
           : await ask({
               kind: "replace_product_key",
               held_key_id: held.keyId,
-              key_id: candidate.keyId,
+              key_id: current.keyId,
             });
       if (!explicitConfirmed(answer, "je confirme")) {
         return fail(new AgentPluggedError(ErrorCode.CANCELLED, "error.cancelled"));
       }
+    }
+    if (held !== undefined && current !== undefined && held.keyId !== current.keyId) {
       await backupProductKey(target.human.keys, target.product, held);
     }
-    await storeProductKey(target.human.keys, target.product, candidate);
+    // The other keys of the export are kept beside the current one, to read what they wrote.
+    for (const key of opened) {
+      if (key.keyId === current?.keyId || key.keyId === held?.keyId) continue;
+      if ((await held?.older?.(key.keyId)) !== undefined) continue;
+      await backupProductKey(target.human.keys, target.product, key);
+    }
+    if (current !== undefined) {
+      await storeProductKey(target.human.keys, target.product, current);
+      return ok({
+        action: "import",
+        key_id: current.keyId,
+        status: "imported",
+        ...(held === undefined || held.keyId === current.keyId ? {} : { replaced: held.keyId }),
+        ...(opened.length > 1 ? { key_ids: opened.map((key) => key.keyId) } : {}),
+      });
+    }
+    // An export from before a renewal: its keys read the old history, the current one is still
+    // to come (from a machine that holds it, or from the renewal sealed for this machine). A
+    // machine that held no key keeps the newest of them as its own, to read with.
+    const newest = opened[0];
+    if (held === undefined && newest !== undefined) {
+      await storeProductKey(target.human.keys, target.product, newest);
+    }
     return ok({
       action: "import",
-      key_id: candidate.keyId,
-      status: "imported",
-      ...(held === undefined ? {} : { replaced: held.keyId }),
+      key_id: announced.key_id,
+      status: "older",
+      key_ids: opened.map((key) => key.keyId),
     });
   } catch (error) {
     if (error instanceof AgentPluggedError) return fail(error);
     throw error;
   } finally {
-    await forgetProductKey(held, candidate);
+    await forgetProductKey(held, ...opened);
   }
+}
+
+/** The keys of an import as one ring: the first is the current one, the others are found by `key_id`. */
+function ringOf(keys: readonly ProductKey[]): ProductKey {
+  const [first, ...rest] = keys;
+  if (first === undefined) throw new Error("ringOf: no key");
+  return {
+    key: first.key,
+    keyId: first.keyId,
+    older: async (keyId) => rest.find((key) => key.keyId === keyId),
+  };
 }
 
 /**
@@ -442,7 +567,7 @@ export async function sealFiles(context: CommandContext): Promise<CommandResult<
   try {
     key = await readHeldProductKey(target.human.keys, target.product);
     if (key === undefined) return fail(productKeyMissing(target.product));
-    checkAnnounced(await journalKey(context, target, key), key);
+    key = await writingKey(await journalKey(context, target, key), key);
     const files: Array<KeySealResult["files"][number]> = [];
     for (const area of SENSITIVE_AREAS as readonly SensitiveArea[]) {
       const prefix = `${METHOD_DIR}/${area}/`;

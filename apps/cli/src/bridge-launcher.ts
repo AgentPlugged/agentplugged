@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
-import { readFile, stat } from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, join } from "node:path";
 import type { Translate } from "@agentplugged/i18n";
 
 /**
@@ -12,6 +13,8 @@ import type { Translate } from "@agentplugged/i18n";
  */
 
 export interface LauncherEnvironment {
+  /** Runs npm with these arguments; resolves with its exit code. Absent: the real npm. */
+  readonly runNpm?: (args: readonly string[]) => Promise<{ code: number; output: string }>;
   readonly argv: readonly string[];
   /** The folder the command was run in: the bridge's `pair` works in the product's folder. */
   readonly cwd?: string;
@@ -78,6 +81,113 @@ export async function findBridge(
   }
 }
 
+/** The npm package the bridge is distributed as (its own package, apart from this one). */
+export const BRIDGE_PACKAGE = "agentplugged-bridge";
+
+/**
+ * npm's own JavaScript program on Windows, where `npm` is a batch file that only runs through a
+ * shell: the one next to Node, else the one that started this process. `undefined` when neither is
+ * found.
+ */
+function npmProgram(env: LauncherEnvironment["env"]): string | undefined {
+  const candidates = [
+    join(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js"),
+    env.npm_execpath ?? "",
+  ];
+  return candidates.find((path) => path.endsWith("npm-cli.js") && existsSync(path));
+}
+
+/** Runs npm; no argument ever passes through a shell. */
+function realNpm(
+  args: readonly string[],
+  platform: string,
+  env: LauncherEnvironment["env"],
+): Promise<{ code: number; output: string }> {
+  return new Promise((resolve) => {
+    let output = "";
+    const program = platform === "win32" ? npmProgram(env) : undefined;
+    if (platform === "win32" && program === undefined) {
+      resolve({ code: -1, output: "npm was not found next to Node" });
+      return;
+    }
+    const options = {
+      env: { ...process.env, ...env } as NodeJS.ProcessEnv,
+      stdio: ["ignore", "pipe", "pipe"] as ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    };
+    const child =
+      program === undefined
+        ? spawn("npm", [...args], options)
+        : spawn(process.execPath, [program, ...args], options);
+    child.stdout.on("data", (chunk: Buffer) => {
+      output += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      output += chunk.toString("utf8");
+    });
+    child.on("error", (error) => resolve({ code: -1, output: error.message }));
+    child.on("close", (code) => resolve({ code: code ?? -1, output }));
+  });
+}
+
+/**
+ * `agentplugged bridge install`: gets the bridge, or its newest version, before the bridge itself
+ * makes itself a service. The bridge is its own npm package, put in a folder of its own; the
+ * pointer file then tells this launcher where it is. A bridge kept elsewhere
+ * (`AGENTPLUGGED_BRIDGE_ENTRY`) is never touched. When the newest version cannot be fetched and a
+ * bridge is already there, that one is used and the failure is said. Returns false when there is
+ * no bridge at all at the end.
+ */
+export async function installBridgePackage(
+  environment: LauncherEnvironment,
+  t: Translate,
+): Promise<boolean> {
+  const { env } = environment;
+  const platform = environment.platform ?? process.platform;
+  if (env.AGENTPLUGGED_BRIDGE_ENTRY?.trim()) return (await findBridge(env, platform)) !== undefined;
+  const dir = bridgeInstallDir(env, platform);
+  const known = await findBridge(env, platform);
+  const source = env.AGENTPLUGGED_BRIDGE_PACKAGE?.trim() || `${BRIDGE_PACKAGE}@latest`;
+  if (dir === undefined || !/^[^\s"'&|<>^%;$`-][^\s"'&|<>^%;$`]*$/.test(source)) {
+    environment.stderr(`${t("bridge.launcher.install_failed", { reason: "folder" })}\n`);
+    return known !== undefined;
+  }
+  const folder = join(dir, "package");
+  environment.stdout(`${t("bridge.launcher.installing")}\n`);
+  try {
+    await mkdir(folder, { recursive: true });
+    const manifest = join(folder, "package.json");
+    if (!(await isFile(manifest))) await writeFile(manifest, '{ "private": true }\n');
+    const args = [
+      "install",
+      "--prefix",
+      folder,
+      "--omit=dev",
+      "--no-audit",
+      "--no-fund",
+      "--loglevel=error",
+      source,
+    ];
+    const done = await (environment.runNpm ?? ((a) => realNpm(a, platform, env)))(args);
+    if (done.code !== 0) throw new Error(done.output.trim().split("\n")[0] ?? "npm");
+    const dependencies = (
+      JSON.parse(await readFile(manifest, "utf8")) as { dependencies?: Record<string, string> }
+    ).dependencies;
+    const name = Object.keys(dependencies ?? {})[0];
+    if (name === undefined) throw new Error("no package");
+    const entry = join(folder, "node_modules", name, "dist", "bin.js");
+    if (!(await isFile(entry))) throw new Error("no program");
+    await writeFile(join(dir, BRIDGE_POINTER_FILE), `${JSON.stringify({ entry })}\n`);
+    return true;
+  } catch (error) {
+    const reason = error instanceof Error ? error.message.slice(0, 200) : "unknown";
+    environment.stderr(
+      `${t(known === undefined ? "bridge.launcher.install_failed" : "bridge.launcher.update_failed", { reason })}\n`,
+    );
+    return known !== undefined;
+  }
+}
+
 /** Runs the bridge's program with `args`; resolves with its exit code (1 when a signal ended it). */
 function runProgram(
   entry: string,
@@ -135,6 +245,10 @@ export async function runBridgeLauncher(
   environment: LauncherEnvironment,
   t: Translate,
 ): Promise<number> {
+  // `bridge install` first gets (or updates) the bridge, then the bridge makes itself a service.
+  if (environment.argv[0] === "bridge" && environment.argv[1] === "install") {
+    if (!(await installBridgePackage(environment, t))) return 1;
+  }
   const entry = await findBridge(environment.env, environment.platform);
   if (entry === undefined) {
     environment.stderr(`${t("bridge.launcher.not_installed")}\n`);
@@ -142,7 +256,9 @@ export async function runBridgeLauncher(
   }
   return runProgram(
     entry,
-    environment.argv[0] === "pair" ? environment.argv : environment.argv.slice(1),
+    environment.argv[0] === "pair" || environment.argv[0] === "device"
+      ? environment.argv
+      : environment.argv.slice(1),
     environment,
     t("bridge.launcher.not_installed"),
   );
