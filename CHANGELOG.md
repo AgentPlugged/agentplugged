@@ -2,6 +2,16 @@
 
 All notable changes to `agentplugged`, newest first. Versions follow semantic versioning.
 
+## 1.2.0 - 2026-10-19
+
+### New features
+
+- Add an optional evening recap: a daily reminder at a chosen hour, then Noah tells the day (delivered, published, cost) and reads the calm decisions, on the phone and in the web view.
+
+### Fixes
+
+- Publish the release that 1.1.0 and 1.1.1 announced; their builds stopped on tests before reaching npm.
+
 ## 1.1.1 - 2026-10-19
 
 ### Fixes

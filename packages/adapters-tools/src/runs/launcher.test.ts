@@ -28,35 +28,42 @@ describe("resolveLauncher", () => {
     });
   });
 
-  it("finds the real program behind the script an npm install leaves, and never runs the script", async () => {
-    const exe = join(folder, "node_modules", "tool", "bin", "tool.exe");
-    await mkdir(join(folder, "node_modules", "tool", "bin"), { recursive: true });
-    await writeFile(exe, "");
-    const cmd = join(folder, "tool.cmd");
-    await writeFile(cmd, shim("node_modules\\tool\\bin\\tool.exe"));
-    expect(await resolveLauncher(cmd, { platform: "win32" })).toEqual({
-      file: exe,
-      prefixArgs: [],
-    });
-  });
+  // These resolve real files through Windows paths, so they only run on Windows.
+  it.runIf(process.platform === "win32")(
+    "finds the real program behind the script an npm install leaves, and never runs the script",
+    async () => {
+      const exe = join(folder, "node_modules", "tool", "bin", "tool.exe");
+      await mkdir(join(folder, "node_modules", "tool", "bin"), { recursive: true });
+      await writeFile(exe, "");
+      const cmd = join(folder, "tool.cmd");
+      await writeFile(cmd, shim("node_modules\\tool\\bin\\tool.exe"));
+      expect(await resolveLauncher(cmd, { platform: "win32" })).toEqual({
+        file: exe,
+        prefixArgs: [],
+      });
+    },
+  );
 
-  it("runs a Node script's program with Node, and does not take Node itself for the program", async () => {
-    const js = join(folder, "node_modules", "tool", "cli.js");
-    await mkdir(join(folder, "node_modules", "tool"), { recursive: true });
-    await writeFile(js, "");
-    await writeFile(join(folder, "node.exe"), "");
-    const cmd = join(folder, "tool.cmd");
-    await writeFile(
-      cmd,
-      `${shim("node.exe")}"%dp0%\\node.exe" "%dp0%\\node_modules\\tool\\cli.js" %*\r\n`,
-    );
-    expect(
-      await resolveLauncher(cmd, { platform: "win32", nodePath: "C:\\node\\node.exe" }),
-    ).toEqual({
-      file: "C:\\node\\node.exe",
-      prefixArgs: [js],
-    });
-  });
+  it.runIf(process.platform === "win32")(
+    "runs a Node script's program with Node, and does not take Node itself for the program",
+    async () => {
+      const js = join(folder, "node_modules", "tool", "cli.js");
+      await mkdir(join(folder, "node_modules", "tool"), { recursive: true });
+      await writeFile(js, "");
+      await writeFile(join(folder, "node.exe"), "");
+      const cmd = join(folder, "tool.cmd");
+      await writeFile(
+        cmd,
+        `${shim("node.exe")}"%dp0%\\node.exe" "%dp0%\\node_modules\\tool\\cli.js" %*\r\n`,
+      );
+      expect(
+        await resolveLauncher(cmd, { platform: "win32", nodePath: "C:\\node\\node.exe" }),
+      ).toEqual({
+        file: "C:\\node\\node.exe",
+        prefixArgs: [js],
+      });
+    },
+  );
 
   it("refuses a script whose program is missing, an unreadable one and a program of another kind", async () => {
     const cmd = join(folder, "tool.cmd");
