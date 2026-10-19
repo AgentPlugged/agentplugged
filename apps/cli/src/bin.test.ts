@@ -852,6 +852,8 @@ describe("agentplugged sync", () => {
       ".claude/hooks/agentplugged-prompt.mjs": "created",
       // The script that records the creator's answers to Claude Code's question tool.
       ".claude/hooks/agentplugged-decision.mjs": "created",
+      // The script that reports a terminal session's activity, read by the web view.
+      ".claude/hooks/agentplugged-activity.mjs": "created",
       ...perAgent(".codex/agents/<id>.toml"),
       ".codex/config.toml": "created",
       // Codex's hooks, their policy and its rules of commands.
@@ -1048,7 +1050,13 @@ describe("agentplugged sync", () => {
     );
     expect(has(".gemini/agents/iris.md")).toBe(true);
 
-    const cleaned = run(["sync", "--clean-gemini"]);
+    // A file the manifest does not know is kept until the creator confirms with --yes.
+    const kept = run(["sync", "--clean-gemini"]);
+    expect(kept.status).toBe(0);
+    expect(kept.stdout).toContain("sync --clean-gemini --yes");
+    expect(has(".gemini/agents/iris.md")).toBe(true);
+
+    const cleaned = run(["sync", "--clean-gemini", "--yes"]);
     expect(cleaned.status).toBe(0);
     expect(summary(cleaned.stdout).get(".gemini/agents/iris.md")).toBe("deleted");
     expect(has(".gemini/agents/iris.md")).toBe(false);

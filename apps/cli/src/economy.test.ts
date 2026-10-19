@@ -470,7 +470,7 @@ describe("the published descriptions send to files that exist", () => {
     );
     for (const [tool, description] of Object.entries(TOOL_DESCRIPTIONS)) {
       expect(description, tool).not.toContain("REFERENCE.md");
-      const named = /reference\/(tool-[a-z]+)\.md/.exec(description)?.[1];
+      const named = /Ref: (tool-[a-z]+)\s*$/.exec(description)?.[1];
       expect(named, tool).toBe(`tool-${tool}`);
       expect(written, tool).toContain(`.agentplugged/reference/${named}.md`);
     }

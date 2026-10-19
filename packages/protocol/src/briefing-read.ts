@@ -33,9 +33,15 @@ export const BRIEFING_LISTEN_SUMMARY_MAX_CHARS = 600;
 /** How far back « what moved » looks. */
 export const BRIEFING_RECENT_MS = 24 * 60 * 60 * 1000;
 
+/** The two briefings: the morning one (what waits) and the evening one (the day, then the calm decisions). */
+export const BRIEFING_PARTS = ["morning", "evening"] as const;
+export type BriefingPart = (typeof BRIEFING_PARTS)[number];
+
 /** The request shape (without the identifier, the version and the product, which the file reading adds). */
 export const BriefingRequestFields = {
   op: z.literal("briefing"),
+  /** Absent: the morning briefing. */
+  part: z.enum(BRIEFING_PARTS).optional(),
 } as const;
 
 const Count = z.int().min(0).max(Number.MAX_SAFE_INTEGER);
@@ -99,11 +105,42 @@ export const BriefingItemSchema = z.strictObject({
 });
 export type BriefingItem = z.infer<typeof BriefingItemSchema>;
 
+/**
+ * The day of a product, in the evening briefing: what was delivered since midnight on the machine's
+ * clock, how many points still wait at a high risk or holding something back (they are counted,
+ * never listed: they are not for the evening), and what the day cost when the bridge could tell.
+ */
+export const BriefingDaySchema = z.strictObject({
+  /** Stories merged today. */
+  merged: Count,
+  /** Publications the creator validated today. */
+  published: Count,
+  /** Decisions the creator made today. */
+  decided: Count,
+  /** Points that wait and are urgent: not in `items`. */
+  urgent: Count,
+  /** What the measured sessions of the day cost; absent when the costs cannot be read. */
+  cost: z
+    .strictObject({
+      /** Dollars of the models the table prices; absent when no model of the day has a price. */
+      usd: z.number().min(0).max(100_000_000).optional(),
+      /** `real`, `partial` or `unknown`: a device shows another value as `unknown`. */
+      nature: z.string().min(1).max(16),
+      tokens: Count,
+    })
+    .optional(),
+});
+export type BriefingDay = z.infer<typeof BriefingDaySchema>;
+
 export const BriefingDataSchema = z.strictObject({
   op: z.literal("briefing"),
+  /** Which briefing this is; absent in a morning briefing. */
+  part: z.enum(BRIEFING_PARTS).optional(),
+  /** The day of the product; present in an evening briefing only. */
+  day: BriefingDaySchema.optional(),
   /** Milliseconds since the epoch, on the machine's clock. */
   composed_at: Count,
-  /** What moved in the last 24 hours. */
+  /** What moved in the last 24 hours (in the evening briefing, since midnight). */
   progress: z.strictObject({
     merged: Count,
     decided: Count,
@@ -223,16 +260,40 @@ function optionsOf(point: Rec): BriefingOption[] {
   return options;
 }
 
+export interface ComposeBriefingOptions {
+  /** The evening briefing lists the calm points only and tells the day; the default is the morning one. */
+  readonly part?: BriefingPart;
+  /** The start of the creator's day, in milliseconds since the epoch; the evening briefing counts from it. */
+  readonly dayStart?: number;
+}
+
+/** The decisions that let a publication go out. */
+const LIFTING: ReadonlySet<string> = new Set([
+  "approved",
+  "approved_with_reservations",
+  "option_chosen",
+]);
+
 /**
  * Composes the briefing of a product from the state of its projection: the points that wait (an
  * answer held for its undo window is not offered again), the most pressing first, and what moved
- * in the last 24 hours. Pure: the same state and the same clock give the same briefing. The
- * result is not yet through the secret guard.
+ * in the last 24 hours. The evening briefing counts from the start of the day instead, tells what
+ * was delivered, and lists only the points that are not urgent: the urgent ones are counted. Pure:
+ * the same state and the same clock give the same briefing. The result is not yet through the
+ * secret guard, and the cost of the day is added by the bridge, which alone can price the sessions.
  */
-export function composeBriefing(state: Rec, now: number): BriefingData {
+export function composeBriefing(
+  state: Rec,
+  now: number,
+  options: ComposeBriefingOptions = {},
+): BriefingData {
   const stories = isRec(state.stories) ? state.stories : {};
   const points = isRec(state.checkpoints) ? Object.values(state.checkpoints).filter(isRec) : [];
-  const since = now - BRIEFING_RECENT_MS;
+  const evening = options.part === "evening";
+  const since = evening
+    ? Math.min(options.dayStart ?? now - BRIEFING_RECENT_MS, now)
+    : now - BRIEFING_RECENT_MS;
+  let published = 0;
 
   let merged = 0;
   for (const story of Object.values(stories)) {
@@ -247,7 +308,17 @@ export function composeBriefing(state: Rec, now: number): BriefingData {
     if (id === undefined) continue;
     if (point.status === "resolved") {
       const at = isRec(point.resolution) ? dateOf(point.resolution.at) : undefined;
-      if (at !== undefined && at >= since) decided += 1;
+      if (at !== undefined && at >= since) {
+        decided += 1;
+        if (
+          point.type === "publication" &&
+          isRec(point.resolution) &&
+          typeof point.resolution.decision === "string" &&
+          LIFTING.has(point.resolution.decision)
+        ) {
+          published += 1;
+        }
+      }
       continue;
     }
     if (point.status !== "open" || isHeld(point, now)) continue;
@@ -285,11 +356,23 @@ export function composeBriefing(state: Rec, now: number): BriefingData {
       (a.openedAt === b.openedAt ? 0 : a.openedAt < b.openedAt ? -1 : 1) ||
       (a.item.id < b.item.id ? -1 : a.item.id > b.item.id ? 1 : 0),
   );
+  if (!evening) {
+    return {
+      op: "briefing",
+      composed_at: now,
+      progress: { merged, decided },
+      waiting: waiting.length,
+      items: waiting.slice(0, BRIEFING_ITEMS_MAX).map((entry) => entry.item),
+    };
+  }
+  const calm = waiting.filter((entry) => !entry.urgent);
   return {
     op: "briefing",
+    part: "evening",
     composed_at: now,
     progress: { merged, decided },
-    waiting: waiting.length,
-    items: waiting.slice(0, BRIEFING_ITEMS_MAX).map((entry) => entry.item),
+    day: { merged, published, decided, urgent: waiting.length - calm.length },
+    waiting: calm.length,
+    items: calm.slice(0, BRIEFING_ITEMS_MAX).map((entry) => entry.item),
   };
 }

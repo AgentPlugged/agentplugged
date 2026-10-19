@@ -392,9 +392,8 @@ Every skill of the method holds to these rules and points here instead of repeat
 
 - Open the checkpoint **before** you ask the creator for their opinion, a decision or whether a
   document suits them, and ask once: an answer given before the checkpoint opened would make
-  them answer twice, unless they had already agreed to exactly this decision a few minutes
-  earlier in the same session (the agent that talks with them then records that agreement with
-  \`anticipated: true\`) ("Talking with the creator"). Never ask for the same validation twice.
+  them answer twice, unless they agreed to exactly this decision minutes earlier in the same
+  session (then record that agreement with \`anticipated: true\`) ("Talking with the creator").
 - Once a decision checkpoint is open, present its options and your recommendation, ask the
   creator once and record their answer with \`chat.answer\` ("Checkpoints in the chat").
 - A question that asks the creator to choose or to say what they think, even a casual one
@@ -419,9 +418,8 @@ Every skill of the method holds to these rules and points here instead of repeat
 - Applying a resolution: \`option_chosen\` — apply \`resolution.option\`; \`approved\` or
   \`approved_with_reservations\` — apply your recommendation, with the note; \`rejected\` or
   \`changes_requested\` — read the note, ask the creator what they want, rework the options and
-  open a new decision with \`supersedes\` set to the refused one's id. An answer the creator gave
-  from the web cockpit reaches you in \`state.next\` (\`web_answers\`: your points answered there,
-  with the option and the note) until you write something: apply it the same way, at once.
+  open a new decision with \`supersedes\` set to the refused one's id. An answer given in the web
+  view comes in \`state.next\` \`web_answers\`: apply it likewise.
 - In French, say « tu » to the creator, always, in the conversation and in every text addressed
   to them ("Talking with the creator", step 7).
 - At the start of the task, call \`memory.read\` with your agent id and apply the creator's

@@ -85,7 +85,7 @@ describe("the answers about the code", () => {
         remarks: [
           {
             id: "9",
-            author: "vera",
+            author: "dana",
             path: "src/a.ts",
             line: 43,
             side: "new",

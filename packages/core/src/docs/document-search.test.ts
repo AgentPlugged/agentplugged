@@ -28,7 +28,7 @@ Un paiement partiel solde la facture au prorata et relance le reste à J+7.
 
 const PRD: DocumentFile = {
   path: ".agentplugged/epics/relances.md",
-  text: `---\nid: epic-1\nkind: epic\nowner: john\nlinks: []\ntitle: Les relances\n---\n# Relances\n\nLe créateur choisit le ton de la relance.\n`,
+  text: `---\nid: epic-1\nkind: epic\nowner: emma\nlinks: []\ntitle: Les relances\n---\n# Relances\n\nLe créateur choisit le ton de la relance.\n`,
 };
 
 const LONG: DocumentFile = {

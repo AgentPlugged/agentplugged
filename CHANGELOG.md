@@ -2,6 +2,12 @@
 
 All notable changes to `agentplugged`, newest first. Versions follow semantic versioning.
 
+## 1.1.1 - 2026-10-19
+
+### Fixes
+
+- Publish the release that 1.1.0 announced; the 1.1.0 build stopped before reaching npm.
+
 ## 1.1.0 - 2026-10-19
 
 ### New features

@@ -36,7 +36,7 @@ describe("every skill that asks the creator for a validation opens the checkpoin
     const shared = sharedRules();
     expect(shared.toLowerCase()).toContain("open the checkpoint **before** you ask");
     expect(shared).toContain('("Talking with the creator")');
-    expect(shared).toContain("Never ask for the same validation twice");
+    expect(shared).toContain("and ask once");
     for (const skill of skills) {
       expect(flat(skill.text), skill.name).toContain(SHARED_RULES_POINTER);
     }

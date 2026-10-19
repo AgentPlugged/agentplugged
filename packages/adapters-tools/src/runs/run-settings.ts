@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -26,7 +25,8 @@ export interface RunSettingsFile {
 export function writeRunSettings(text: string, base?: string): RunSettingsFile {
   const dir = runSettingsDir(base);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const path = join(dir, `${randomBytes(12).toString("hex")}.json`);
+  const name = Buffer.from(globalThis.crypto.getRandomValues(new Uint8Array(12))).toString("hex");
+  const path = join(dir, `${name}.json`);
   // `wx`: never over a file that exists; `0o600`: the user alone.
   writeFileSync(path, text, { flag: "wx", mode: 0o600 });
   return {

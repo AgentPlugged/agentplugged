@@ -20,7 +20,7 @@ const ID = "AAAAAAAAAAAAAAAAAAAAAA";
 const KEY = "B".repeat(43);
 
 const source = (over: Partial<ShareSource> = {}): ShareSource => ({
-  name: "Twosay",
+  name: "Acme",
   stage: "development",
   phases: [
     { id: "framing", state: "done" },
@@ -131,7 +131,7 @@ describe("the page", () => {
       "stories",
       "v",
     ]);
-    expect(page.product).toEqual({ name: "Twosay", stage: "development" });
+    expect(page.product).toEqual({ name: "Acme", stage: "development" });
     expect(page.stories[0]).toEqual({
       id: "2-1",
       title: "Page de paiement",
