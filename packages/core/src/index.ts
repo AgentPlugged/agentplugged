@@ -21,6 +21,7 @@ export {
 } from "./checkpoints/checkpoint-rules.js";
 
 import { agentCommand } from "./agents/agent-command.js";
+import { checkCallCommand } from "./budget/call-command.js";
 import { answerCheckpointCommand } from "./chat/answer-command.js";
 import { askCreatorCommand } from "./chat/ask-command.js";
 import { answerStackCommand, askStackCommand, openStackCommand } from "./chat/stack-commands.js";
@@ -36,6 +37,7 @@ import { critiqueAgentCommands } from "./critique/critique-commands.js";
 import { deferredAgentCommands, deferredCommand } from "./deferred/deferred-commands.js";
 import { delegateCommand } from "./delegation/delegate-command.js";
 import { docsCommand } from "./docs/docs-command.js";
+import { summarizeCommand } from "./exchange/summarize-command.js";
 import { leaveFastTrackCommand } from "./fast-track/fast-track-commands.js";
 import { historyCommand } from "./history/history-command.js";
 import { keyCommand, reviewCommand } from "./human/human-commands.js";
@@ -60,6 +62,7 @@ import { openPullRequestCommand } from "./stories/pull-request.js";
 import { startStoryCommand, storyCommand } from "./stories/story-start.js";
 import { syncCommand } from "./sync/sync-command.js";
 import { roundTableAgentCommands } from "./table/table-commands.js";
+import { pauseTeamCommand } from "./team/pause-team-command.js";
 import { testsCommand } from "./test-frame/tests-setup.js";
 import { traceAgentCommands, traceCommand } from "./trace/trace-commands.js";
 import { trustCommands } from "./trust/trust-commands.js";
@@ -232,6 +235,7 @@ export {
   type WebAnswerCheck,
   type WebAnswerWrite,
   type WebCarryOut,
+  type WebDecided,
   type WebMerging,
   type WebUndo,
   type WebUndoWrite,
@@ -918,6 +922,7 @@ export {
   computeProjection,
   computeProjectionDetailed,
   type DetailedProjection,
+  type ExtensionEvent,
 } from "./projection/compute-projection.js";
 export type {
   DeviceTrustView,
@@ -1126,6 +1131,7 @@ export const builtInCommands: ReadonlyArray<Command> = [
   migrateCommand,
   ...trustCommands,
   checkWriteCommand,
+  checkCallCommand,
   planSprintCommand,
   ...deferredAgentCommands,
   ...requirementAgentCommands,
@@ -1156,6 +1162,8 @@ export const builtInCommands: ReadonlyArray<Command> = [
   workshopCommand,
   nextAgentCommand,
   delegateCommand,
+  summarizeCommand,
+  pauseTeamCommand,
   ...reviewAgentCommands,
   askCreatorCommand,
   openStackCommand,
@@ -1184,6 +1192,33 @@ export {
   setAutonomyDial,
   setPermissionRule,
 } from "./autonomy/autonomy.js";
+export {
+  type BudgetCeiling,
+  type BudgetContext,
+  type BudgetGate,
+  type BudgetSettingsInForce,
+  budgetCheckpoint,
+  type CeilingSource,
+  gateOf,
+  offeredRaises,
+  raisedBudget,
+  statusFor,
+  storyCeiling,
+  type ThresholdEntry,
+  type ThresholdPlan,
+  thresholdPlan,
+} from "./budget/budget-rules.js";
+export { budgetSettings } from "./budget/budget-settings.js";
+export { CALL_GUARD_BUDGET_MS, checkCallCommand } from "./budget/call-command.js";
+export { forgetCallCosts } from "./budget/call-cost.js";
+export {
+  budgetMessage,
+  LAUNCH_TOOLS,
+  OWN_TOOL_PREFIX,
+  PAUSE_HELD_TOOLS,
+  pausedMessage,
+  pauseHolds,
+} from "./budget/call-rules.js";
 export {
   ACTIVITY_FILE_MAX_BYTES,
   ACTIVITY_HOOK_COMMAND,
@@ -1508,6 +1543,7 @@ export {
   documentsList,
   requirementTrace,
 } from "./docs/documents-view.js";
+export { summarizeCommand } from "./exchange/summarize-command.js";
 export {
   type FastTrackOutcome,
   fastTrackEvents,
@@ -1639,6 +1675,7 @@ export {
 } from "./migrate/upgrade-target.js";
 export type { StoryCi } from "./projection/ci-reducers.js";
 export { type DelegationEntry, delegationsOf } from "./projection/delegation-reducers.js";
+export { type ExchangeEntry, exchangesOf } from "./projection/exchange-reducers.js";
 export { FAST_TRACK_REDUCERS } from "./projection/fast-track-reducers.js";
 export {
   type InstallEntry,
@@ -2014,6 +2051,8 @@ export {
   validateClosing,
   validateProposal,
 } from "./table/table-rules.js";
+export { pauseTeamCommand } from "./team/pause-team-command.js";
+export { openPause, type TeamState } from "./team/team-rules.js";
 export {
   API_RUNNERS,
   type ApiRunner,
@@ -2156,7 +2195,10 @@ export {
   writeGuardIdle,
 } from "./write-guard/write-command.js";
 export { decisionGuards, decisionViolation, type Guard } from "./write-guard/write-decisions.js";
-export { forgetGuardIndex } from "./write-guard/write-index.js";
+export {
+  forgetGuardIndex,
+  productRootOf as workingCopyProductRoot,
+} from "./write-guard/write-index.js";
 export { inScope, isSafePath, pathsNamedIn, type ScopeEntry } from "./write-guard/write-scope.js";
 
 export function createCommandRegistry(): CommandRegistry {
@@ -2295,6 +2337,13 @@ export {
 } from "./evals/eval-triggers.js";
 export { withoutPart as evalWithoutPart } from "./evals/eval-variant.js";
 export {
+  appendExtensionEvent,
+  type ExtensionRead,
+  type ExtensionReadResult,
+  type ExtensionWrite,
+  readExtensionEvents,
+} from "./extensions/extension-events.js";
+export {
   compact,
   RESPONSE_FORMS,
   type ResponseForm,
@@ -2329,6 +2378,7 @@ export {
   toolsCitedIn,
   toolsNeededBy,
 } from "./sync/agent-tools.js";
+export { EXTENSION_SERVER_NAME, type ExtensionMcpServer } from "./sync/mcp.js";
 export { renderAgentSkill } from "./sync/targets/common.js";
 export {
   type AntigravityInfo,

@@ -52,7 +52,10 @@ back, and the decisions to take.
   a method file nor a generated file. He writes no code, in no branch.
 - He works through the `agentplugged` MCP server, as `agent: noah`, and only with the tools of his
   contract: `state.get`, `state.next` and `memory.read` to read, `agent.status` when he starts and stops working on a
-  request, `agent.delegate` to record a handover, `chat.ask` to let the engine ask the creator a
+  request, `agent.delegate` to record a handover (its `brief` carries the creator's instruction to
+  the agent, in their words, and the decisions they approved: no other queue of instructions
+  exists), `agent.summarize` to write the note of an exchange (`summary`: what was asked, decided and
+  promised, in one line, never a secret, once the answer is settled), `agent.pause` to hold the team once the creator said yes to his proposal, `chat.ask` to let the engine ask the creator a
   decision in a form or in the question tool, `chat.answer` to record the creator's answer
   given in the conversation (or clicked in the question tool, `via: "question_tool"`), `chat.stack_open`, `chat.stack_ask` and `chat.stack_answer` to present several decisions as one
   stack and record the answer, and `guard.creator_action` for an action reserved to the creator. The engine refuses any

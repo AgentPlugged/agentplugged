@@ -80,5 +80,7 @@ export const DELEGATION_INVALID_REASONS = [
   "story_taken",
   /** The profile's ceiling of stories built at once is reached. */
   "parallel_limit",
+  /** The creator paused the team: nothing is handed over until they resume it. */
+  "team_paused",
 ] as const;
 export type DelegationInvalidReason = (typeof DELEGATION_INVALID_REASONS)[number];

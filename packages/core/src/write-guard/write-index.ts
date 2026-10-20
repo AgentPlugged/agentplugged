@@ -1,4 +1,4 @@
-import type { ProjectionState } from "@agentplugged/protocol";
+import type { EventEnvelope, MethodConfig, ProjectionState } from "@agentplugged/protocol";
 import { ErrorCode, MAIN_SESSION_AGENT } from "@agentplugged/protocol";
 import { agentWriteContext, project } from "../agent-activity/agent-commands.js";
 import type { CommandContext } from "../command.js";
@@ -36,6 +36,10 @@ export type Owner =
 export interface GuardIndex {
   readonly product: string;
   readonly journal: NonNullable<CommandContext["journal"]>;
+  /** The product's configuration, the projection of its journal (no sensitive content) and its events. */
+  readonly config: MethodConfig;
+  readonly state: ProjectionState["state"];
+  readonly events: readonly EventEnvelope[];
   /** The path's owner: the story whose working copy holds it. */
   ownerOf(path: string): Owner;
   /** The scope of a story: the files its text names, plus what the creator added. */
@@ -145,6 +149,9 @@ async function read(context: CommandContext, now: number): Promise<GuardIndex | 
   return {
     product: target.product,
     journal: target.journal,
+    config: target.config,
+    state,
+    events: listing.events,
     decisions,
     ownerOf(path) {
       if (root === undefined) return { kind: "none" };

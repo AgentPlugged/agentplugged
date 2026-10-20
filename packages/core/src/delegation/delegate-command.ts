@@ -17,6 +17,7 @@ import { AgentPluggedError } from "../errors.js";
 import { parallelLimitProblem, storyJournalView } from "../stories/story-start.js";
 import { isDeveloper } from "../sync/developers.js";
 import { activeDefinitions, loadDefinitions } from "../sync/sync-command.js";
+import { openPause } from "../team/team-rules.js";
 
 /** What `delegate` reads of the installed definitions, once, before the write. */
 export interface DelegationTarget {
@@ -141,6 +142,8 @@ export const delegateCommand = agentEventCommand<typeof DelegateInputSchema, Del
   },
   check(input, state, { config, now, prepared }) {
     if (input.agent !== NOAH_AGENT) return roleForbidden(input.agent, "delegate");
+    // The creator paused the team: nothing is handed over until they resume it.
+    if (openPause(state) !== undefined) return delegationInvalid(input.to, "team_paused");
     if (prepared === undefined) return delegationInvalid(input.to, "unknown_target");
     const refused = targetProblem(input, prepared);
     if (refused !== undefined) return refused;

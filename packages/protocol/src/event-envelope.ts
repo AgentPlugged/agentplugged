@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ErrorCode, type ErrorPayload } from "./error-payload.js";
 import { currentVersionOf, eventConversion, MAX_EVENT_VERSION } from "./event-versions.js";
+import { EXTENSION_TYPE_PATTERN, isExtensionEventType } from "./extension.js";
 
 /** An error payload whose `code` is one of the stable `ErrorCode`s. */
 export type CodedErrorPayload = ErrorPayload & { code: ErrorCode };
@@ -95,8 +96,10 @@ const BASE64URL = /^[A-Za-z0-9_-]*$/;
 /** ULID: 26 Crockford base32 characters, the first one at most 7 (48-bit time). */
 export const ULID_PATTERN = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 const ULID = ULID_PATTERN;
-/** `domain.action`, lowercase. */
-export const EVENT_TYPE_PATTERN = /^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$/;
+/** `domain.action`, lowercase; or `x.<module>.<type>` for the extension point. */
+export const EVENT_TYPE_PATTERN = new RegExp(
+  `^(?:[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*|${EXTENSION_TYPE_PATTERN.source.slice(1, -1)})$`,
+);
 /** `sha256:` then the 32-byte digest in base64url (43 characters). */
 const EVENT_HASH = /^sha256:[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
 /** 64 bytes in base64url: 86 characters, the last one carrying 2 bits only. */
@@ -168,7 +171,7 @@ export type WebAuthnSignature = z.infer<typeof WebAuthnSignatureSchema>;
 /** Event envelope v1: one event of the journal or of a validation, signed by its writer. */
 export const EventEnvelopeSchema = z
   .strictObject({
-    v: z.number().int().min(0).max(MAX_EVENT_VERSION),
+    v: z.number().int().min(0),
     id: UlidSchema,
     type: z.string().regex(EVENT_TYPE_PATTERN, { message: EVENT_REASON.eventType }),
     at: z.iso.datetime({ message: EVENT_REASON.utcDatetime }),
@@ -184,6 +187,11 @@ export const EventEnvelopeSchema = z
     assurance: z.enum(ASSURANCE_LEVELS).optional(),
   })
   .superRefine((event, context) => {
+    // A future version is refused, except for an extension event: it stays in its writer's chain,
+    // applied to nothing, so that the events after it still count.
+    if (event.v > MAX_EVENT_VERSION && !isExtensionEventType(event.type)) {
+      context.addIssue({ code: "custom", path: ["v"], message: EVENT_REASON.invalidValue });
+    }
     if (event.v < currentVersionOf(event.type) && !convertible(event.type, event.v)) {
       context.addIssue({ code: "custom", path: ["v"], message: EVENT_REASON.invalidValue });
     }
@@ -311,7 +319,14 @@ export function eventInvalid(field: string, reasonKey: string): CodedErrorPayloa
 export function parseEventEnvelope(input: unknown): EventEnvelopeParseResult {
   if (typeof input === "object" && input !== null && !Array.isArray(input)) {
     const { v: version, type } = input as { v?: unknown; type?: unknown };
-    if (typeof version === "number" && Number.isInteger(version) && version > MAX_EVENT_VERSION) {
+    // An extension event never asks for an upgrade: one this engine cannot read is refused as
+    // invalid and ignored, it does not stop the journal.
+    if (
+      typeof version === "number" &&
+      Number.isInteger(version) &&
+      version > MAX_EVENT_VERSION &&
+      !(typeof type === "string" && isExtensionEventType(type))
+    ) {
       return {
         success: false,
         error: {

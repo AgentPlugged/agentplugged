@@ -355,6 +355,54 @@ describe("computeProjection", () => {
     });
   });
 
+  it("does not stop on an extension type of a module it does not know", async () => {
+    const { a, events } = await twoMachines();
+    const first = await signedAs(a.key, lastOf(events, a.key.device), {
+      type: "x.module_unknown.opened",
+    });
+    // The next event of the same chain still applies, after the extension event.
+    const [next] = await signed(a.key, headOf(first), [draft(77)], { start: START + 995_000 });
+    const state = await project([...events, first, next as EventEnvelope]);
+    expect(ignoredOf(state)).toEqual({});
+    const { payloads } = state.state.test as { payloads: unknown[] };
+    expect(payloads).toContainEqual({ n: 77 });
+    expect(state.applied).toBe(events.length + 2);
+  });
+
+  it("keeps the chain going past an extension event of a future envelope version", async () => {
+    const { a, events } = await twoMachines();
+    const future = await signedAs(a.key, lastOf(events, a.key.device), {
+      type: "x.module_unknown.opened",
+      v: 5,
+    });
+    const [next] = await signed(a.key, headOf(future), [draft(78)], { start: START + 996_000 });
+    const state = await project([...events, future, next as EventEnvelope]);
+    expect(ignoredOf(state)).toEqual({});
+    expect((state.state.test as { payloads: unknown[] }).payloads).toContainEqual({ n: 78 });
+  });
+
+  it("keeps stopping on an unknown core type next to an extension type", async () => {
+    const { a, events } = await twoMachines();
+    const extension = await signedAs(a.key, lastOf(events, a.key.device), {
+      type: "x.module_unknown.opened",
+    });
+    const core = await signedAs(a.key, headOf(extension), { type: "story.teleported" });
+    await expect(project([...events, extension, core])).rejects.toMatchObject({
+      code: ErrorCode.UPGRADE_REQUIRED,
+      details: { type: "story.teleported" },
+    });
+  });
+
+  it("ignores an extension event whose signature fails, like any other", async () => {
+    const { a, events } = await twoMachines();
+    const extension = await signedAs(a.key, lastOf(events, a.key.device), {
+      type: "x.module_unknown.opened",
+    });
+    const forged = { ...extension, payload: { n: 1 } };
+    const state = await project([...events, forged]);
+    expect(ignoredOf(state)).toEqual({ [forged.id]: "bad_signature" });
+  });
+
   it("ignores an unknown type it cannot verify, instead of stopping everyone", async () => {
     const { a, events } = await twoMachines();
     const teleported = await signedAs(a.key, lastOf(events, a.key.device), {

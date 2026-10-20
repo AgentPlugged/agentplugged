@@ -29,6 +29,7 @@ import {
   KbListDataSchema,
   KbListRequestFields,
 } from "./kb-read.js";
+import { LiveNoticesSchema } from "./notice.js";
 import { FoldersDataSchema, FoldersRequestFields } from "./product-browse.js";
 import { readTolerant } from "./tolerant-reader.js";
 import { TranscribeDataSchema, TranscribeRequestFields } from "./voice-read.js";
@@ -226,10 +227,9 @@ export const LIVE_ACTIONS_PER_RUN = 100;
  * the same references and paths as the file reading (`file`, `changes`). The results of a tool,
  * and the content of files, are never in a line.
  *
- * In a conversation with Noah two more kinds appear: `creator`, the creator's own message (plain
- * text, so that their other devices see it), and `routed`, what the bridge did with a handover
- * Noah recorded, as a stable code (`noah:started?agent=iris`) the view tells in the creator's
- * language. What Noah says is a `say` of the agent `noah`: untrusted text, like any agent's.
+ * In a conversation with Noah one more kind appears: `creator`, the creator's own message (plain
+ * text, so that their other devices see it). What Noah says is a `say` of the agent `noah`:
+ * untrusted text, like any agent's.
  */
 export const LiveLineSchema = z.strictObject({
   seq: z.number().int().min(1),
@@ -250,7 +250,6 @@ export const LiveLineSchema = z.strictObject({
     "command_ok",
     "command_failed",
     "creator",
-    "routed",
   ]),
   text: z.string().max(LIVE_LINE_MAX_CHARS).optional(),
   /** For a command's issue: the `seq` of the line of the command. */
@@ -279,16 +278,8 @@ export type LiveLine = z.infer<typeof LiveLineSchema>;
 export const LiveTerminalStateSchema = z.enum(["listening", "hook_missing", "unsupported"]);
 export type LiveTerminalState = z.infer<typeof LiveTerminalStateSchema>;
 
-/** Where the chain of the product stands, as a code the views tell in the creator's language. */
-export const LiveChainStateSchema = z.enum([
-  "none",
-  "running",
-  "waiting",
-  "paused",
-  "handed_over",
-  "conversation",
-  "stopped",
-]);
+/** Where the team of the product stands, as a code the views tell in the creator's language. */
+export const LiveChainStateSchema = z.enum(["none", "running", "waiting", "paused", "stopped"]);
 export type LiveChainState = z.infer<typeof LiveChainStateSchema>;
 
 /** What an answer carries, by operation. */
@@ -357,6 +348,13 @@ export const FilesDataSchema = z.discriminatedUnion("op", [
     /** True when more lines wait: ask again at once. */
     more: z.boolean(),
     chain: LiveChainStateSchema,
+    /**
+     * Present while the creator holds the whole team: `paused` (the agents finish their step and
+     * start nothing) or `stopped` (the emergency stop cut what the bridge started).
+     */
+    team: z.enum(["paused", "stopped"]).optional(),
+    /** Present while notices wait for Noah (a validation he has not read yet) and why. */
+    notices: LiveNoticesSchema.optional(),
     /** The agent that works now, or null. */
     working: z
       .strictObject({
@@ -375,14 +373,6 @@ export const FilesDataSchema = z.discriminatedUnion("op", [
         }),
       )
       .max(8)
-      .optional(),
-    /** Present while the creator holds the session: where to go and what to type in the terminal. */
-    handover: z
-      .strictObject({
-        tool: z.string().min(1).max(32),
-        cwd: z.string().min(1).max(FILES_PATH_MAX),
-        command: z.string().min(1).max(300),
-      })
       .optional(),
   }),
 ]);

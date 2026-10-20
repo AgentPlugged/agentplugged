@@ -350,7 +350,14 @@ describe("holding an answer for the undo window", () => {
     expect(early.next).toBeGreaterThan(T0);
     expect((await p.checkpoint(id)).status).toBe("open");
     const done = await p.carryOut(() => T0 + 11_000);
-    expect(done).toEqual({ decided: 1, failed: 0, next: undefined });
+    expect(done).toMatchObject({ decided: 1, failed: 0, next: undefined });
+    // The answer decided is told, with the order that carried it, for whoever must tell the agents.
+    expect(done.answered).toHaveLength(1);
+    expect(done.answered[0]).toMatchObject({
+      params: { checkpoint: id, ...CHOICE },
+      order: expect.any(String),
+      device: expect.any(String),
+    });
     const point = await p.checkpoint(id);
     expect(point.status).toBe("resolved");
     expect(point.resolution).toMatchObject({
@@ -359,7 +366,12 @@ describe("holding an answer for the undo window", () => {
       option: "paddle",
     });
     expect(point.pending_answer ?? null).toBeNull();
-    expect(await p.carryOut(() => T0 + 12_000)).toEqual({ decided: 0, failed: 0, next: undefined });
+    expect(await p.carryOut(() => T0 + 12_000)).toEqual({
+      decided: 0,
+      failed: 0,
+      answered: [],
+      next: undefined,
+    });
     const answered = (await p.journal.list()).events.filter(
       (event) => event.type === "checkpoint.web_answered",
     );
@@ -406,7 +418,12 @@ describe("holding an answer for the undo window", () => {
     expect(point.status).toBe("resolved");
     expect(point.resolution?.option).toBe("stripe");
     expect(point.pending_answer ?? null).toBeNull();
-    expect(await p.carryOut(() => T0 + 20_000)).toEqual({ decided: 0, failed: 0, next: undefined });
+    expect(await p.carryOut(() => T0 + 20_000)).toEqual({
+      decided: 0,
+      failed: 0,
+      answered: [],
+      next: undefined,
+    });
     expect(await p.undo(id)).toEqual({ ok: false, code: ANSWER_ORDER_CODES.notHeld });
   });
 

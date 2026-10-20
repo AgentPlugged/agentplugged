@@ -44,6 +44,7 @@ const WHITELIST = [
   "request_action",
   "check_action",
   "check_write",
+  "check_call",
   "plan_sprint",
   "defer_work",
   "complete_deferred",
@@ -73,6 +74,8 @@ const WHITELIST = [
   "workshop",
   "next",
   "delegate",
+  "summarize",
+  "pause_team",
   "start_review",
   "submit_review",
   "export_review",
@@ -517,6 +520,7 @@ describe("agents' commands", () => {
         recent: [],
       },
       delegations: [],
+      exchanges: [],
       truncated: [],
     });
     expect(files.files.get(".agentplugged/method.yaml")).toContain(`product_id: ${view.product}`);

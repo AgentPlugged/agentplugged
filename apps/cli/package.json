@@ -1,8 +1,8 @@
 {
   "name": "agentplugged",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Install the AgentPlugged method in a repository and make its agents callable from Claude Code, Codex, Antigravity CLI and Cursor.",
-  "releaseSummary": "The engine updates itself: your session moves to a newer version between two calls, with nothing to reconnect.",
+  "releaseSummary": "One circuit: pause the whole team, stop a story at its budget before the next tool call, and let Noah keep a note of each exchange.",
   "license": "FSL-1.1-MIT",
   "author": "Innovel Studio SASU",
   "repository": {

@@ -456,6 +456,41 @@ describe("start_story and story start", () => {
     });
   });
 
+  it("starts and resumes no story for an agent while the team is paused, and again once resumed", async () => {
+    const { journal, call, files, workspace } = await product();
+    expect((await call("start_story", { agent: "sam", story: "1-1" })).ok).toBe(true);
+    const productId = /product_id: "?([0-9A-Z]{26})/.exec(
+      files.files.get(".agentplugged/method.yaml") ?? "",
+    )?.[1];
+    const hold = (type: string, payload: Record<string, unknown>) =>
+      journal.appendAll([
+        {
+          type,
+          actor: { kind: "system" },
+          product: productId ?? "",
+          provenance: "trusted",
+          payload,
+        },
+      ]);
+    await hold("team.paused", { reason: "creator" });
+    const count = journal.events.length;
+    // A new story is refused, and so is the story already started: nobody takes work up.
+    for (const [agent, story] of [
+      ["ethan", "1-3"],
+      ["sam", "1-1"],
+    ] as const) {
+      expect(errorOf(await call("start_story", { agent, story }))).toMatchObject({
+        code: ErrorCode.STORY_NOT_STARTABLE,
+        message_key: "error.story_not_startable.team_paused",
+        details: { story, reason: "team_paused" },
+      });
+    }
+    expect(journal.events.length).toBe(count);
+    expect(workspace.branches.has("feat/1-3-work")).toBe(false);
+    await hold("team.resumed", {});
+    expect((await call("start_story", { agent: "ethan", story: "1-3" })).ok).toBe(true);
+  });
+
   it("makes a story wait while the ceiling of stories at once is reached", async () => {
     const { journal, call, workspace } = await product({ max_parallel_stories: 1 });
     expect((await call("start_story", { agent: "sam", story: "1-1" })).ok).toBe(true);

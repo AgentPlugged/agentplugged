@@ -25,6 +25,8 @@ const CAPABILITIES: ToolCapabilities = {
   interceptsPermissions: false,
   canResume: true,
   nativePause: false,
+  subAgents: true,
+  liveInput: true,
 };
 
 const SESSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
@@ -118,8 +120,52 @@ function rulesOf(permissions: PermissionPlan): {
   };
 }
 
+/**
+ * The tool that launches a sub-agent. It is allowed by its bare name because it takes no path or
+ * command: what the sub-agents may do is still decided by the plan's mode and rules, which they
+ * share with the session that launched them.
+ */
+const AGENT_TOOL = "Agent";
+/** The name of the agent definition the session runs as when some refusals are its own. */
+const MAIN_AGENT_NAME = "bridge-main";
+const OWN_DENY_RULE = /^[A-Za-z][A-Za-z0-9_-]{0,80}(?:\([A-Za-z0-9_.-]{1,60}\))?$/;
+
+/**
+ * What a session that launches sub-agents needs on top of its plan: the right to use the agent
+ * tool and, for the refusals that are its own (`mainSessionDeny`), a definition of the session as
+ * an agent. The tool applies an agent's own refusals to that agent only, not to the sub-agents
+ * it launches, which a refusal on the command line or in a settings file would reach as well.
+ */
+function subAgentPlan(request: RunRequest): { allow: string[]; args: string[] } {
+  const sub = request.permissions.subAgents;
+  if (sub === undefined) return { allow: [], args: [] };
+  if (request.permissions.noTools === true) {
+    throw new RunRequestInvalid("subAgents: not with a run that has no tool");
+  }
+  const own = [...new Set(sub.mainSessionDeny ?? [])];
+  for (const rule of own) {
+    // Stricter than a project rule: these travel on the command line, so a tool name or a tool
+    // and one plain word, nothing a shell could read.
+    if (!OWN_DENY_RULE.test(rule)) throw new RunRequestInvalid("subAgents: not a refusal rule");
+  }
+  if (own.length === 0) return { allow: [AGENT_TOOL], args: [] };
+  const definition = {
+    [MAIN_AGENT_NAME]: {
+      description: "The session the bridge runs for the creator.",
+      prompt: "Follow the user's message. Your role is given in the message itself.",
+      disallowedTools: own,
+    },
+  };
+  return {
+    allow: [AGENT_TOOL],
+    args: ["--agents", JSON.stringify(definition), "--agent", MAIN_AGENT_NAME],
+  };
+}
+
 function plan(request: RunRequest): LaunchPlan {
   const { allow, deny, mode, project } = rulesOf(request.permissions);
+  const sub = subAgentPlan(request);
+  allow.push(...sub.allow);
   const args = [
     "-p",
     "--output-format",
@@ -133,6 +179,9 @@ function plan(request: RunRequest): LaunchPlan {
   if (allow.length > 0) args.push("--allowedTools", ...allow);
   args.push("--disallowedTools", ...deny);
   if (request.permissions.noTools === true) args.push("--tools", "", "--strict-mcp-config");
+  args.push(...sub.args);
+  // Messages arrive as lines of JSON on the input, which stays open for further ones.
+  if (request.liveInput === true) args.push("--input-format", "stream-json");
   if (request.model !== undefined) {
     if (!MODEL_PATTERN.test(request.model)) throw new RunRequestInvalid("model: not a model name");
     args.push("--model", request.model);
@@ -149,6 +198,14 @@ function plan(request: RunRequest): LaunchPlan {
     // Claude Code takes a UUID for a new session.
     if (!SESSION_UUID.test(request.sessionId)) throw new RunRequestInvalid("sessionId: not a UUID");
     args.push("--session-id", request.sessionId);
+  }
+  // A name for the session list of the tool (`/resume`): one line, nothing the shell could read.
+  if (request.sessionName !== undefined && request.resume === undefined) {
+    const name = request.sessionName
+      .replace(/\p{Cc}+/gu, " ")
+      .trim()
+      .slice(0, 120);
+    if (name !== "") args.push("--name", name);
   }
   if (request.persistSession === false) args.push("--no-session-persistence");
   if (request.maxBudgetUsd !== undefined) {
@@ -250,6 +307,13 @@ class ClaudeLines implements LineTranslator {
   /** The latest usage of each answer of the model: an answer is repeated once per block. */
   readonly #answers = new Map<string, RunUsage>();
   #billing: RunBilling | undefined;
+  /** The tasks the tool says run in the background (sub-agents it launched), by identifier. */
+  #background = new Set<string>();
+
+  /** Nothing runs in the background: the tool only waits for what the caller writes next. */
+  idle(): boolean {
+    return this.#background.size === 0;
+  }
 
   line(value: unknown): readonly RunEvent[] {
     if (!isObject(value)) return [];
@@ -270,6 +334,16 @@ class ClaudeLines implements LineTranslator {
   }
 
   #system(value: Json): RunEvent[] {
+    if (value.subtype === "background_tasks_changed") {
+      // The tool tells the whole list each time it changes.
+      const tasks = Array.isArray(value.tasks) ? value.tasks : [];
+      this.#background = new Set(
+        tasks.flatMap((task) =>
+          isObject(task) && str(task.task_id) !== undefined ? [String(task.task_id)] : [],
+        ),
+      );
+      return [];
+    }
     if (value.subtype !== "init") return [];
     const session = str(value.session_id);
     if (session === undefined) return [];
@@ -384,4 +458,5 @@ export const claudeCodeTranslator: ToolTranslator = {
   capabilities: CAPABILITIES,
   plan,
   begin: () => new ClaudeLines(),
+  frame: (text) => JSON.stringify({ type: "user", message: { role: "user", content: text } }),
 };

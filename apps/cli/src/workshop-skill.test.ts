@@ -273,6 +273,6 @@ describe("an addition made on the real method", () => {
       TOKEN;
     expect(tokens, `${Math.round(tokens)} tokens`).toBeLessThanOrEqual(2_100);
     expect(answer).toBeLessThanOrEqual(400);
-    expect(registry.agentCommands()).toHaveLength(62);
+    expect(registry.agentCommands()).toHaveLength(65);
   });
 });

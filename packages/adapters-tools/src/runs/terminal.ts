@@ -33,3 +33,20 @@ export function terminalCommandFor(tool: string, session: string): TerminalComma
 export function canContinueSession(tool: string): boolean {
   return tool === "claude-code";
 }
+
+/**
+ * True when a run of the tool can launch sub-agents and be driven to do so (the plan's
+ * `subAgents`). The other tools keep their present behaviour until their own trial says what
+ * they can do.
+ */
+export function canLaunchSubAgents(tool: string): boolean {
+  return tool === "claude-code";
+}
+
+/**
+ * True when a message can be written to a run of the tool while it goes on (the request's
+ * `liveInput`). For any other tool a message waits for the end of the run.
+ */
+export function canTakeLiveInput(tool: string): boolean {
+  return tool === "claude-code";
+}

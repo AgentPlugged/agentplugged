@@ -1,21 +1,24 @@
 import { spawn } from "node:child_process";
 import { win32 } from "node:path";
-import type {
-  Launcher,
-  RunBilling,
-  RunEvent,
-  RunOutcome,
-  RunRequest,
-  RunResult,
-  RunUsage,
-  ToolRun,
-  ToolTranslator,
+import {
+  type Launcher,
+  type RunBilling,
+  type RunEvent,
+  type RunOutcome,
+  type RunRequest,
+  RunRequestInvalid,
+  type RunResult,
+  type RunUsage,
+  type ToolRun,
+  type ToolTranslator,
 } from "./contract.js";
 import { LineSplitter } from "./lines.js";
 import { type RunSettingsFile, writeRunSettings } from "./run-settings.js";
 
 /** A run that outlasts this is stopped (the request may ask for less or more). */
 export const DEFAULT_MAX_DURATION_MS = 30 * 60 * 1000;
+/** How long a live input stays open after an answer that leaves it idle but fewer answers than messages. */
+const IDLE_GRACE_MS = 15_000;
 /** How long a process gets to end by itself after a polite stop before it is killed. */
 const GRACE_MS = 3000;
 /** How long the output gets to drain after the process exited (a grandchild may hold the pipe). */
@@ -71,6 +74,16 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
   const startedAt = clock();
   // Refuses an unacceptable request before anything is started.
   const plan = translator.plan(request);
+  // A live input needs a tool that takes messages on its input and says when it is idle.
+  const live = request.liveInput === true;
+  if (
+    live &&
+    (translator.capabilities.liveInput !== true ||
+      translator.frame === undefined ||
+      translator.begin().idle === undefined)
+  ) {
+    throw new RunRequestInvalid("liveInput: this tool cannot take messages while it runs");
+  }
   // The rules of a launch that are too many for a command line travel in a file of the launch.
   let settingsFile: RunSettingsFile | undefined;
   let settingsFailed = false;
@@ -97,6 +110,11 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
   let exitCode: number | null = null;
   let exited = false;
   let finished = false;
+  // Live input: the messages written so far (the prompt is the first), the answers read, and
+  // whether the input is still open.
+  let inputs = 1;
+  let answers = 0;
+  let inputOpen = live;
   let timer: NodeJS.Timeout | undefined;
   let drainTimer: NodeJS.Timeout | undefined;
   let resolveDone: (result: RunResult) => void = () => {};
@@ -125,6 +143,7 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
         break;
       case "turn.completed":
         turn = event;
+        answers += 1;
         if (event.session !== undefined) session = event.session;
         if (event.usage !== undefined) usage = event.usage;
         break;
@@ -140,7 +159,14 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
     }
   };
 
+  let closeInputWhenIdle: (ok: boolean) => void = () => {};
+  let idleTimer: NodeJS.Timeout | undefined;
   const feed = (line: string): void => {
+    // Any activity of the tool means it is not idle after all.
+    if (idleTimer !== undefined) {
+      clearTimeout(idleTimer);
+      idleTimer = undefined;
+    }
     let value: unknown;
     try {
       value = JSON.parse(line);
@@ -149,7 +175,12 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
       return;
     }
     try {
-      for (const event of reader.line(value)) emit(event);
+      for (const event of reader.line(value)) {
+        emit(event);
+        // The input stays open for further messages until the tool has answered all it was given
+        // and runs nothing in the background: from then on nothing can come, the program may end.
+        if (event.type === "turn.completed") closeInputWhenIdle(event.ok);
+      }
     } catch {
       emit({
         type: "error",
@@ -179,6 +210,7 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
     if (finished) return;
     finished = true;
     settingsFile?.remove();
+    if (idleTimer !== undefined) clearTimeout(idleTimer);
     if (timer !== undefined) clearTimeout(timer);
     if (drainTimer !== undefined) clearTimeout(drainTimer);
     const { outcome, failure } = outcomeOf();
@@ -237,7 +269,29 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
     stderr = (stderr + text).slice(-STDERR_KEEP);
   });
   child.stdin?.on("error", () => {});
-  child.stdin?.end(request.prompt);
+  const frame = translator.frame;
+  if (live && frame !== undefined) {
+    child.stdin?.write(`${frame(request.prompt)}\n`);
+    const closeInput = (): void => {
+      if (!inputOpen) return;
+      inputOpen = false;
+      child.stdin?.end();
+    };
+    closeInputWhenIdle = (ok) => {
+      if (!inputOpen) return;
+      if (idleTimer !== undefined) clearTimeout(idleTimer);
+      idleTimer = undefined;
+      // A turn that failed ends the run whatever is still pending: nothing would wake it again.
+      if (!ok) return closeInput();
+      if (reader.idle?.() !== true) return;
+      if (answers >= inputs) return closeInput();
+      // Messages the tool took together get one answer: if nothing starts soon after an answer
+      // that leaves nothing in the background, the input is closed anyway (see `feed`).
+      idleTimer = setTimeout(closeInput, IDLE_GRACE_MS);
+    };
+  } else {
+    child.stdin?.end(request.prompt);
+  }
 
   const settle = (): void => {
     if (!exited || finished) return;
@@ -267,6 +321,7 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
   child.on("exit", (code) => {
     if (exited) return;
     exited = true;
+    inputOpen = false;
     exitCode = code;
     // Give the output a moment to reach its end, then settle.
     if (stdout === null || stdout === undefined || stdout.destroyed || stdout.readableEnded)
@@ -281,6 +336,7 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
   const stopNow = async (): Promise<void> => {
     // A process that already exited has freed its id: nothing is killed through it.
     if (pid === undefined || exited) return;
+    inputOpen = false;
     child.stdin?.destroy();
     await killTree(pid, windows, "polite");
     if (!windows) {
@@ -320,6 +376,20 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
         await done;
       });
       return stopping;
+    },
+    send(text) {
+      const stdin = child.stdin;
+      if (!live || frame === undefined || !inputOpen || exited || finished || stopRequested) {
+        return false;
+      }
+      if (stdin === null || stdin === undefined || !stdin.writable) return false;
+      try {
+        stdin.write(`${frame(text)}\n`);
+      } catch {
+        return false;
+      }
+      inputs += 1;
+      return true;
     },
     done,
   };

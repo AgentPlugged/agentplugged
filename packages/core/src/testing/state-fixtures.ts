@@ -7,6 +7,7 @@ import type {
 } from "../projection/agent-reducers.js";
 import type { CheckpointState } from "../projection/checkpoint-reducers.js";
 import type { DelegationEntry } from "../projection/delegation-reducers.js";
+import type { ExchangeEntry } from "../projection/exchange-reducers.js";
 import { answer, checkpointState } from "./checkpoint-state.js";
 
 /**
@@ -23,6 +24,7 @@ export interface StateSize {
   readonly rich?: boolean;
   readonly agents?: number;
   readonly delegations?: number;
+  readonly exchanges?: number;
   /** Characters of a summary, a result, a brief. */
   readonly text?: number;
 }
@@ -298,6 +300,12 @@ export function fullState(size: StateSize): FullStateView {
       provenance: "trusted",
     }),
   );
+  const exchanges: ExchangeEntry[] = Array.from({ length: size.exchanges ?? 30 }, (_, n) => ({
+    id: ulid(6000 + n),
+    at: at(400 + n),
+    summary: words(`Echange ${n}`, 300),
+    provenance: "trusted",
+  }));
 
   const openPoints = Object.values(agents).flatMap((agent) =>
     (agent.last_result?.open_questions ?? []).map((questionText) => ({
@@ -318,6 +326,7 @@ export function fullState(size: StateSize): FullStateView {
       utc_offset: "+00:00",
     },
     delegations,
+    exchanges,
     product: ulid(1),
     journal_head: ulid(2),
     agents,

@@ -1039,6 +1039,7 @@ export const fr: Catalog = {
   "next.step.knowledge_base": "Générer la base de connaissance",
   "next.step.knowledge_base_review": "Base de connaissance en attente de ta relecture",
   "next.step.knowledge_base_decision": "Réponds à Zoé sur la base de connaissance",
+  "next.step.paused": "L'équipe est en pause : reprends-la quand tu es prêt",
   "reason.docSource":
     "une liste de { path, blob } : le chemin d'un document lu, et l'id du blob de la version lue (40 ou 64 caractères hexadécimaux minuscules)",
   "docs.check.warning.kb_stale":
@@ -1147,6 +1148,8 @@ export const fr: Catalog = {
     "La story {story} a été démarrée par {agent} : une story n'a jamais deux développeurs, seul {agent} la reprend.",
   "error.story_not_startable.parallel_limit":
     "La story {story} attend : {limit} stories sont déjà développées en même temps ({building}), le plafond du profil (max_parallel_stories). Démarre-la quand l'une d'elles sera terminée. Rien n'a été créé.",
+  "error.story_not_startable.team_paused":
+    "L'équipe est en pause : la story {story} ne démarre pas tant que le créateur ne l'a pas reprise. Rien n'a été créé.",
   "error.story_not_startable.unsupported_repository":
     "Ce dépôt ne peut pas accueillir la copie de travail d'une story ({why} : un dépôt nu, ou à la racine d'un disque). Rien n'a été créé.",
   "error.story_not_startable.not_recorded":
@@ -1460,6 +1463,10 @@ export const fr: Catalog = {
     "{to} est un développeur : il travaille sur une story, une instance par story. Donne la story. Rien n'a été écrit.",
   "error.delegation_invalid.story_taken":
     "La story {story} est déjà développée par {agent} : une story n'a jamais deux développeurs. Rien n'a été écrit.",
+  "error.team_already_paused":
+    "L'équipe est déjà en pause depuis {since} : il n'y a rien de plus à tenir. Rien n'a été écrit.",
+  "error.delegation_invalid.team_paused":
+    "L'équipe est en pause : rien n'est confié à {to} tant que le créateur ne l'a pas reprise. Rien n'a été écrit.",
   "error.delegation_invalid.parallel_limit":
     "Le plafond de {limit} stories en parallèle est atteint ({building}) : la story {story} attend qu'une d'elles soit terminée. Rien n'a été écrit.",
   "checkpoint.type.creator_action": "action réservée",
@@ -2380,15 +2387,19 @@ export const fr: Catalog = {
   "points.summary": "Points qui t'attendent : {list}. Les agents décident les autres.",
   "points.summary.none": "Aucun point ne t'attend : les agents décident tous les points.",
   "history.source.agent": "décidé par l'agent responsable",
-  "history.source.web": "depuis le cockpit web",
+  "history.source.web": "depuis la vue web",
   "history.source.mobile": "depuis le téléphone",
   "assurance.agent": "décision d'un agent (pas ta réponse), avec sa raison ; tu peux la rouvrir",
-  "assurance.device": "signé par un appareil que tu as relié (le cockpit web ou ton téléphone)",
+  "assurance.device": "signé par un appareil que tu as relié (la vue web ou ton téléphone)",
   "review.agent_decided": "Décidé par l'agent {agent} le {at} : {decision}. Raison : {reason}",
   "next.step.point_decision":
     "Un point que tu ne gardes pas attend la décision de l'agent responsable",
   "next.independent":
     "Le travail continue sans toi : cette étape ne dépend d'aucun des points qui t'attendent.",
+  "next.paused":
+    "L'équipe est en pause depuis {since}. Chaque agent finit l'étape en cours et ne démarre rien de nouveau ; reprends-la depuis la vue web, le téléphone, ou en le demandant à Noah.",
+  "next.paused.stopped":
+    "L'équipe a été arrêtée en urgence depuis {since} : les programmes lancés par le pont ont été coupés, et rien ne démarre tant que tu ne l'as pas reprise.",
   "next.stop":
     "Rien d'indépendant ne reste : les points qui t'attendent bloquent la suite, les agents s'arrêtent là.",
   "next.morning":

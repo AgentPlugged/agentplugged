@@ -272,6 +272,7 @@ describe("sync: Cursor's hooks, rules and secrets", () => {
       "cursor.isolation",
       "cursor.decisions",
       "cursor.usage",
+      "cursor.budget",
     ]);
     expect(cursor.find((fallback) => fallback.capability === "rules")?.reason).toBe(
       CURSOR_RULES_REASON,

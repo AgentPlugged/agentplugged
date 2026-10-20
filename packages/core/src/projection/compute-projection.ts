@@ -18,6 +18,7 @@ import {
   EVENT_TYPES,
   type EventEnvelope,
   eventTypeUpgrade,
+  extensionModuleOf,
   HUMAN_EVENT_TYPES,
   HUMAN_ONLY_EVENT_TYPES,
   type HumanKeyRegisteredPayload,
@@ -206,9 +207,29 @@ async function checkSensitive(
   }
 }
 
+/**
+ * An event of the extension point (`x.<module>.<type>`), as the journal holds it: valid,
+ * readable here, in projection order. The engine applies it to nothing; the module that wrote it
+ * reads it from here.
+ */
+export interface ExtensionEvent {
+  readonly id: string;
+  readonly type: string;
+  readonly module: string;
+  readonly at: string;
+  readonly actor: EventEnvelope["actor"];
+  readonly story?: string;
+  readonly payload: Readonly<Record<string, unknown>>;
+}
+
 /** A projection, and what this machine could not read of it (never written to `state.json`). */
 export interface DetailedProjection {
   readonly projection: ProjectionState;
+  /**
+   * The extension events that are valid and readable here, in projection order. Machine-local like
+   * `unreadable`: never written to `state.json`.
+   */
+  readonly extensionEvents: readonly ExtensionEvent[];
   /** Encrypted events applied without their content (no product key here, or another one). */
   readonly unreadable: number;
   /**
@@ -775,6 +796,7 @@ export async function computeProjectionDetailed(
   }
   let applied = 0;
   let unreadable = 0;
+  const extensionEvents: ExtensionEvent[] = [];
   let computedAt: string | null = null;
   const apply = (event: EventEnvelope) => {
     applied += 1;
@@ -829,6 +851,23 @@ export async function computeProjectionDetailed(
     // waiting for its checkpoint) counts once it is applied, with its own date.
     const refusedNow = draft.ignored.slice(refused).some((item) => item.id === entry.event.id);
     if (!refusedNow && !draft.held.has(entry.event.id)) apply(entry.event);
+    const module = extensionModuleOf(current.type);
+    // Only what arrived encrypted is handed over: a clear one is not a module's sealed content.
+    if (
+      module !== undefined &&
+      current.payload !== undefined &&
+      entry.event.payload_enc !== undefined
+    ) {
+      extensionEvents.push({
+        id: current.id,
+        type: current.type,
+        module,
+        at: current.at,
+        actor: current.actor,
+        ...(current.story === undefined ? {} : { story: current.story }),
+        payload: current.payload,
+      });
+    }
     for (const event of draft.released.slice(released)) apply(event);
   }
   settleHeldResolutions(draft);
@@ -853,6 +892,7 @@ export async function computeProjectionDetailed(
       state: draft.state,
     },
     unreadable,
+    extensionEvents,
     ...(trust === undefined ? {} : { deviceTrust: trust.view }),
   };
 }

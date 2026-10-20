@@ -1,4 +1,5 @@
 import { QUESTION_TOOL_NAME, type RuleAction, type RuleValue } from "@agentplugged/protocol";
+import { OWN_TOOL_PREFIX } from "../budget/call-rules.js";
 import {
   ACTIVITY_END_MATCHER,
   ACTIVITY_START_MATCHER,
@@ -29,6 +30,9 @@ import { claudeActionRules } from "./rule-permissions.js";
  * string): it may call a hook for a harmless command. So `record_external_read` and
  * `check_action` read the command again (`trust/command-match.ts`, `NETWORK_COMMANDS` lives
  * there too) and ignore it when it fetches nothing from outside, or matches no rule.
+ *
+ * A hook before every tool call (`check_call`): the story's budget at the nearest call, and the
+ * team's pause held while an agent writes. In doubt it lets the call through.
  *
  * Two `command` hooks on the question tool (`AskUserQuestion`): `PostToolUse` records
  * the creator's answer, `PreToolUse` refuses a call that already carries answers
@@ -115,6 +119,15 @@ function handler(
 export const WRITE_HOOK_TIMEOUT = 5;
 
 /**
+ * How long Claude Code waits for the guard before every tool call, in seconds: the engine itself
+ * gives up after 1.5 s (`CALL_GUARD_BUDGET_MS`); this is the fence around it.
+ */
+export const CALL_HOOK_TIMEOUT = 5;
+
+/** Every tool but those of the engine's own server (an agent held must still be able to conclude). */
+export const CALL_HOOK_MATCHER = `^(?!${OWN_TOOL_PREFIX})`;
+
+/**
  * The file tools the guard before a write reads, each with the field of its input that
  * holds the path and the one that holds what is written (`MultiEdit`: the list of edits, which the
  * engine reads as the text Claude Code substitutes for it).
@@ -172,6 +185,24 @@ export function claudeTrustHooks(
       ),
     });
   }
+  // Before every tool call, the engine checks the story's budget (the nearest call after the ceiling
+  // is refused, a checkpoint opens for the creator) and the team's pause; in doubt it lets the call through.
+  pre.push({
+    matcher: CALL_HOOK_MATCHER,
+    hooks: [
+      handler(
+        "check_call",
+        {
+          tool: hookValue("tool_name"),
+          session,
+          cwd: hookValue("cwd"),
+          agent: hookValue("agent_type"),
+        },
+        undefined,
+        CALL_HOOK_TIMEOUT,
+      ),
+    ],
+  });
   // Before a file is written, the engine checks the secret rule, the story's scope and
   // the architecture's checkable decisions; in doubt it lets the write through.
   for (const { tool, path, text } of WRITE_TOOLS) {

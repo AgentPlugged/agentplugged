@@ -4,49 +4,78 @@ import {
   CHAIN_INSTRUCTION_MAX_CHARS,
   CHAIN_ORDER_CODES,
   ChainControlParamsSchema,
-  ChainInstructParamsSchema,
   ChainPauseParamsSchema,
   ChainResumeParamsSchema,
-  ChainSayParamsSchema,
-  formatChainNote,
-  formatNoahRoute,
   InstructionGivenPayloadSchema,
   NoahSayParamsSchema,
+  ORDER_TYPE_CHAIN_INSTRUCT,
   ORDER_TYPE_CHAIN_SAY,
+  ORDER_TYPE_CHAIN_START,
   ORDER_TYPE_NOAH_SAY,
-  parseChainNote,
-  parseNoahRoute,
+  RetiredChainOrderParamsSchema,
 } from "./chain.js";
 import { eventTypeSpec } from "./event-types.js";
 import { baseOrderTypes } from "./orders.js";
 
-describe("the orders that keep the hand on the agents", () => {
-  it("take an agent by its name, or none for the whole team, and a bounded instruction", () => {
+describe("the orders that hold the team", () => {
+  it("take an agent by its name, or none for the whole team", () => {
     expect(ChainPauseParamsSchema.safeParse({}).success).toBe(true);
+    expect(ChainPauseParamsSchema.safeParse({ agent: "iris" }).success).toBe(true);
+    expect(ChainPauseParamsSchema.safeParse({ agent: "Iris" }).success).toBe(false);
+    expect(ChainResumeParamsSchema.safeParse({ agent: "iris" }).success).toBe(true);
+    expect(ChainControlParamsSchema.safeParse({ agent: "noah" }).success).toBe(true);
+    expect(ChainControlParamsSchema.safeParse({ extra: 1 }).success).toBe(false);
+  });
+
+  it("read, and ignore, the fields an older device still sends with a pause or a resumption", () => {
     expect(ChainPauseParamsSchema.safeParse({ agent: "iris", when: "after_step" }).success).toBe(
       true,
     );
+    expect(ChainPauseParamsSchema.safeParse({ hand: "terminal" }).success).toBe(true);
+    expect(ChainResumeParamsSchema.safeParse({ close_session: true }).success).toBe(true);
     expect(ChainPauseParamsSchema.safeParse({ when: "later" }).success).toBe(false);
-    expect(ChainPauseParamsSchema.safeParse({ agent: "Iris" }).success).toBe(false);
-    expect(ChainControlParamsSchema.safeParse({ agent: "noah" }).success).toBe(true);
-    expect(ChainControlParamsSchema.safeParse({ extra: 1 }).success).toBe(false);
-    expect(
-      ChainInstructParamsSchema.safeParse({ agent: "iris", text: "Fais court." }).success,
-    ).toBe(true);
-    expect(ChainInstructParamsSchema.safeParse({ agent: "iris", text: "   " }).success).toBe(false);
-    expect(ChainInstructParamsSchema.safeParse({ agent: "iris", text: "" }).success).toBe(false);
-    expect(
-      ChainInstructParamsSchema.safeParse({
-        agent: "iris",
-        text: "x".repeat(CHAIN_INSTRUCTION_MAX_CHARS + 1),
-      }).success,
-    ).toBe(false);
-    expect(ChainInstructParamsSchema.safeParse({ text: "Fais court." }).success).toBe(false);
+    expect(ChainPauseParamsSchema.safeParse({ hand: "shell" }).success).toBe(false);
+    expect(ChainResumeParamsSchema.safeParse({ close_session: "yes" }).success).toBe(false);
+    // The stop never had such a field.
+    expect(ChainControlParamsSchema.safeParse({ when: "now" }).success).toBe(false);
   });
 
-  it("keep the creator's words out of the order the journal keeps, and encrypt them as an event", () => {
-    const declared = baseOrderTypes().get("order.chain.instruct/v1");
-    expect(declared?.sealedParams).toEqual(["text"]);
+  it("have a stable code for every refusal the machine can give", () => {
+    expect(Object.values(CHAIN_ORDER_CODES).sort()).toEqual([
+      "CHAIN_CONVERSATION_UNAVAILABLE",
+      "CHAIN_ENGINE_TOO_OLD",
+      "CHAIN_ORDER_RETIRED",
+      "CHAIN_PRODUCT_PAUSED",
+      "CHAIN_REQUESTS_FULL",
+      "CHAIN_TEAM_PAUSED",
+      "CHAIN_UNAVAILABLE",
+    ]);
+  });
+});
+
+describe("the orders that were retired", () => {
+  it("stay declared, take any parameters and read none of them", () => {
+    for (const type of [ORDER_TYPE_CHAIN_START, ORDER_TYPE_CHAIN_INSTRUCT, ORDER_TYPE_CHAIN_SAY]) {
+      const spec = baseOrderTypes().get(`order.${type}/v1`);
+      expect(spec, type).toBeDefined();
+      expect(spec?.target).toBe("primary");
+    }
+    expect(RetiredChainOrderParamsSchema.safeParse({}).success).toBe(true);
+    expect(
+      RetiredChainOrderParamsSchema.safeParse({ agent: "iris", text: "x", budget_usd: 3 }).success,
+    ).toBe(true);
+    expect(RetiredChainOrderParamsSchema.safeParse("text").success).toBe(false);
+  });
+
+  it("keep the words of an old instruction out of the order the journal keeps", () => {
+    for (const type of [ORDER_TYPE_CHAIN_INSTRUCT, ORDER_TYPE_CHAIN_SAY]) {
+      expect(baseOrderTypes().get(`order.${type}/v1`)?.sealedParams, type).toEqual(["text"]);
+    }
+  });
+});
+
+describe("the creator's words in the journal", () => {
+  it("are encrypted as an event of their own, and earlier events stay readable", () => {
     expect(eventTypeSpec(CHAIN_EVENT_TYPES.instructionGiven)?.sensitive).toBe(true);
     expect(
       InstructionGivenPayloadSchema.safeParse({
@@ -57,83 +86,11 @@ describe("the orders that keep the hand on the agents", () => {
       }).success,
     ).toBe(true);
     expect(
-      InstructionGivenPayloadSchema.safeParse({ to: "iris", text: "x", delivery: "soon" }).success,
-    ).toBe(false);
-  });
-
-  it("tell a pause, a stop and a refusal by stable codes", () => {
-    expect(formatChainNote("paused")).toBe("chain:paused");
-    expect(parseChainNote("chain:pausing?agent=iris")).toEqual({
-      code: "pausing",
-      params: { agent: "iris" },
-    });
-    expect(parseChainNote("chain:halted")?.code).toBe("halted");
-    expect(Object.values(CHAIN_ORDER_CODES)).toContain("CHAIN_ALREADY_PAUSED");
-  });
-});
-
-describe("handing the session over to the creator's terminal", () => {
-  it("is asked with the pause, at once and never after the step", () => {
-    expect(ChainPauseParamsSchema.safeParse({ hand: "terminal" }).success).toBe(true);
-    expect(ChainPauseParamsSchema.safeParse({ hand: "terminal", when: "now" }).success).toBe(true);
-    expect(ChainPauseParamsSchema.safeParse({ hand: "terminal", when: "after_step" }).success).toBe(
-      false,
-    );
-    expect(ChainPauseParamsSchema.safeParse({ hand: "shell" }).success).toBe(false);
-  });
-
-  it("has its own note and refusals, as stable codes", () => {
-    expect(parseChainNote(formatChainNote("handed_over", { agent: "iris" }))).toEqual({
-      code: "handed_over",
-      params: { agent: "iris" },
-    });
-    expect(Object.values(CHAIN_ORDER_CODES)).toEqual(
-      expect.arrayContaining(["CHAIN_NO_SESSION", "CHAIN_TERMINAL_UNAVAILABLE"]),
-    );
-  });
-});
-
-describe("talking to the agent from a device", () => {
-  it("is asked with the pause (chat), then one message at a time, and closing a left-open session is a flag", () => {
-    expect(ChainPauseParamsSchema.safeParse({ hand: "chat" }).success).toBe(true);
-    expect(ChainPauseParamsSchema.safeParse({ hand: "chat", when: "after_step" }).success).toBe(
-      false,
-    );
-    expect(ChainSayParamsSchema.safeParse({ text: "Montre le plan." }).success).toBe(true);
-    expect(ChainSayParamsSchema.safeParse({ text: "x", close_session: true }).success).toBe(true);
-    expect(ChainSayParamsSchema.safeParse({ text: "  " }).success).toBe(false);
-    expect(ChainSayParamsSchema.safeParse({ text: "" }).success).toBe(false);
-    expect(
-      ChainSayParamsSchema.safeParse({ text: "x".repeat(CHAIN_INSTRUCTION_MAX_CHARS + 1) }).success,
-    ).toBe(false);
-    expect(ChainSayParamsSchema.safeParse({ text: "x", agent: "iris" }).success).toBe(false);
-    expect(ChainResumeParamsSchema.safeParse({ close_session: true }).success).toBe(true);
-    expect(ChainResumeParamsSchema.safeParse({ close_session: "yes" }).success).toBe(false);
-  });
-
-  it("keeps the creator's message out of the order the journal keeps", () => {
-    const spec = baseOrderTypes().get("order.chain.say/v1");
-    expect(spec?.sealedParams).toEqual(["text"]);
-    expect(spec?.target).toBe("primary");
-    expect(parseChainNote(formatChainNote("conversation", { agent: "iris" }))?.code).toBe(
-      "conversation",
-    );
-    expect(Object.values(CHAIN_ORDER_CODES)).toEqual(
-      expect.arrayContaining([
-        "CHAIN_TERMINAL_STILL_OPEN",
-        "CHAIN_NOT_IN_CONVERSATION",
-        "CHAIN_REPLY_PENDING",
-        "CHAIN_CONVERSATION_UNAVAILABLE",
-        "CHAIN_BUDGET_PENDING",
-        "CHAIN_BUDGET_STOPPED",
-      ]),
-    );
-    expect(
-      parseChainNote(formatChainNote("budget_paused", { agent: "lina", story: "3-1" })),
-    ).toEqual({ code: "budget_paused", params: { agent: "lina", story: "3-1" } });
-    expect(
       InstructionGivenPayloadSchema.safeParse({ to: "iris", text: "x", delivery: "chat" }).success,
     ).toBe(true);
+    expect(
+      InstructionGivenPayloadSchema.safeParse({ to: "iris", text: "x", delivery: "soon" }).success,
+    ).toBe(false);
   });
 });
 
@@ -153,24 +110,10 @@ describe("the creator's talk with Noah", () => {
     expect(NoahSayParamsSchema.safeParse({ text: "x", agent: "iris" }).success).toBe(false);
   });
 
-  it("keeps the message out of the order the journal keeps, like an instruction", () => {
+  it("keeps the message out of the order the journal keeps", () => {
     const spec = baseOrderTypes().get(`order.${ORDER_TYPE_NOAH_SAY}/v1`);
     expect(spec?.sealedParams).toEqual(["text"]);
     expect(spec?.target).toBe("primary");
     expect(spec?.risk).toBe("medium");
-  });
-
-  it("tells what became of a handover as a code, never a sentence", () => {
-    expect(formatNoahRoute("started", { agent: "iris" })).toBe("noah:started?agent=iris");
-    expect(formatNoahRoute("paused")).toBe("noah:paused");
-    expect(
-      parseNoahRoute(formatNoahRoute("refused", { agent: "iris", code: "CHAIN_PAUSED" })),
-    ).toEqual({
-      code: "refused",
-      params: { agent: "iris", code: "CHAIN_PAUSED" },
-    });
-    expect(parseNoahRoute("noah:unknown")).toBeUndefined();
-    expect(parseNoahRoute("chain:paused")).toBeUndefined();
-    expect(parseNoahRoute("Noah a mis l'équipe en pause")).toBeUndefined();
   });
 });

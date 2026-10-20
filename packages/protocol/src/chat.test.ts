@@ -152,7 +152,7 @@ describe("chat events", () => {
   it("adds its codes and its reason at the end of the shared lists", () => {
     // Then the codes of the delegation, of the creator's actions and of the review.
     // CONFIRMATION_REQUIRED is retired: one answer is the whole validation.
-    expect(Object.values(ErrorCode).slice(-23, -19)).toEqual([
+    expect(Object.values(ErrorCode).slice(-24, -20)).toEqual([
       "CHAT_QUOTE_NOT_FOUND",
       "CHAT_SESSION_REQUIRED",
       "REVIEW_REQUIRED",

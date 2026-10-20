@@ -30,6 +30,7 @@ import type { StoryDiff } from "./review/review-diff.js";
 import type { MainBranchReader } from "./rules/main-branch.js";
 import type { StoryForge } from "./stories/story-forge.js";
 import type { StoryWorkspace } from "./stories/story-workspace.js";
+import type { ExtensionMcpServer } from "./sync/mcp.js";
 import type { ToolProbe } from "./tools/tool-probe.js";
 import type { TestReferenceSource } from "./trace/test-references.js";
 import type { FolderReader } from "./trust/install-folders.js";
@@ -117,6 +118,12 @@ export interface CommandContext {
    * a plan, for a module that reads it. The engine never prints what it returns. Absent here.
    */
   readonly costSource?: CostSource;
+  /**
+   * MCP servers a program built on the engine asks `sync` to declare next to the engine's own in the
+   * tools' MCP files (Claude Code and Cursor). The engine never knows what they serve. Absent:
+   * none, and any entry `sync` recorded earlier is removed.
+   */
+  readonly extensionServers?: readonly ExtensionMcpServer[];
   /**
    * Where `history --export` writes, resolved once by the surface: the file's existing folder
    * (possibly outside the product's folder) and the file's name in it.
@@ -246,6 +253,11 @@ export interface CommandContext {
    * lets the write through in doubt, in milliseconds. 400 when absent; tests give their own.
    */
   readonly writeGuardBudgetMs?: number;
+  /**
+   * How long the guard before every tool call (`check_call`) waits for the journal and the
+   * traces before it lets the call through in doubt, in milliseconds. 1500 when absent.
+   */
+  readonly callGuardBudgetMs?: number;
 }
 
 /** What the creator's commands need to sign: the keychain, its lock, the platform authenticator. */

@@ -1015,6 +1015,7 @@ export const en = {
   "next.step.knowledge_base": "Generate the knowledge base",
   "next.step.knowledge_base_review": "Knowledge base waiting for your review",
   "next.step.knowledge_base_decision": "Answer Zoé about the knowledge base",
+  "next.step.paused": "The team is paused: resume it when you are ready",
   "reason.docSource":
     "a list of { path, blob }: the path of a document read, and the blob id of the version read (40 or 64 lowercase hexadecimal characters)",
   "docs.check.warning.kb_stale":
@@ -1121,6 +1122,8 @@ export const en = {
     "Story {story} was started by {agent}: a story never has two developers, only {agent} takes it up again.",
   "error.story_not_startable.parallel_limit":
     "Story {story} waits: {limit} stories are already being built at once ({building}), the ceiling of the profile (max_parallel_stories). Start it once one of them is done. Nothing was created.",
+  "error.story_not_startable.team_paused":
+    "The team is paused: story {story} does not start until the creator resumes it. Nothing was created.",
   "error.story_not_startable.unsupported_repository":
     "This repository cannot hold a story's working copy ({why}: a bare repository, or one at the root of a disk). Nothing was created.",
   "error.story_not_startable.not_recorded":
@@ -1430,6 +1433,10 @@ export const en = {
     "{to} is a developer: it works on a story, one instance per story. Give the story. Nothing was written.",
   "error.delegation_invalid.story_taken":
     "Story {story} is already built by {agent}: a story never has two developers. Nothing was written.",
+  "error.team_already_paused":
+    "The team is already paused since {since}: there is nothing more to hold. Nothing was written.",
+  "error.delegation_invalid.team_paused":
+    "The team is paused: nothing is handed over to {to} until the creator resumes it. Nothing was written.",
   "error.delegation_invalid.parallel_limit":
     "The ceiling of {limit} stories in parallel is reached ({building}): story {story} waits until one of them is done. Nothing was written.",
   "checkpoint.type.creator_action": "creator's action",
@@ -2332,15 +2339,19 @@ export const en = {
   "points.summary": "Points that wait for you: {list}. The agents decide the others.",
   "points.summary.none": "No point waits for you: the agents decide every point.",
   "history.source.agent": "decided by the agent responsible",
-  "history.source.web": "from the web cockpit",
+  "history.source.web": "from the web view",
   "history.source.mobile": "from the phone",
   "assurance.agent": "an agent's decision (not your answer), with its reason; you can reopen it",
-  "assurance.device": "signed by a device you linked (the web cockpit or your phone)",
+  "assurance.device": "signed by a device you linked (the web view or your phone)",
   "review.agent_decided": "Decided by the agent {agent} on {at}: {decision}. Reason: {reason}",
   "next.step.point_decision":
     "A point you do not keep waits for the agent responsible to decide it",
   "next.independent":
     "The work goes on without you: this step does not depend on any of the points that wait for you.",
+  "next.paused":
+    "The team is paused since {since}. Each agent finishes the step it is on and starts nothing new; resume it from the web view, the phone, or by asking Noah.",
+  "next.paused.stopped":
+    "The team was stopped in an emergency since {since}: the programs the bridge started were cut, and nothing starts until you resume it.",
   "next.stop":
     "Nothing independent is left: the points that wait for you block what follows, the agents stop here.",
   "next.morning":

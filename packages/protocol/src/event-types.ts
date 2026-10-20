@@ -77,6 +77,8 @@ import {
   eventInvalid,
 } from "./event-envelope.js";
 import { currentVersionOf, eventConversion, TEST_EVENT_TYPE } from "./event-versions.js";
+import { EXCHANGE_EVENT_TYPES, ExchangeSummarizedPayloadSchema } from "./exchange.js";
+import { isExtensionEventType } from "./extension.js";
 import {
   FAST_TRACK_EVENT_TYPES,
   FastTrackCheckedPayloadSchema,
@@ -167,6 +169,7 @@ import {
   TableClosedPayloadSchema,
   TableProposedPayloadSchema,
 } from "./table.js";
+import { TEAM_EVENT_TYPES, TeamPausedPayloadSchema, TeamResumedPayloadSchema } from "./team.js";
 import { TEST_REVIEW_EVENT_TYPES, TestsReviewedPayloadSchema } from "./test-quality.js";
 import {
   DEVIATION_EVENT_TYPES,
@@ -213,6 +216,11 @@ export const EVENT_TYPE_REGISTRY: Readonly<Record<string, EventTypeSpec>> = {
     payload: InstructionGivenPayloadSchema,
     sensitive: true,
   },
+  /** The creator holds the whole team, then lets it go on. */
+  [TEAM_EVENT_TYPES.paused]: { version: 1, payload: TeamPausedPayloadSchema },
+  [TEAM_EVENT_TYPES.resumed]: { version: 1, payload: TeamResumedPayloadSchema },
+  /** Noah's short note at the end of an exchange with the creator. */
+  [EXCHANGE_EVENT_TYPES.summarized]: { version: 1, payload: ExchangeSummarizedPayloadSchema },
   [AGENT_EVENT_TYPES.progressReported]: { version: 1, payload: ProgressReportedPayloadSchema },
   // Version 2: billing, quota, run and cumulative reports (version 1 converts as is).
   [AGENT_EVENT_TYPES.costReported]: {
@@ -449,6 +457,8 @@ export function isTestEventType(type: string): boolean {
  * a sensitive domain (`salle.*`, `security.*`, `memory.*`), known yet or not.
  */
 export function isSensitiveEventType(type: string): boolean {
+  // The engine cannot know what a module puts in its events: they are always encrypted.
+  if (isExtensionEventType(type)) return true;
   if (eventTypeSpec(type)?.sensitive === true) return true;
   const domain = type.split(".")[0] ?? "";
   return SENSITIVE_EVENT_DOMAINS.includes(domain);
@@ -467,6 +477,8 @@ export function eventTypeSpec(type: string): EventTypeSpec | undefined {
  * undefined when it can read it.
  */
 export function eventTypeUpgrade(type: string, version: number): CodedErrorPayload | undefined {
+  // An extension type is never a reason to stop: a module this engine does not know is ignored.
+  if (isExtensionEventType(type)) return undefined;
   const spec = eventTypeSpec(type);
   if (spec !== undefined && version <= spec.version) return undefined;
   return {
@@ -489,6 +501,8 @@ export type CurrentEventResult =
 export function currentEvent(event: EventEnvelope): CurrentEventResult {
   const upgrade = eventTypeUpgrade(event.type, event.v);
   if (upgrade !== undefined) return { ok: false, error: upgrade };
+  // An extension event is carried as written: the envelope was checked, its module owns the rest.
+  if (isExtensionEventType(event.type)) return { ok: true, event };
   const spec = eventTypeSpec(event.type) as EventTypeSpec;
   let current = event;
   for (let version = event.v; version < spec.version; version++) {

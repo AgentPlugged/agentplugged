@@ -30,6 +30,7 @@ import { CRITIQUE_REDUCERS } from "./critique-reducers.js";
 import { DEFERRED_REDUCERS } from "./deferred-reducers.js";
 import { DELEGATION_REDUCERS } from "./delegation-reducers.js";
 import { DEVIATION_REDUCERS } from "./deviation-reducers.js";
+import { EXCHANGE_REDUCERS } from "./exchange-reducers.js";
 import { FAST_TRACK_REDUCERS } from "./fast-track-reducers.js";
 import { GIT_REDUCERS } from "./git-reducers.js";
 import { HUMAN_REDUCERS } from "./human-reducers.js";
@@ -47,6 +48,7 @@ import { SPRINT_REDUCERS } from "./sprint-reducers.js";
 import { STACK_REDUCERS } from "./stack-reducers.js";
 import { STORY_REDUCERS } from "./story-reducers.js";
 import { TABLE_REDUCERS } from "./table-reducers.js";
+import { TEAM_REDUCERS } from "./team-reducers.js";
 import { TRUST_REDUCERS } from "./trust-reducers.js";
 import { USAGE_REDUCERS } from "./usage-reducers.js";
 import { WRITE_GUARD_REDUCERS } from "./write-guard-reducers.js";
@@ -257,6 +259,8 @@ export const REDUCERS: Readonly<Record<string, Reducer>> = withMergeFeedback({
   ...CRITERION_REDUCERS,
   ...QA_REDUCERS,
   ...LOOP_REDUCERS,
+  ...TEAM_REDUCERS,
+  ...EXCHANGE_REDUCERS,
   ...MERGE_ORDER_REDUCERS,
   ...MEMORY_REDUCERS,
   ...STACK_REDUCERS,

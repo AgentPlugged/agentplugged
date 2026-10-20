@@ -586,7 +586,10 @@ export const syncCommand = defineCommand<SyncResult>({
    * Generates the files of the targeted AI tools (the `tools` list of `method.yaml`) from
    * `.agentplugged/agents/` and `.agentplugged/skills/`.
    */
-  async run({ files, tools: probe, method, platform, mainBranch, projectRoot }, options) {
+  async run(
+    { files, tools: probe, method, platform, mainBranch, projectRoot, extensionServers },
+    options,
+  ) {
     if (!(await files.exists(METHOD_CONFIG_PATH))) return fail(methodNotInstalled());
     // The cleanup of the retired Gemini CLI's files: it writes nothing else.
     if (options.clean_gemini === true) {
@@ -748,6 +751,7 @@ export const syncCommand = defineCommand<SyncResult>({
       models,
       mcpLaunch: launch,
       engineCommand: engine,
+      ...(extensionServers === undefined ? {} : { extensionServers }),
       codexRules: {
         ...codexRuleSettings(resolvedRules.rules, validation.mode === "strict"),
         // Codex writes only in the project: the stories' working copies sit next to it.
@@ -798,8 +802,16 @@ export const syncCommand = defineCommand<SyncResult>({
       const previous = manifest.settings?.[file.path];
       if (!targeted && previous === undefined) continue;
       const current = mcpFiles.get(file.path);
-      const outcome = reconcileMcpFile(file, current?.value, targeted, launch, previous);
+      const outcome = reconcileMcpFile(
+        file,
+        current?.value,
+        targeted,
+        launch,
+        previous,
+        extensionServers ?? [],
+      );
       if (outcome.record) settingsRecords[file.path] = outcome.record;
+      if ((outcome.extraConflicts?.length ?? 0) > 0) plan.warn("conflict", file.path);
       if (outcome.conflict) {
         plan.warn("conflict", file.path);
         mcpConflicts.set(file.client, file.path);

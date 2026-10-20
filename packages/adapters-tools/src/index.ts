@@ -49,4 +49,10 @@ export {
   startToolRun,
 } from "./runs/process-core.js";
 export { runSettingsDir, sweepRunSettings, writeRunSettings } from "./runs/run-settings.js";
-export { canContinueSession, type TerminalCommand, terminalCommandFor } from "./runs/terminal.js";
+export {
+  canContinueSession,
+  canLaunchSubAgents,
+  canTakeLiveInput,
+  type TerminalCommand,
+  terminalCommandFor,
+} from "./runs/terminal.js";

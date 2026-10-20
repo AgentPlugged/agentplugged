@@ -360,6 +360,7 @@ describe("compatibility: Antigravity CLI", () => {
     expect(result.fallbacks.filter((f) => f.client === "antigravity").map((f) => f.id)).toEqual([
       "antigravity.isolation",
       "antigravity.decisions",
+      "antigravity.budget",
     ]);
     const constitution = files.reference();
     expect(constitution).toContain("- Antigravity CLI, decisions: ");
@@ -382,6 +383,7 @@ describe("compatibility: Antigravity CLI", () => {
       "antigravity.isolation",
       "antigravity.decisions",
       "antigravity.installs.plugin-kept",
+      "antigravity.budget",
     ]);
     expect(result.fallbacks.find((f) => f.id === "antigravity.mcp.plugin-kept")?.reason).toBe(
       ANTIGRAVITY_PLUGIN_KEPT_REASON,

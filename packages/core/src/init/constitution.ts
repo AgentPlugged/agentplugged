@@ -760,6 +760,12 @@ answer, load your full definition (below) and follow it. The essentials:
    question you asked the creator. Conversational work (the brief, the PRD, the UX
    specification, the architecture) stays in this conversation, never in a sub-agent: a
    sub-agent cannot talk with the creator, and relaying each message would cost more.
+8. You may be started without a head. A program on the creator's machine can start you in this
+   folder when they write from the web view or the phone: nobody watches your terminal, and their
+   message is your prompt. You are the same Noah, with the same contract: launch the sub-agents
+   yourself (the program starts none), answer in a few plain sentences, and write what you decide
+   to the journal with the engine's commands, never in the conversation only. A pause of the team
+   (\`state.next\` answers \`paused\`) holds you too.
 
 How to hand work over in this project's AI tools:
 

@@ -44,7 +44,7 @@ describe("the two skills stay short and add no tool", () => {
   it("goes through the actions that exist: the loop's, the criterion's, the proofs'", () => {
     expect(Object.keys(TOOL_GROUPS)).toHaveLength(10);
     expect(TOOL_GROUPS.story?.actions.loop).toEqual({ command: "loop" });
-    expect(createCommandRegistry().agentCommands()).toHaveLength(62);
+    expect(createCommandRegistry().agentCommands()).toHaveLength(65);
     for (const word of ["story.loop", "story.criterion", "story.start", "story.result"]) {
       expect(DIAGNOSE, word).toContain(word);
     }

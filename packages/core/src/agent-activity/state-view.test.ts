@@ -158,12 +158,22 @@ describe("the abridged state", () => {
   });
 
   it("shows no truncation on a small state", () => {
-    const view = fitState(fullState({ checkpoints: 3, stories: 2, open: 1, delegations: 2 }));
+    const view = fitState(
+      fullState({ checkpoints: 3, stories: 2, open: 1, delegations: 2, exchanges: 2 }),
+    );
     // Texts of 600 characters are cut, and the external reads (30) are cut to 10.
     expect(view.truncated.map((entry) => entry.section)).toEqual(["session.reads", "texts"]);
     expect(stateSize(view)).toBeLessThan(STATE_MAX_CHARS);
     const quiet = fitState({
-      ...fullState({ checkpoints: 1, stories: 0, open: 1, agents: 1, delegations: 0, text: 60 }),
+      ...fullState({
+        checkpoints: 1,
+        stories: 0,
+        open: 1,
+        agents: 1,
+        delegations: 0,
+        exchanges: 0,
+        text: 60,
+      }),
       session: { trusted: true, reads: [] },
       external_reads: { total: 0, recent: [] },
     });

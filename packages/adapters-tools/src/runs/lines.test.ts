@@ -28,7 +28,7 @@ describe("LineSplitter", () => {
     expect(splitter.push("x".repeat(8))).toEqual([]);
     expect(splitter.push("x".repeat(8))).toEqual([]);
     expect(splitter.push("xx\nok\n")).toEqual(["ok"]);
-    expect(splitter.push("y".repeat(30) + "\nfine\n")).toEqual(["fine"]);
+    expect(splitter.push(`${"y".repeat(30)}\nfine\n`)).toEqual(["fine"]);
     expect(splitter.dropped).toBe(2);
   });
 });

@@ -13,7 +13,7 @@ export { NOAH_AGENT };
  * (`report_status`), records the creator's answers (`answer_checkpoint`, or `ask_creator` in the
  * AI tool's form), presents the checkpoints that wait as one stack and records the
  * answer (`open_stack`, `ask_stack`, `answer_stack`), hands work over
- * (`delegate`), reports what he read outside (`record_external_read`) and asks the creator for an
+ * (`delegate`), holds the team once the creator agreed (`pause_team`), reports what he read outside (`record_external_read`) and asks the creator for an
  * action reserved to them, such as creating an agent (`request_creator_action`), and asks the
  * engine to measure what the sessions consumed (`measure_usage`), and to read the state of
  * the machine (`check_environment`). He
@@ -33,6 +33,8 @@ export const NOAH_COMMANDS: ReadonlySet<string> = new Set([
   "ask_stack",
   "answer_stack",
   "delegate",
+  "summarize",
+  "pause_team",
   "record_external_read",
   "request_creator_action",
   "measure_usage",

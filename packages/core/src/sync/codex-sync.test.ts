@@ -287,6 +287,7 @@ describe("sync: Codex's hooks, rules and configuration", () => {
       "untrusted",
       "isolation",
       "decisions",
+      "budget",
     ]);
     expect(codex.find((fallback) => fallback.capability === "rules")?.reason).toContain(
       "never `ask`",

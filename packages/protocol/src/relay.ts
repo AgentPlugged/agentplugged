@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ErrorCode, type ErrorPayload } from "./error-payload.js";
 import { isCanonicalBase64url, ULID_PATTERN } from "./event-envelope.js";
+import { EXTENSION_MODULE_PATTERN } from "./extension.js";
 import {
   NOTIFY_SURFACES,
   NotifyPrefsSchema,
@@ -497,6 +498,8 @@ export const RelayClientFrameSchema = z.discriminatedUnion("type", [
   }),
   /** A view asks for the notification settings of the account. */
   z.strictObject({ type: z.literal("notify_prefs_get") }),
+  /** A device asks which extension modules the account opens (decided by the account, here). */
+  z.strictObject({ type: z.literal("modules_get") }),
   /** A view changes the notification settings of the account. */
   z.strictObject({ type: z.literal("notify_prefs_set"), prefs: NotifyPrefsSchema }),
   /** A device takes back an envelope it sent that its recipient has not received. */
@@ -642,6 +645,11 @@ export const RelayServerFrameSchema = z.discriminatedUnion("type", [
     type: z.literal("notified"),
     id: PushNoticeSchema.shape.id,
     sent: z.number().int().min(0).max(1000),
+  }),
+  /** The extension modules the account opens, by name: the answer to `modules_get`. */
+  z.strictObject({
+    type: z.literal("modules"),
+    modules: z.array(z.string().regex(EXTENSION_MODULE_PATTERN)).max(32),
   }),
   /** The notification settings of the account: the answer to a request, and every change. */
   z.strictObject({ type: z.literal("notify_prefs"), prefs: NotifyPrefsSchema }),

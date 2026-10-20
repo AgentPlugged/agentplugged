@@ -96,7 +96,7 @@ describe("the correspondence table: no capability lost", () => {
       .agentCommands()
       .map((command) => command.name)
       .sort();
-    expect(commands).toHaveLength(62);
+    expect(commands).toHaveLength(65);
     expect(exposedCommands().sort()).toEqual(commands);
     expect(Object.keys(TOOL_GROUPS).length).toBeLessThanOrEqual(12);
     // No command in two actions: the count of actions is the count of commands.
@@ -104,7 +104,7 @@ describe("the correspondence table: no capability lost", () => {
       (sum, group) => sum + Object.keys(group.actions).length,
       0,
     );
-    expect(actions).toBe(62);
+    expect(actions).toBe(65);
   });
 
   it("keeps the manual of every action in the reference: description and fields", () => {
@@ -1137,7 +1137,7 @@ describe("testing an idea and the press release stay light", () => {
     expect(test / TOKEN, `${Math.round(test / TOKEN)} tokens`).toBeLessThanOrEqual(4_500);
     expect(forge / TOKEN, `${Math.round(forge / TOKEN)} tokens`).toBeLessThanOrEqual(4_500);
     expect(release / TOKEN, `${Math.round(release / TOKEN)} tokens`).toBeLessThanOrEqual(5_250);
-    expect(createCommandRegistry().agentCommands()).toHaveLength(62);
+    expect(createCommandRegistry().agentCommands()).toHaveLength(65);
   });
 });
 
@@ -1200,7 +1200,7 @@ describe("design thinking, story and deck stay light", () => {
     expect(whole, `design thinking to the end: ${Math.round(whole)} tokens`).toBeLessThanOrEqual(
       4_000,
     );
-    expect(createCommandRegistry().agentCommands()).toHaveLength(62);
+    expect(createCommandRegistry().agentCommands()).toHaveLength(65);
     expect(Object.keys(TOOL_GROUPS)).toHaveLength(10);
   });
 });
@@ -1403,7 +1403,7 @@ describe("the test framework and the API and end-to-end tests stay light", () =>
   const references = ["frameworks", "generate", "ci"].map((name) => own(`references/${name}.md`));
 
   it("adds no tool and no action: the plan is for the creator's command line", () => {
-    expect(createCommandRegistry().agentCommands()).toHaveLength(62);
+    expect(createCommandRegistry().agentCommands()).toHaveLength(65);
     expect(createCommandRegistry().names()).toContain("tests");
     expect(exposedCommands()).not.toContain("tests");
     expect(Object.keys(TOOL_GROUPS)).toHaveLength(10);
@@ -1607,7 +1607,7 @@ describe("a deep research is light, and reusing it is lighter", () => {
     expect(file("references/external.md").length).toBeLessThanOrEqual(2_300);
     expect(file("references/candidates.md").length).toBeLessThanOrEqual(2_300);
     expect(file("assets/page-template.md").length).toBeLessThanOrEqual(1_320);
-    expect(createCommandRegistry().agentCommands()).toHaveLength(62);
+    expect(createCommandRegistry().agentCommands()).toHaveLength(65);
     expect(Object.keys(TOOL_GROUPS)).toHaveLength(10);
   });
 
@@ -1742,7 +1742,7 @@ describe("the round table stays light", () => {
   it("adds no tool: an action of `chat`, with the fields of the engine's record", () => {
     expect(Object.keys(TOOL_GROUPS).length).toBeLessThanOrEqual(12);
     expect(TOOL_GROUPS.chat?.actions.table?.command).toBe("round_table");
-    expect(createCommandRegistry().agentCommands()).toHaveLength(62);
+    expect(createCommandRegistry().agentCommands()).toHaveLength(65);
   });
 
   it("reads only the persona of the agents seated, a fraction of their files", () => {

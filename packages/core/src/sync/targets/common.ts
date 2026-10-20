@@ -18,7 +18,7 @@ import { type Definition, isMarkdown, SKILL_FILE } from "../../method/definition
 import type { MethodSource } from "../../method/method-source.js";
 import { isInherit } from "../../models/model-table.js";
 import { type ResolvedAgent, renderAgentBody } from "../agent-render.js";
-import type { McpServerLaunch } from "../mcp.js";
+import type { ExtensionMcpServer, McpServerLaunch } from "../mcp.js";
 import type { CodexRuleSettings } from "../rule-permissions.js";
 
 /** Who a generated file is for: one tool, or several (`shared`). */
@@ -50,6 +50,8 @@ export interface RenderInput {
   readonly models: ModelTable;
   /** How the AI tools start the `agentplugged` MCP server (`mcpLaunch`). */
   readonly mcpLaunch: McpServerLaunch;
+  /** Extra MCP servers a program built on the engine asks to declare beside `agentplugged`. */
+  readonly extensionServers?: readonly ExtensionMcpServer[];
   /**
    * The command that runs the engine from a shell on this machine (`engineCommand`), written in
    * place of `npx agentplugged` in everything generated for the agents.

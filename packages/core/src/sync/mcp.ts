@@ -247,6 +247,8 @@ export interface McpFileOutcome {
   readonly record: SettingsRecord | undefined;
   /** The file holds another `agentplugged` server, the creator's: left as is. */
   readonly conflict: boolean;
+  /** Extension servers (by name) whose entry is the creator's: left as is. */
+  readonly extraConflicts?: readonly string[];
 }
 
 /** Equal JSON values, whatever the order of their keys. */
@@ -265,7 +267,7 @@ const ENTRY_KEY = `mcpServers.${MCP_SERVER_NAME}`;
  * `mcpServers` when `sync` added it and it is left empty), and a file `sync` created is deleted
  * when nothing remains; without a record, nothing is touched.
  */
-export function reconcileMcpFile(
+function reconcileMainEntry(
   file: McpJsonFile,
   current: Json | undefined,
   targeted: boolean,
@@ -319,6 +321,189 @@ export function reconcileMcpFile(
     next: previous.created && empty ? undefined : result,
     record: undefined,
     conflict: false,
+  };
+}
+
+/**
+ * An MCP server that a program built on the engine asks `sync` to declare next to `agentplugged`
+ * in the tools' MCP files. The engine does not know what it serves: it writes the entry, records
+ * it, brings it to the launch given now and removes it when it is no longer given.
+ */
+export interface ExtensionMcpServer {
+  readonly name: string;
+  readonly launch: McpServerLaunch;
+}
+
+/** The name of an extension server: lowercase letters, digits, `_` and `-`, not `agentplugged`. */
+export const EXTENSION_SERVER_NAME = /^[a-z][a-z0-9_-]{0,63}$/;
+
+/** The servers of a request that can be declared: a valid name, never the engine's own. */
+export function usableExtensionServers(
+  extras: readonly ExtensionMcpServer[],
+): readonly ExtensionMcpServer[] {
+  return extras.filter(
+    (extra) => extra.name !== MCP_SERVER_NAME && EXTENSION_SERVER_NAME.test(extra.name),
+  );
+}
+
+const SERVERS_PREFIX = "mcpServers.";
+/**
+ * Beside each recorded extension entry, the manifest keeps what `sync` wrote there
+ * (`mcpEntry.<name>=<canonical JSON>`), so that an entry the creator replaced since is told from
+ * the one `sync` wrote: the first is never rewritten nor removed.
+ */
+const WRITTEN_PREFIX = "mcpEntry.";
+
+const writtenKey = (name: string, entry: unknown): string =>
+  `${WRITTEN_PREFIX}${name}=${fromUtf8(canonicalBytes(entry))}`;
+
+const isWrittenKeyOf = (key: string, name: string): boolean =>
+  key.startsWith(`${WRITTEN_PREFIX}${name}=`);
+
+/** What `sync` wrote for `name`, from the record; undefined for a record that predates it. */
+function writtenEntry(keys: readonly string[], name: string): unknown {
+  const key = keys.find((item) => isWrittenKeyOf(item, name));
+  if (key === undefined) return undefined;
+  try {
+    return JSON.parse(key.slice(`${WRITTEN_PREFIX}${name}=`.length)) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+/** True while the entry in the file is still the one `sync` wrote (or cannot be told apart). */
+function stillOurs(keys: readonly string[], name: string, found: unknown): boolean {
+  const written = writtenEntry(keys, name);
+  return written === undefined || sameJson(written, found);
+}
+
+/**
+ * Takes out of the result what dropping extension entries left empty: an `mcpServers` that `sync`
+ * introduced, and a file that `sync` created.
+ */
+function tidyServers(
+  next: Json | undefined | "same",
+  current: Json | undefined,
+  previous: SettingsRecord | undefined,
+): Json | undefined | "same" {
+  const target = next === "same" ? current : next;
+  if (target === undefined || !isRecord(target.mcpServers)) return next;
+  if (Object.keys(target.mcpServers).length > 0) return next;
+  if (previous?.keys.includes("mcpServers") !== true) return next;
+  const { mcpServers: _gone, ...rest } = target;
+  if (Object.keys(rest).length === 0 && previous.created) return undefined;
+  return rest;
+}
+
+/**
+ * `reconcileMainEntry` for the `agentplugged` server, then the same rules for each extension
+ * server: while the tool is targeted, an entry is created or brought to the launch given now; an
+ * entry is ours when the manifest recorded it or when it is exactly the launch given now, any
+ * other is the creator's (`extraConflicts`, left as is). An entry `sync` recorded and that is no
+ * longer given is removed, and all of them are once the tool leaves the list. Without extension
+ * servers (given or recorded) it is exactly `reconcileMainEntry`.
+ */
+export function reconcileMcpFile(
+  file: McpJsonFile,
+  current: Json | undefined,
+  targeted: boolean,
+  launch: McpServerLaunch,
+  previous: SettingsRecord | undefined,
+  extras: readonly ExtensionMcpServer[] = [],
+): McpFileOutcome {
+  const recordedExtras = (previous?.keys ?? [])
+    .filter((key) => key.startsWith(SERVERS_PREFIX) && key !== ENTRY_KEY)
+    .map((key) => key.slice(SERVERS_PREFIX.length));
+  const wanted = targeted ? usableExtensionServers(extras) : [];
+  if (wanted.length === 0 && recordedExtras.length === 0) {
+    return reconcileMainEntry(file, current, targeted, launch, previous);
+  }
+  // 1. Recorded entries that are no longer given go away first, unless the creator replaced them
+  // since: such an entry is theirs now, left as it is, and forgotten by the manifest.
+  const kept = new Set(wanted.map((extra) => extra.name));
+  const dropped = recordedExtras.filter((name) => !kept.has(name));
+  const previousKeys = previous?.keys ?? [];
+  const removable = dropped.filter((name) => {
+    if (current === undefined || !isRecord(current.mcpServers)) return false;
+    if (!Object.hasOwn(current.mcpServers, name)) return false;
+    return stillOurs(previousKeys, name, current.mcpServers[name]);
+  });
+  let base = current;
+  if (removable.length > 0 && current !== undefined && isRecord(current.mcpServers)) {
+    const servers = { ...current.mcpServers };
+    for (const name of removable) delete servers[name];
+    base = { ...current, mcpServers: servers };
+  }
+  const trimmed =
+    previous === undefined
+      ? undefined
+      : {
+          ...previous,
+          keys: previous.keys.filter(
+            (key) => !dropped.some((n) => key === SERVERS_PREFIX + n || isWrittenKeyOf(key, n)),
+          ),
+        };
+  // 2. The `agentplugged` entry, as ever.
+  const main = reconcileMainEntry(file, base, targeted, launch, trimmed);
+  let working: Json | undefined = main.next === "same" ? base : main.next;
+  let record = main.record;
+  // A file that must not be created (and does not exist) gets nothing.
+  if (wanted.length === 0 || (base === undefined && file.existingOnly)) {
+    return {
+      next: tidyServers(working === current ? main.next : working, current, previous),
+      record,
+      conflict: main.conflict,
+    };
+  }
+  // 3. The extension entries given now.
+  const servers: Json = isRecord(working?.mcpServers) ? { ...working.mcpServers } : {};
+  const introduced: string[] = [];
+  const extraConflicts: string[] = [];
+  const forgotten: string[] = [];
+  const rewritten: string[] = [];
+  let changed = false;
+  for (const extra of wanted) {
+    const key = SERVERS_PREFIX + extra.name;
+    const entry = mcpServerEntry(file, extra.launch);
+    const exists = Object.hasOwn(servers, extra.name);
+    const recorded = trimmed?.keys.includes(key) === true;
+    if (exists && sameJson(servers[extra.name], entry)) {
+      if (recorded) {
+        introduced.push(key, writtenKey(extra.name, entry));
+        rewritten.push(extra.name);
+      }
+      continue;
+    }
+    // An entry the creator replaced since `sync` wrote it is theirs: left as it is, forgotten.
+    if (exists && (!recorded || !stillOurs(trimmed?.keys ?? [], extra.name, servers[extra.name]))) {
+      extraConflicts.push(extra.name);
+      forgotten.push(extra.name);
+      continue;
+    }
+    servers[extra.name] = entry;
+    introduced.push(key, writtenKey(extra.name, entry));
+    rewritten.push(extra.name);
+    changed = true;
+  }
+  if (changed) working = { ...(working ?? {}), mcpServers: servers };
+  if (introduced.length > 0 || forgotten.length > 0) {
+    const stale = (key: string): boolean =>
+      forgotten.some((n) => key === SERVERS_PREFIX + n || isWrittenKeyOf(key, n)) ||
+      rewritten.some((n) => isWrittenKeyOf(key, n));
+    const keys = [
+      ...new Set([...(record?.keys ?? []).filter((key) => !stale(key)), ...introduced]),
+    ];
+    record =
+      keys.length === 0
+        ? undefined
+        : { created: record?.created ?? trimmed?.created ?? current === undefined, keys };
+  }
+  const next = changed || working !== current ? working : main.next;
+  return {
+    next: next === current ? "same" : next,
+    record,
+    conflict: main.conflict,
+    ...(extraConflicts.length > 0 ? { extraConflicts } : {}),
   };
 }
 

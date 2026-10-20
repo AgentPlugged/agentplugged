@@ -191,6 +191,15 @@ describe("Claude Code launch plan", () => {
     ).toThrow(RunRequestInvalid);
   });
 
+  it("gives a new session a display name for the tool's list of sessions, on one line", () => {
+    const named = claudeCodeTranslator.plan(request({ sessionName: "Noah — Kalo\nrm -rf" })).args;
+    expect(named).toEqual(expect.arrayContaining(["--name", "Noah — Kalo rm -rf"]));
+    // A session that is continued keeps the name it has.
+    expect(
+      claudeCodeTranslator.plan(request({ sessionName: "Noah — Kalo", resume: "abc-123" })).args,
+    ).not.toContain("--name");
+  });
+
   it("names a new session with a UUID chosen by the caller, never together with a resume", () => {
     const id = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
     expect(claudeCodeTranslator.plan(request({ sessionId: id })).args).toEqual(
@@ -227,6 +236,89 @@ describe("Claude Code launch plan", () => {
       interceptsPermissions: false,
       canResume: true,
       nativePause: false,
+      subAgents: true,
+      liveInput: true,
+    });
+  });
+
+  describe("an agent that launches sub-agents", () => {
+    const launching = (sub: { mainSessionDeny?: readonly string[] } = {}): RunRequest =>
+      request({
+        permissions: {
+          level: "edit",
+          allowMcpServers: ["agentplugged"],
+          projectRules: { allow: ["Bash(node:*)"], deny: ["Read(./secret)"] },
+          subAgents: sub,
+        },
+      });
+
+    it("allows the agent tool by name, under the same mode, with no way around the checks", () => {
+      const { args } = claudeCodeTranslator.plan(launching());
+      const allowed = args.slice(args.indexOf("--allowedTools") + 1);
+      expect(allowed).toContain("Agent");
+      expect(allowed).toContain("mcp__agentplugged");
+      expect(allowed).not.toContain("Write");
+      expect(args).toContain("acceptEdits");
+      expect(args).not.toContain("--dangerously-skip-permissions");
+      expect(args).not.toContain("bypassPermissions");
+      // Nothing was asked to be kept from the session alone: no agent definition.
+      expect(args).not.toContain("--agents");
+      expect(args).not.toContain("--agent");
+    });
+
+    it("keeps the floor of refusals, which the sub-agents inherit", () => {
+      const { args, settings } = claudeCodeTranslator.plan(
+        launching({ mainSessionDeny: ["mcp__agentplugged__guard"] }),
+      );
+      const denied = args.slice(args.indexOf("--disallowedTools") + 1);
+      expect(denied).toEqual(
+        expect.arrayContaining([
+          "Read(//**/.env)",
+          "Read(~/.ssh/**)",
+          "Read(~/.claude/.credentials.json)",
+        ]),
+      );
+      // The session's own refusals are not on the command line nor in the settings file, which the
+      // sub-agents read too; the product's rules are, as for any run.
+      expect(denied).not.toContain("mcp__agentplugged__guard");
+      expect(settings).not.toContain("mcp__agentplugged__guard");
+      expect(settings).toContain("Read(./secret)");
+    });
+
+    it("runs the session as an agent of the launch that carries the refusals of its own", () => {
+      const own = ["mcp__agentplugged__guard", "mcp__agentplugged__checkpoint"];
+      const { args } = claudeCodeTranslator.plan(launching({ mainSessionDeny: own }));
+      const defined = args[args.indexOf("--agents") + 1] ?? "";
+      const parsed = JSON.parse(defined) as Record<string, { disallowedTools: string[] }>;
+      expect(Object.keys(parsed)).toEqual(["bridge-main"]);
+      expect(parsed["bridge-main"]?.disallowedTools).toEqual(own);
+      expect(args[args.indexOf("--agent") + 1]).toBe("bridge-main");
+      // The prompt still travels on the standard input, never on the command line.
+      expect(args.join(" ")).not.toContain("do it");
+    });
+
+    it("refuses a refusal that is not a rule, and no tool at all together with sub-agents", () => {
+      expect(() => claudeCodeTranslator.plan(launching({ mainSessionDeny: ["x\ny"] }))).toThrow(
+        RunRequestInvalid,
+      );
+      for (const bad of ["Bash(a & b)", "Read(%USERPROFILE%)", "Agent(x y)", "a b"]) {
+        expect(() => claudeCodeTranslator.plan(launching({ mainSessionDeny: [bad] }))).toThrow(
+          RunRequestInvalid,
+        );
+      }
+      expect(() =>
+        claudeCodeTranslator.plan(
+          request({ permissions: { level: "edit", noTools: true, subAgents: {} } }),
+        ),
+      ).toThrow(RunRequestInvalid);
+    });
+
+    it("gives no sub-agent tool to a run that did not ask for it", () => {
+      const { args } = claudeCodeTranslator.plan(
+        request({ permissions: { level: "edit", allowMcpServers: ["agentplugged"] } }),
+      );
+      expect(args.slice(args.indexOf("--allowedTools") + 1)).not.toContain("Agent");
+      expect(args).not.toContain("--agents");
     });
   });
 });

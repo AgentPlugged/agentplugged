@@ -250,6 +250,7 @@ describe("MCP server", () => {
       "skill",
       "status",
       "story",
+      "summary",
       "task",
       "to",
       "workshop",

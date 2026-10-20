@@ -13,6 +13,7 @@ import {
 } from "../index.js";
 import { MemoryFiles, shippedMethod } from "../testing/memory-files.js";
 import {
+  CALL_HOOK_MATCHER,
   claudeTrustHooks,
   hookValue,
   isTrustHook,
@@ -155,6 +156,7 @@ describe("Claude Code hooks of untrusted content", () => {
     // Only the installations are gated: the other rules are written as the tool's own.
     expect(hooks.PreToolUse.map((group) => group.matcher)).toEqual([
       "Bash|PowerShell",
+      CALL_HOOK_MATCHER,
       "Write",
       "Edit",
       "MultiEdit",
@@ -182,6 +184,7 @@ describe("Claude Code hooks of untrusted content", () => {
     // A rule that denies is refused by the tool first: nothing to ask.
     const denied = claudeTrustHooks({ ...DEFAULT_RULES, install_dependency: "deny" });
     expect(denied.PreToolUse.map((group) => group.matcher)).toEqual([
+      CALL_HOOK_MATCHER,
       "Write",
       "Edit",
       "MultiEdit",
@@ -203,7 +206,7 @@ describe("Claude Code hooks of untrusted content", () => {
     const once = withTrustHooks(settings, hooks);
     expect(withTrustHooks(once, hooks)).toEqual(once);
     expect(once.hooks.PreToolUse[0]).toEqual({ matcher: "Bash|PowerShell", hooks: [mine] });
-    expect(once.hooks.PreToolUse).toHaveLength(8);
+    expect(once.hooks.PreToolUse).toHaveLength(9);
     expect(once.hooks.Stop).toEqual([{ hooks: [mine] }]);
     expect(withTrustHooks(once, undefined)).toEqual(settings);
 

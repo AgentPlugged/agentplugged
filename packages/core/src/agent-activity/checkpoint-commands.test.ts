@@ -672,7 +672,9 @@ describe("no resolution", () => {
     // 60 with `ready`: it records the readiness report and the creator's gestures, opens a decision, answers no checkpoint.
     // 61 with `export_review`: it writes a review request that stands alone in a file, answers no checkpoint.
     // 62 with `acceptance_qa`: it records the closed report of the acceptance QA in a browser, answers no checkpoint.
-    expect(names).toHaveLength(62);
+    // 63 with `check_call`: the hook before every tool call, it refuses a call and answers no checkpoint.
+    // 64 with `summarize`: Noah's note of an exchange, it answers no checkpoint.
+    expect(names).toHaveLength(65);
     const answering = names.filter((name) =>
       /resolve|validate|waive|close|approve|answer|decide|ask_creator|ask_stack/.test(name),
     );

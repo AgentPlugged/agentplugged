@@ -164,14 +164,17 @@ describe("sync to the four tools", () => {
       "codex.untrusted",
       "codex.isolation",
       "codex.decisions",
+      "codex.budget",
       // Antigravity CLI's plugin applies the rules, records the reads and the creator's messages.
       "antigravity.isolation",
       "antigravity.decisions",
+      "antigravity.budget",
       // Cursor's hooks apply the permissions, record the reads, the creator's messages and the installations.
       "cursor.rules",
       "cursor.isolation",
       "cursor.decisions",
       "cursor.usage",
+      "cursor.budget",
     ]);
     for (const fallback of result.fallbacks) {
       expect(files.reference()).toContain(
@@ -375,6 +378,7 @@ describe("compatibility matrix", () => {
       "codex.untrusted",
       "codex.isolation",
       "codex.decisions",
+      "codex.budget",
     ]);
     expect(actions(again)["AGENTS.md"]).toBe("updated");
     expect(files.reference()).toContain("- Codex, rules: ");

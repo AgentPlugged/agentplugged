@@ -2,6 +2,33 @@
 
 All notable changes to `agentplugged`, newest first. Versions follow semantic versioning.
 
+## 1.3.0 - 2026-10-20
+
+### New features
+
+- Stop a story at its budget at the nearest tool call, through a hook of Claude Code that reads the measured cost and refuses the next call, and hold the team's pause at the same point while an agent writes.
+- Let Noah write a one-line note of each exchange with the creator to the journal (`agent summarize`), shown in the latest notes of the state, so that a fresh session takes the thread up without any session to resume.
+- Add an extension point to the journal: signed, ordered events named x.<module>.<type> that an engine ignores without stopping when it does not know the module, and extra MCP servers that sync can declare.
+- Let a program built on the engine declare its extra MCP server for Codex and Antigravity too, and leave alone an entry the user replaced instead of rewriting or removing it.
+- Let Noah hold the whole team himself (`agent pause`, the same `team.paused` fact the pause button writes) once the creator said yes to his proposal to adjust the plan after changes of course pile up; resuming stays the creator's gesture.
+- Noah now answers briefly and in plain words to a dictated message, and the spoken reading drops icons, agent prefixes, emojis and tables.
+- Tell Noah, in the instructions that sync writes, that a program on the creator's machine may start him without a head, so that he launches his sub-agents himself and respects the team's pause.
+- Add a team pause written to the journal that Noah and every sub-agent respect, so the creator can hold all the agents of a product and resume them.
+- A tool run can now take further messages while it works, so that a message to the lead agent no longer waits for its sub-agents to finish.
+- A tool run can now launch sub-agents under the same permission plan, with the refusals meant for the launching session kept away from its sub-agents.
+
+### Fixes
+
+- Noah's spoken-answer rule now applies whenever his answer will be read aloud, whether the message was typed or dictated in the web view or on the phone.
+
+### What was tried, and what was not
+
+- Works, with automated tests: the team pause, the note of each exchange, the budget check before each tool call, the pause written by Noah, and the reading of a journal across 1.2.0 and 1.3.0.
+- Tried for real only with Claude Code and on Windows: the budget hook, a sub-agent that reads the pause through the engine, a lead agent that takes messages while its sub-agents work. The pause's hold on writes is covered by automated tests only.
+- The budget is measured at the engine's public price table, which gives about 2.7 times less than the cost Claude Code announces for Haiku 5.5, so a ceiling can be reached later than the real bill; a call already started is not cut.
+- Not tried yet: Codex, Antigravity CLI, Cursor and Kimi (they keep the earlier behaviour, with a fallback that is said), macOS, and Linux beyond a short trial in a container (install, build and start of the MCP server only).
+- A product pinned to 1.2.0 keeps working and is not written the new events; an engine 1.2.0 that meets one answers that it must be updated, and changes nothing. It refuses an extension event as invalid.
+
 ## 1.2.0 - 2026-10-19
 
 ### New features

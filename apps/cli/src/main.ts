@@ -136,6 +136,7 @@ import {
   type ValidationEntry,
   validateInstallChannel,
   type WorkspaceFiles,
+  workingCopyProductRoot,
   writeInstallChannel,
 } from "@agentplugged/core";
 import {
@@ -641,7 +642,8 @@ async function runMcp(
         // `read_memory`, `promote_lesson`: the common memory of this machine.
         commonMemory: new NodeCommonMemory(),
         // `measure_usage` and the end of an agent run: what the AI tool traces say.
-        usageTraces: new NodeUsageTraces({ root: environment.cwd }),
+        // The product's folder, also when the server runs in a story's working copy.
+        usageTraces: new NodeUsageTraces({ root: workingCopyProductRoot(environment.cwd) }),
         // `check_ci`: the CI of a story's pull request, through the forge's tool.
         ciReader: ciReaderOf(environment),
         // `get_trace`: the tests that cite a requirement, through Git.

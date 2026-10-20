@@ -13,7 +13,13 @@ import { isInherit } from "../../models/model-table.js";
 import type { AntigravityPolicy } from "../../trust/antigravity-policy.js";
 import { renderAgentBody } from "../agent-render.js";
 import { renderCodexRules } from "../codex-rules.js";
-import { MCP_SERVER_NAME, type McpServerLaunch, withEngineCommand } from "../mcp.js";
+import {
+  type ExtensionMcpServer,
+  MCP_SERVER_NAME,
+  type McpServerLaunch,
+  usableExtensionServers,
+  withEngineCommand,
+} from "../mcp.js";
 import type { CodexRuleSettings } from "../rule-permissions.js";
 import { agentsOf, modelOf, type RenderInput, type Target } from "./common.js";
 
@@ -129,7 +135,11 @@ export function codexApprovalToml(policy: "never" | "on-request"): string {
  * tools run without approval, and the hooks of the project (`renderCodexHooks`). Codex reads this
  * file only for a project marked as trusted, and runs the hooks once the creator approved them.
  */
-export function renderCodexConfig(launch: McpServerLaunch, rules?: CodexRuleSettings): string {
+export function renderCodexConfig(
+  launch: McpServerLaunch,
+  rules?: CodexRuleSettings,
+  extensionServers: readonly ExtensionMcpServer[] = [],
+): string {
   const args = launch.args.map(tomlString).join(", ");
   // The permission rules: the sandbox follows `edit_code`, network and web search
   // follow `internet`; nothing is asked while agents edit on their own.
@@ -145,6 +155,13 @@ export function renderCodexConfig(launch: McpServerLaunch, rules?: CodexRuleSett
   ];
   const network =
     section.length === 0 ? "" : `\n[sandbox_workspace_write]\n${section.join("\n")}\n`;
+  // The servers a program built on the engine asks for, beside the engine's own.
+  const extras = usableExtensionServers(extensionServers)
+    .map(
+      (extra) =>
+        `\n[mcp_servers.${extra.name}]\ncommand = ${tomlString(extra.launch.command)}\nargs = [${extra.launch.args.map(tomlString).join(", ")}]\ndefault_tools_approval_mode = "approve"\n`,
+    )
+    .join("");
   return `${GENERATED_HEADER_HASH}
 sandbox_mode = "${sandbox}"
 approval_policy = ${approval}
@@ -153,7 +170,7 @@ ${webSearch}${network}
 command = ${tomlString(launch.command)}
 args = [${args}]
 default_tools_approval_mode = "approve"
-
+${extras}
 ${renderCodexHooks()}`;
 }
 
@@ -204,7 +221,7 @@ export function renderCodex(input: RenderInput): Target[] {
   }));
   targets.push({
     path: CODEX_CONFIG_PATH,
-    content: renderCodexConfig(input.mcpLaunch, input.codexRules),
+    content: renderCodexConfig(input.mcpLaunch, input.codexRules, input.extensionServers),
     group: "codex",
   });
   return targets;

@@ -96,6 +96,8 @@ export const TOOL_GROUPS: Readonly<Record<string, ToolGroup>> = {
     actions: {
       status: { command: "report_status" },
       delegate: { command: "delegate" },
+      summarize: { command: "summarize" },
+      pause: { command: "pause_team" },
       workshop: { command: "workshop" },
     },
   },
@@ -106,6 +108,7 @@ export const TOOL_GROUPS: Readonly<Record<string, ToolGroup>> = {
       check: { command: "check_action", rename: WHAT },
       external_read: { command: "record_external_read" },
       write: { command: "check_write" },
+      call: { command: "check_call" },
       creator_action: { command: "request_creator_action", rename: WHAT },
       read_sensitive: { command: "read_sensitive" },
       write_sensitive: { command: "write_sensitive" },

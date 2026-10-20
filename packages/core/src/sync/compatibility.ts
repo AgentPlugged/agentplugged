@@ -44,6 +44,12 @@ export const CAPABILITIES = [
    * nothing, and never estimates.
    */
   "usage",
+  /**
+   * The stop at a story's budget, at the nearest tool call: a hook sees each call before it runs
+   * and refuses the next one once the ceiling is reached. In a fallback the engine reads the cost
+   * afterwards and opens the budget checkpoint then.
+   */
+  "budget",
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -114,6 +120,16 @@ export const CURSOR_USAGE_REASON =
 /** Why a tool has the "usage" fallback: the engine reads none of its traces. */
 export const USAGE_REASON =
   "the engine reads no trace of this tool: it measures nothing of its sessions (`measure.usage` answers `available: false`) and never estimates it.";
+
+/** Why a tool has the "budget" fallback: no hook sees each tool call before it runs. */
+export const BUDGET_REASON =
+  "this tool has no hook that sees each tool call before it runs, so the engine cannot stop the work at a story's budget at the nearest call and cannot hold the team's pause while an agent writes: the cost is read afterwards (where the engine can read the tool's traces) and the budget checkpoint opens then.";
+
+const BUDGET_FALLBACK: CompatibilityCell = {
+  support: "fallback",
+  files: [],
+  reason: BUDGET_REASON,
+};
 
 const CURSOR_DECISIONS_FALLBACK: CompatibilityCell = {
   support: "fallback",
@@ -313,6 +329,8 @@ export const COMPATIBILITY: readonly ClientCompatibility[] = [
       },
       // Claude Code's transcripts, with the tokens of each answer.
       usage: { support: "native", files: [] },
+      // The hook before every tool call reads the story's cost and refuses the call after the ceiling.
+      budget: { support: "native", files: [".claude/settings.json"] },
     },
   },
   {
@@ -338,6 +356,7 @@ export const COMPATIBILITY: readonly ClientCompatibility[] = [
       installs: { support: "native", files: CODEX_GUARD_FILES },
       // Codex's rollouts, read from the format observed on 0.160.1.
       usage: { support: "native", files: [] },
+      budget: BUDGET_FALLBACK,
     },
   },
   {
@@ -364,6 +383,7 @@ export const COMPATIBILITY: readonly ClientCompatibility[] = [
       installs: { support: "native", files: ANTIGRAVITY_GUARD_FILES },
       // Antigravity's conversation transcripts.
       usage: { support: "native", files: [] },
+      budget: BUDGET_FALLBACK,
     },
   },
   {
@@ -402,6 +422,7 @@ export const COMPATIBILITY: readonly ClientCompatibility[] = [
       decisions: CURSOR_DECISIONS_FALLBACK,
       installs: { support: "native", files: CURSOR_GUARD_FILES },
       usage: { support: "fallback", files: [], reason: CURSOR_USAGE_REASON },
+      budget: BUDGET_FALLBACK,
     },
   },
 ];

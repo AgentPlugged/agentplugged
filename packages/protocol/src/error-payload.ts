@@ -483,6 +483,11 @@ export const ErrorCode = {
    */
   DELEGATION_INVALID: "DELEGATION_INVALID",
   /**
+   * `pause_team`: the team is already paused, there is nothing more to hold. Nothing was
+   * written. `details: { since }`.
+   */
+  TEAM_ALREADY_PAUSED: "TEAM_ALREADY_PAUSED",
+  /**
    * A review cannot start, be given, sorted, read or posted (`start_review`,
    * `submit_review`, `triage_review`, `get_review`, `publish_review`). Nothing was written.
    * `details: { story, reason, … }` (`REVIEW_NOT_POSSIBLE_REASONS`).

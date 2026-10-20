@@ -16,7 +16,7 @@ const CLOSED = [
   "rel" + "ay",
   "rel" + "ay-client",
   "rel" + "ay-testkit",
-  "i18n-" + "cockpit",
+  "i18n-" + "cock" + "pit",
 ];
 const PRIVATE_NAME = new RegExp(`@agentplugged/(?:${CLOSED.join("|")})`);
 const PRIVATE_NAME_EXACT = new RegExp(`^@agentplugged/(?:${CLOSED.join("|")})$`);

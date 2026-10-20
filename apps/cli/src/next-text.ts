@@ -281,7 +281,15 @@ export function formatNext(t: Translate, result: NextResult): string {
   }
   // The points the creator keeps: work that goes on without them, or where it stops.
   if (result.independent === true) lines.push(t("next.independent"));
-  if (result.stop === true) lines.push(t("next.stop"));
+  if (result.paused !== undefined) {
+    lines.push(
+      t(result.paused.reason === "emergency_stop" ? "next.paused.stopped" : "next.paused", {
+        since: displayText(result.paused.since),
+      }),
+    );
+  } else if (result.stop === true) {
+    lines.push(t("next.stop"));
+  }
   const morning = result.morning;
   if (morning !== undefined && morning.done_total + morning.decided_total > 0) {
     lines.push(
@@ -416,6 +424,7 @@ export function nextJson(result: NextResult): string {
       ...(result.point === undefined ? {} : { point: { ...result.point } }),
       ...(result.independent === true ? { independent: true } : {}),
       ...(result.stop === true ? { stop: true } : {}),
+      ...(result.paused === undefined ? {} : { paused: { ...result.paused } }),
       ...(result.pile === undefined
         ? {}
         : {

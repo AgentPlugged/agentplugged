@@ -95,6 +95,8 @@ export const STORY_START_REASONS = [
    * reached: the story waits until one of them is done.
    */
   "parallel_limit",
+  /** The creator paused the team: no agent starts or takes up a story until they resume it. */
+  "team_paused",
 ] as const;
 export type StoryStartReason = (typeof STORY_START_REASONS)[number];
 

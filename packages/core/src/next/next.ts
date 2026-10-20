@@ -88,6 +88,7 @@ import {
   sprintStories,
   storyDoneAt,
 } from "../sprints/sprint-rules.js";
+import { openPause } from "../team/team-rules.js";
 
 /**
  * Where the product stands: what blocks first (a checkpoint, a creator's key to
@@ -164,6 +165,11 @@ export const NEXT_STEPS = [
    * brief, the PRD and the architecture; its author writes it, then opens its `document` point.
    */
   "spec",
+  /**
+   * The creator paused the team: nothing starts, the agents finish the step they are on, sum up
+   * and wait for the creator to resume. Replaces whatever the method would propose.
+   */
+  "paused",
 ] as const;
 
 export type NextStepId = (typeof NEXT_STEPS)[number];
@@ -465,6 +471,11 @@ export interface NextStep {
    * agents stop here: they sum up the night (`morning`) and wait for the creator's answer.
    */
   readonly stop?: true;
+  /**
+   * On a `paused` step only: since when the creator holds the team and why (`creator`, or
+   * `emergency_stop` after the bridge cut what it had started). Start nothing until they resume.
+   */
+  readonly paused?: { readonly since: string; readonly reason: "creator" | "emergency_stop" };
   /**
    * The single stack of everything waiting for the creator: the points to open
    * together with `open_stack`, in the order to present them, and those that keep their own
@@ -1884,11 +1895,42 @@ const INDEPENDENT_STEPS: ReadonlySet<NextStepId> = new Set([
  */
 export function nextStep(state: NextState, docs: NextDocs, config: NextConfig): NextStep {
   const step = withIndependence(state, docs, config);
+  // The creator holds the team: whatever the method would propose, nothing starts.
+  const pause = openPause(state.projection);
+  if (pause !== undefined) return heldStep(step, pause);
   // Zoé's update beside a story under way, never in its place.
   const background = backgroundUpdate(state, docs, config);
   return background === undefined || step.step === "knowledge_base_update"
     ? step
     : { ...step, background };
+}
+
+/**
+ * The step of a team the creator paused. It keeps what the creator still needs to see (the points
+ * that wait, the phases, the sprint) and drops everything that names work to start.
+ */
+function heldStep(step: NextStep, pause: NonNullable<ReturnType<typeof openPause>>): NextStep {
+  return {
+    step: "paused",
+    you: true,
+    agent: null,
+    agent_name: null,
+    tool: null,
+    waiting: step.waiting,
+    command: null,
+    story: null,
+    checkpoint: null,
+    sync: null,
+    missing_tools: [],
+    pending_keys: step.pending_keys,
+    phase: step.phase,
+    phases: step.phases,
+    stray: step.stray,
+    sprint: step.sprint,
+    deferred: null,
+    stop: true,
+    paused: { since: pause.since, reason: pause.reason },
+  };
 }
 
 /**

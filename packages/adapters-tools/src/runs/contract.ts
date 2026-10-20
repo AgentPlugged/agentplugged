@@ -44,6 +44,17 @@ export interface PermissionPlan {
    * be of any kind. The floor of refusals the adapter keeps is added to them, never removed.
    */
   readonly projectRules?: { readonly allow: readonly string[]; readonly deny: readonly string[] };
+  /**
+   * The agent may launch sub-agents with the tool's own agent tool (the product's agents, written
+   * for the tool by `sync`); a tool that cannot refuses the request. The sub-agents work under the
+   * same plan: the same level, the same refusals, nothing more is allowed to them.
+   *
+   * `mainSessionDeny` lists refusals (tool rules) that hold for the agent's own session and not
+   * for the sub-agents it launches: the tools the agent has no contract for, which his
+   * sub-agents need to do their own work. Applied by running the agent's session as a defined
+   * agent of the launch, never by a rule that would reach the sub-agents too.
+   */
+  readonly subAgents?: { readonly mainSessionDeny?: readonly string[] };
 }
 
 /** One run of an agent: what to start, where, and with which permissions. */
@@ -62,12 +73,21 @@ export interface RunRequest {
    * starts (a tool that cannot name its sessions refuses it). Never together with `resume`.
    */
   readonly sessionId?: string;
+  /** A display name for a new session, shown in the tool's own list of sessions (Claude Code: `--name`). */
+  readonly sessionName?: string;
   /** False: the tool keeps no trace of the session on the disk (it cannot be resumed). Default true. */
   readonly persistSession?: boolean;
   /** A spending ceiling in US dollars, for the tools that bill by usage. */
   readonly maxBudgetUsd?: number;
   /** The run is stopped after this long (default 30 minutes). */
   readonly maxDurationMs?: number;
+  /**
+   * Keeps the run open to further messages (`ToolRun.send`) while it works, for the tools that
+   * can (`ToolCapabilities.liveInput`; any other refuses the request). The input is closed by the
+   * adapter once the tool has answered every message and has nothing left running in the
+   * background, so that a run that launches no sub-agent ends as it would without this option.
+   */
+  readonly liveInput?: boolean;
 }
 
 /**
@@ -85,6 +105,13 @@ export interface ToolCapabilities {
   readonly canResume: boolean;
   /** The run can be held and continued without stopping the process. When false, a pause is a stop and a resume. */
   readonly nativePause: boolean;
+  /** An agent run can launch sub-agents (`PermissionPlan.subAgents`). Absent: it cannot. */
+  readonly subAgents?: boolean;
+  /**
+   * A message can be written to a run while it goes on (`RunRequest.liveInput`, `ToolRun.send`).
+   * Absent: it cannot, and a message waits for the end of the run.
+   */
+  readonly liveInput?: boolean;
 }
 
 /** The consumption of a run, cumulative since its start. Absent fields are unknown, not zero. */
@@ -182,6 +209,12 @@ export interface ToolRun {
   onEvent(listener: (event: RunEvent) => void): () => void;
   /** Stops the process and everything it started. Resolves when nothing is left running. */
   stop(): Promise<void>;
+  /**
+   * Writes a further message to a run started with `liveInput`. True when the message was handed
+   * to the running program; false when it cannot be (no live input, the input is already closed,
+   * the program ended): the caller then keeps the message for the end of the run.
+   */
+  send?(text: string): boolean;
   /** Resolves, never rejects, when the process has ended and the last line was read. */
   readonly done: Promise<RunResult>;
 }
@@ -215,11 +248,18 @@ export interface ToolTranslator {
   plan(request: RunRequest): LaunchPlan;
   /** A fresh reader for one run's lines. */
   begin(): LineTranslator;
+  /** How a message is written on the input of a run started with `liveInput` (one line). */
+  frame?(text: string): string;
 }
 
 export interface LineTranslator {
   /** The events one parsed JSON line stands for (none for a line that carries nothing to report). */
   line(value: unknown): readonly RunEvent[];
+  /**
+   * True when the tool waits for input with nothing left running in the background, so that a
+   * live input may be closed after an answer. Absent: a live input is never closed by the reader.
+   */
+  idle?(): boolean;
 }
 
 /** The request asks for something the adapter refuses; nothing was started. */

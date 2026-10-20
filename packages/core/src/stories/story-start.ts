@@ -52,6 +52,7 @@ import {
 } from "../sprints/sprint-rules.js";
 import { readSprintStories } from "../sprints/sprint-stories.js";
 import { activeAgentNames, loadDefinitions } from "../sync/sync-command.js";
+import { openPause } from "../team/team-rules.js";
 import { sessionTrust } from "../trust/session.js";
 import { commitHookFiles, type TraceSkips, traceSkipsOf } from "./commit-hook.js";
 import { openPullRequest, type StoryPullRequestResult } from "./pull-request.js";
@@ -404,6 +405,10 @@ async function startStory(
   const document = documents.get(id);
 
   if (view.done(id)) return notStartable(id, "done");
+  // The creator paused the team: an agent starts, and takes up, no story until they resume it.
+  if (starter.kind === "agent" && openPause(state) !== undefined) {
+    return notStartable(id, "team_paused");
+  }
   const started = view.story?.started;
   if (started !== undefined) {
     // The fast track is entered when the story starts, never afterwards.

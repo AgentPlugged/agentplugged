@@ -12,7 +12,7 @@ import {
 } from "../../chat/antigravity-hook.js";
 import { normalizeText } from "../../init/generated.js";
 import { type AntigravityPolicy, renderPolicy } from "../../trust/antigravity-policy.js";
-import { MCP_SERVER_NAME } from "../mcp.js";
+import { MCP_SERVER_NAME, usableExtensionServers } from "../mcp.js";
 import type { RenderInput, Target } from "./common.js";
 
 /**
@@ -56,6 +56,12 @@ export function renderAntigravityPlugin(input: RenderInput, policy: AntigravityP
       json({
         mcpServers: {
           [MCP_SERVER_NAME]: { command: input.mcpLaunch.command, args: [...input.mcpLaunch.args] },
+          ...Object.fromEntries(
+            usableExtensionServers(input.extensionServers ?? []).map((extra) => [
+              extra.name,
+              { command: extra.launch.command, args: [...extra.launch.args] },
+            ]),
+          ),
         },
       }),
     ),

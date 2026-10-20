@@ -98,6 +98,7 @@ describe("get_state: an agent that waits for a point already settled can resume"
       status: "in_progress",
       phases: [{ id: "build", status: "in_progress" }],
     },
+    exchanges: [],
     sprint: { current: null, latest: null },
     deferred: { open: [] },
     deviations: { open: [] },

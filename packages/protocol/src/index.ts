@@ -86,6 +86,7 @@ export {
   CeilingIdSchema,
   MAX_BUDGET_USD,
 } from "./budget.js";
+export { type CheckCallInput, CheckCallInputSchema } from "./call-guard.js";
 export * from "./chain.js";
 export {
   ANSWER_DECISIONS,
@@ -472,6 +473,15 @@ export {
   MAX_EVENT_VERSION,
   TEST_EVENT_TYPE,
 } from "./event-versions.js";
+export * from "./exchange.js";
+export {
+  EXTENSION_DOMAIN,
+  EXTENSION_EVENT_VERSION,
+  EXTENSION_MODULE_PATTERN,
+  EXTENSION_TYPE_PATTERN,
+  extensionModuleOf,
+  isExtensionEventType,
+} from "./extension.js";
 export {
   FAST_TRACK_AGENT_REASONS,
   FAST_TRACK_ENGINE_REASONS,
@@ -847,6 +857,7 @@ export {
   ModelTableSchema,
   NO_EFFORT,
 } from "./models.js";
+export * from "./notice.js";
 export * from "./orders.js";
 export {
   type LinkRequest,
@@ -1275,6 +1286,7 @@ export {
   SyncManifestSchema,
 } from "./sync-manifest.js";
 export * from "./table.js";
+export * from "./team.js";
 export * from "./test-quality.js";
 export * from "./tolerant-reader.js";
 export {

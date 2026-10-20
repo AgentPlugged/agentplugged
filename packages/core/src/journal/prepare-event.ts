@@ -13,10 +13,12 @@ import {
   EVENT_TYPES,
   type EventEnvelope,
   type EventTypeSpec,
+  EXTENSION_EVENT_VERSION,
   eventInvalid,
   eventTypeSpec,
   eventTypeUpgrade,
   HUMAN_ONLY_EVENT_TYPES,
+  isExtensionEventType,
   isSensitiveEventType,
   isTestEventType,
   MACHINE_EVENT_TYPES,
@@ -121,6 +123,18 @@ function checkDraft(
   }
   if (isTestEventType(draft.type) && !allowTestTypes) {
     throw thrown(eventInvalid("type", EVENT_REASON.testType));
+  }
+  if (isExtensionEventType(draft.type)) {
+    // An extension event: always at the extension version, its content free (the module checks
+    // it), written by an agent or the system, encrypted like every sensitive content.
+    if (version !== undefined && version !== EXTENSION_EVENT_VERSION) {
+      throw thrown(eventInvalid("v", EVENT_REASON.invalidValue));
+    }
+    if (draft.actor.device !== undefined && draft.actor.device !== key.device) {
+      throw thrown(eventInvalid("actor.device", EVENT_REASON.invalidValue));
+    }
+    if (journalProduct !== draft.product) throw productIdMismatch(draft.product, journalProduct);
+    return;
   }
   const upgrade = eventTypeUpgrade(
     draft.type,

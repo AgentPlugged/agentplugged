@@ -336,7 +336,7 @@ describe("solving and strategy stay light", () => {
   });
 
   it("adds no tool and no action", () => {
-    expect(createCommandRegistry().agentCommands()).toHaveLength(62);
+    expect(createCommandRegistry().agentCommands()).toHaveLength(65);
     expect(Object.keys(TOOL_GROUPS)).toHaveLength(10);
   });
 });

@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { ProductAutonomySchema } from "./autonomy.js";
 import { UlidSchema } from "./event-envelope.js";
-import { PROFILE_PRESET_IDS, ProfileSchema } from "./method-config.js";
+import { PROFILE_PRESET_IDS, ProfileSchema, SemverSchema } from "./method-config.js";
+import { readTolerant } from "./tolerant-reader.js";
 
 /**
  * The life of a product, as the creator drives it from a device: creating one on a machine, saying
@@ -94,6 +95,7 @@ export const ORDER_TYPE_CREATE_PRODUCT = "product.create";
 export const ORDER_TYPE_OPEN_PRODUCT_FOLDER = "product.open_folder";
 export const ORDER_TYPE_SET_PRODUCT_STATE = "product.set_state";
 export const ORDER_TYPE_SET_PRODUCT_PROFILE = "product.set_profile";
+export const ORDER_TYPE_UPDATE_PRODUCT_ENGINE = "product.update_engine";
 
 /**
  * The creator creates a product on this machine. The place is one the machine listed in its report
@@ -150,6 +152,31 @@ export type SetProductStateParams = z.infer<typeof SetProductStateParamsSchema>;
 export const SetProductProfileParamsSchema = z.strictObject({ profile: ProfileSchema });
 export type SetProductProfileParams = z.infer<typeof SetProductProfileParamsSchema>;
 
+/**
+ * Brings a product to the engine this machine runs (what `agentplugged init --upgrade-engine` then
+ * `sync` do in a terminal). `to` is the version the creator read back before saying yes: the machine
+ * refuses when it would not move the product to that version. Absent: whatever the machine runs.
+ */
+export const UpdateProductEngineParamsSchema = z.strictObject({ to: SemverSchema.optional() });
+export type UpdateProductEngineParams = z.infer<typeof UpdateProductEngineParamsSchema>;
+
+/**
+ * What the main machine publishes of the engine a product runs (the `engine` key of
+ * `projection.state` of the published state): the version the product is pinned to, the version the
+ * machine can bring it to, and where an update asked from a device stands. The state's `state`
+ * record is open, so a view that does not know this key still reads the rest.
+ */
+export const PublishedEngineSchema = z.strictObject({
+  version: SemverSchema,
+  /** The version this machine would bring the product to; absent when it cannot update products. */
+  target: SemverSchema.optional(),
+  /** `running` while an update asked from a device is under way; `failed` when the last one did not end. */
+  update: z.enum(["running", "failed"]).optional(),
+});
+export type PublishedEngine = z.infer<typeof PublishedEngineSchema>;
+/** What a view reads of it: unknown optional fields dropped, known ones as strict as above. */
+export const PublishedEngineReader = readTolerant(PublishedEngineSchema);
+
 /** The codes a refused order of this family answers with. */
 export const PRODUCT_ORDER_CODES = {
   /** The place is not one of those this machine allows. */
@@ -172,6 +199,12 @@ export const PRODUCT_ORDER_CODES = {
   notSaved: "PRODUCT_NOT_SAVED",
   /** The folder of the product could not be opened on the machine (gone, or no explorer to open it). */
   openFailed: "PRODUCT_OPEN_FAILED",
+  /** Agents work on the product, or an update of it is already under way: it is not touched meanwhile. */
+  updateBusy: "PRODUCT_UPDATE_BUSY",
+  /** The product already runs the engine this machine runs (or a newer one). */
+  alreadyCurrent: "PRODUCT_ALREADY_CURRENT",
+  /** The machine would not bring the product to the version the creator read back. */
+  updateMismatch: "PRODUCT_UPDATE_MISMATCH",
 } as const;
 export type ProductOrderCode = (typeof PRODUCT_ORDER_CODES)[keyof typeof PRODUCT_ORDER_CODES];
 

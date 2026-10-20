@@ -148,6 +148,7 @@ describe("watching what the agents do", () => {
       { ...base, kind: "command", result: "output" },
       { ...base, kind: "read", cwd: "/work" },
       { ...base, kind: "read", terminal: false },
+      { ...base, kind: "routed", text: "noah:started" },
     ]) {
       expect(LiveLineSchema.safeParse(line).success, JSON.stringify(line)).toBe(false);
     }
@@ -169,10 +170,9 @@ describe("watching what the agents do", () => {
         dropped: 0,
         next: 1,
         more: false,
-        chain: "handed_over",
+        chain: "paused",
         working: null,
         lines: [line],
-        handover: { tool: "claude-code", cwd: "/work", command: "claude --resume abc" },
       },
     };
     expect(FilesResponseSchema.safeParse(answer).success).toBe(true);

@@ -309,12 +309,22 @@ export async function undoWebAnswer(
 /** How soon a pass looks again after a journal that could not be written. */
 const RETRY_MS = 2_000;
 
+/** One answer a pass decided: what the creator said, the order that carried it, the point's story. */
+export interface WebDecided {
+  readonly params: AnswerCheckpointParams;
+  readonly order: string;
+  readonly device: string;
+  readonly story: string | null;
+}
+
 /** What carrying out the held answers did. */
 export interface WebCarryOut {
   /** How many answers were decided. */
   readonly decided: number;
   /** How many held answers were released because they could not be carried out. */
   readonly failed: number;
+  /** The answers decided in this pass, for whoever must tell the agents (the order is the answer's). */
+  readonly answered: readonly WebDecided[];
   /** When the next window ends (epoch ms), or undefined when no answer is held any more. */
   readonly next: number | undefined;
 }
@@ -360,6 +370,7 @@ export async function carryOutWebAnswers(
   });
   let decided = 0;
   let failed = 0;
+  const answered: WebDecided[] = [];
   let next: number | undefined;
   let retry: number | undefined;
   for (const point of Object.values(checkpointsOf(state))) {
@@ -475,6 +486,12 @@ export async function carryOutWebAnswers(
         },
       });
       decided += 1;
+      answered.push({
+        params: answer.params,
+        order: answer.order,
+        device: answer.device,
+        story: point.story ?? null,
+      });
       if (merge !== undefined) await merging?.merged?.(merge).catch(() => undefined);
     } catch (error) {
       // Taken back, answered or closed meanwhile, or a rule that now refuses it: nothing to retry.
@@ -484,5 +501,10 @@ export async function carryOutWebAnswers(
       retry = now() + RETRY_MS;
     }
   }
-  return { decided, failed, next: retry === undefined ? next : Math.min(next ?? retry, retry) };
+  return {
+    decided,
+    failed,
+    answered,
+    next: retry === undefined ? next : Math.min(next ?? retry, retry),
+  };
 }

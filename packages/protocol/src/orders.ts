@@ -9,11 +9,8 @@ import {
 } from "./autonomy.js";
 import {
   ChainControlParamsSchema,
-  ChainInstructParamsSchema,
   ChainPauseParamsSchema,
   ChainResumeParamsSchema,
-  ChainSayParamsSchema,
-  ChainStartParamsSchema,
   NoahSayParamsSchema,
   ORDER_TYPE_CHAIN_INSTRUCT,
   ORDER_TYPE_CHAIN_PAUSE,
@@ -22,6 +19,7 @@ import {
   ORDER_TYPE_CHAIN_START,
   ORDER_TYPE_CHAIN_STOP,
   ORDER_TYPE_NOAH_SAY,
+  RetiredChainOrderParamsSchema,
 } from "./chain.js";
 import {
   AnswerCheckpointParamsSchema,
@@ -51,6 +49,7 @@ import {
   UnlinkForgeParamsSchema,
 } from "./forge-link.js";
 import { MACHINE_ROLE_MAX } from "./machines.js";
+import { NoahWakeParamsSchema, ORDER_TYPE_NOAH_WAKE } from "./notice.js";
 import {
   CreateProductParamsSchema,
   OpenProductFolderParamsSchema,
@@ -58,9 +57,17 @@ import {
   ORDER_TYPE_OPEN_PRODUCT_FOLDER,
   ORDER_TYPE_SET_PRODUCT_PROFILE,
   ORDER_TYPE_SET_PRODUCT_STATE,
+  ORDER_TYPE_UPDATE_PRODUCT_ENGINE,
   SetProductProfileParamsSchema,
   SetProductStateParamsSchema,
+  UpdateProductEngineParamsSchema,
 } from "./product-lifecycle.js";
+import {
+  ORDER_TYPE_TEAM_PAUSE,
+  ORDER_TYPE_TEAM_RESUME,
+  ORDER_TYPE_TEAM_STOP,
+  TeamControlParamsSchema,
+} from "./team.js";
 
 /**
  * Signed orders: every command sent to a machine is signed by the device of the creator that gives
@@ -549,15 +556,16 @@ export const BASE_ORDER_TYPES: readonly OrderTypeDeclaration[] = [
     target: "bridge",
   },
   {
-    // Run what comes next: the agents go on until a validation waits for the creator.
+    // Retired: the bridge no longer runs agents one by one. Declared so that an older device is
+    // answered with the reason (CHAIN_ORDER_RETIRED) instead of UPGRADE_REQUIRED.
     type: ORDER_TYPE_CHAIN_START,
     version: 1,
-    params: ChainStartParamsSchema,
+    params: RetiredChainOrderParamsSchema,
     risk: "medium",
     target: "primary",
   },
   {
-    // Keep the hand on the agents: pause, take up again, stop, or give an instruction.
+    // Hold the team: pause, take up again, stop.
     type: ORDER_TYPE_CHAIN_PAUSE,
     version: 1,
     params: ChainPauseParamsSchema,
@@ -579,21 +587,20 @@ export const BASE_ORDER_TYPES: readonly OrderTypeDeclaration[] = [
     target: "primary",
   },
   {
-    // The creator's own words: the signed order the journal keeps holds a digest of them, not the
-    // text, which is written once, encrypted, as an event of its own.
+    // Retired like `chain.start`. The text of an old instruction stays sealed: the order the
+    // journal could keep never holds it in clear.
     type: ORDER_TYPE_CHAIN_INSTRUCT,
     version: 1,
-    params: ChainInstructParamsSchema,
+    params: RetiredChainOrderParamsSchema,
     risk: "medium",
     target: "primary",
     sealedParams: ["text"],
   },
   {
-    // One message in a conversation with the agent the creator holds the hand on: kept like an
-    // instruction (a digest in the order, the text encrypted in an event of its own).
+    // Retired like `chain.start`; the text stays sealed.
     type: ORDER_TYPE_CHAIN_SAY,
     version: 1,
-    params: ChainSayParamsSchema,
+    params: RetiredChainOrderParamsSchema,
     risk: "medium",
     target: "primary",
     sealedParams: ["text"],
@@ -607,6 +614,36 @@ export const BASE_ORDER_TYPES: readonly OrderTypeDeclaration[] = [
     risk: "medium",
     target: "primary",
     sealedParams: ["text"],
+  },
+  {
+    // Gives Noah, once more, the notices that wait (a validation he could not read yet): no parameter.
+    type: ORDER_TYPE_NOAH_WAKE,
+    version: 1,
+    params: NoahWakeParamsSchema,
+    risk: "medium",
+    target: "primary",
+  },
+  {
+    // Hold the whole team (pause, resume) or cut it at once (emergency stop): no parameter.
+    type: ORDER_TYPE_TEAM_PAUSE,
+    version: 1,
+    params: TeamControlParamsSchema,
+    risk: "medium",
+    target: "primary",
+  },
+  {
+    type: ORDER_TYPE_TEAM_RESUME,
+    version: 1,
+    params: TeamControlParamsSchema,
+    risk: "medium",
+    target: "primary",
+  },
+  {
+    type: ORDER_TYPE_TEAM_STOP,
+    version: 1,
+    params: TeamControlParamsSchema,
+    risk: "medium",
+    target: "primary",
   },
   {
     type: ORDER_TYPE_ROTATE_PRODUCT_KEY,
@@ -660,6 +697,15 @@ export const BASE_ORDER_TYPES: readonly OrderTypeDeclaration[] = [
     type: ORDER_TYPE_SET_PRODUCT_PROFILE,
     version: 1,
     params: SetProductProfileParamsSchema,
+    risk: "medium",
+    target: "primary",
+  },
+  {
+    // Brings the product to the engine the main machine runs (`init --upgrade-engine`, then
+    // `sync`): the creator read the two versions back and said yes, so the gesture is the confirmation.
+    type: ORDER_TYPE_UPDATE_PRODUCT_ENGINE,
+    version: 1,
+    params: UpdateProductEngineParamsSchema,
     risk: "medium",
     target: "primary",
   },

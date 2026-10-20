@@ -127,7 +127,7 @@ describe("creator's actions", () => {
 
   it("adds its codes at the end of the shared list", () => {
     // Then the two codes of the delegation (`ROLE_FORBIDDEN`, `DELEGATION_INVALID`) and one of the review.
-    expect(Object.values(ErrorCode).slice(-18, -14)).toEqual([
+    expect(Object.values(ErrorCode).slice(-19, -15)).toEqual([
       "CREATOR_ACTION_NOT_RESERVED",
       "CREATOR_ACTION_UNCHANGED",
       "CREATOR_ACTION_STALE",

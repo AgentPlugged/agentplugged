@@ -31,7 +31,7 @@ describe("the readiness gate stays light", () => {
     for (const reference of REFERENCES) expect(reference.length).toBeLessThanOrEqual(1_200);
     expect(Object.keys(TOOL_GROUPS)).toHaveLength(10);
     expect(TOOL_GROUPS.review?.actions.ready).toEqual({ command: "ready" });
-    expect(createCommandRegistry().agentCommands()).toHaveLength(62);
+    expect(createCommandRegistry().agentCommands()).toHaveLength(65);
   });
 
   it("costs a few thousand tokens for a check with its gestures", () => {

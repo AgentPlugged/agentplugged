@@ -198,6 +198,7 @@ describe("declaring an order type", () => {
       "order.forge.unlink/v1",
       "order.machine.set_role/v1",
       "order.noah.say/v1",
+      "order.noah.wake/v1",
       "order.pair.offer/v1",
       "order.portfolio.set_priority/v1",
       "order.product.answer_checkpoint/v1",
@@ -210,7 +211,11 @@ describe("declaring an order type", () => {
       "order.product.set_rule/v1",
       "order.product.set_state/v1",
       "order.product.undo_checkpoint_answer/v1",
+      "order.product.update_engine/v1",
       "order.secret.set/v1",
+      "order.team.pause/v1",
+      "order.team.resume/v1",
+      "order.team.stop/v1",
     ]);
     const extended = registry.extended({
       type: "checkpoint.decide",

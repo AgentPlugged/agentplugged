@@ -49,3 +49,6 @@ allowBuilds:
   # The mobile build's libsodium binding unpacks the archive it ships (`tar -xzf libsodium/build.tgz`):
   # a local file, no download.
   react-native-libsodium: true
+  # protobufjs (a dependency of the voice runtime in the browser) declares a postinstall that only
+  # prints a notice about its own version scheme: never run.
+  protobufjs: false

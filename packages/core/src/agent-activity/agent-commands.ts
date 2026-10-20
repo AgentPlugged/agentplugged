@@ -100,6 +100,7 @@ import type { CheckpointState } from "../projection/checkpoint-reducers.js";
 import { checkpointsOf } from "../projection/checkpoint-reducers.js";
 import { computeProjection, computeProjectionDetailed } from "../projection/compute-projection.js";
 import { type DelegationEntry, delegationsOf } from "../projection/delegation-reducers.js";
+import { type ExchangeEntry, exchangesOf } from "../projection/exchange-reducers.js";
 import { type InstallEntry, installsOf } from "../projection/install-reducers.js";
 import type { LocalWarning } from "../projection/project-state.js";
 import { stacksOf } from "../projection/stack-reducers.js";
@@ -245,6 +246,11 @@ export interface FullStateView {
    * mode, on which story, with which brief.
    */
   readonly delegations: readonly DelegationEntry[];
+  /**
+   * Noah's notes at the end of each exchange with the creator, oldest first, the latest
+   * `EXCHANGES_KEPT`: what was asked, decided and promised.
+   */
+  readonly exchanges: readonly ExchangeEntry[];
   readonly product: string | null;
   /** The journal position the state was computed at, or null for an empty journal. */
   readonly journal_head: string | null;
@@ -1673,6 +1679,7 @@ export const getStateCommand = defineCommand<GetStateResult>({
         stacks: stacksView(state, now),
         installs: await installsView(context, loaded.config, state),
         delegations: delegationsOf(state).map((entry) => ({ ...entry })),
+        exchanges: exchangesOf(state).map((entry) => ({ ...entry })),
       };
       // An option reads one part in full; without one, the abridged state.
       const cursor = parsed.data.checkpoints?.before;

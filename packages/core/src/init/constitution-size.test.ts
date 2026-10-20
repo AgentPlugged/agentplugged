@@ -31,6 +31,13 @@ describe("AGENTS.md stays short", () => {
     expect(short.length).toBeLessThanOrEqual(6_000);
   });
 
+  it("tells Noah he may be started without a head, and to launch the sub-agents himself", () => {
+    const text = flat(reference);
+    expect(text).toContain("You may be started without a head");
+    expect(text).toContain("launch the sub-agents yourself");
+    expect(flat(renderConstitution())).not.toContain("without a head");
+  });
+
   it("is also short without Noah and without fallbacks", () => {
     expect(renderConstitution().length).toBeLessThanOrEqual(5_500);
   });
