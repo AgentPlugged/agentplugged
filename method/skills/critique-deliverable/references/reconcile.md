@@ -1,15 +1,10 @@
 # Reconcile with the creator's inputs
 
-Compare what the creator said with what the document holds, and report what did not land. You
-read the document and the sources: the brief, the notes in `.agentplugged/docs/research/`, any
-exchange or file the caller names.
+Compare what the creator said (the brief, `.agentplugged/docs/research/` notes, what the caller names) with the document.
 
-1. In each source, take what the creator said with feeling or weight: first the qualitative
-   (a tone, a feeling, a refusal, an image), then the constraints and promises.
-2. Look in the document for where each one lives. Missing, softened or contradicted: that is a
-   finding. What landed in other words is no finding.
-3. Keep five at most, the ones that matter most; the qualitative first.
+1. Take what they said with weight: the qualitative first (a tone, a refusal, an image), then constraints and promises.
+2. Missing, softened or contradicted in the document is a finding; what landed in other words is not.
+3. Keep five at most.
 
-Each is an objection: what did not land is the `claim`, the heading where it belongs is the
-`passage`, and the creator's own words with their source, quoted, are the `argument`. The
-`proposal` names where to add it, never a rewriting; the `proof` is the creator's answer.
+`claim`: what did not land; `passage`: where it belongs; `argument`: the creator's words, quoted,
+with their source; `proposal`: where to add it, never a rewriting; `proof`: their answer.

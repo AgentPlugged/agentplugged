@@ -92,7 +92,7 @@ export type SecurityReason = (typeof SECURITY_REASONS)[number];
 export const MAX_REVIEW_FINDINGS = 100;
 export const MAX_TRIAGE_ITEMS = 100;
 /** Closed passes without agreement before the creator is asked. */
-export const MAX_REVIEW_PASSES = 5;
+export const MAX_REVIEW_PASSES = 2;
 
 /** Acceptance criteria a story may hold, at most. */
 export const MAX_CRITERIA = 99;

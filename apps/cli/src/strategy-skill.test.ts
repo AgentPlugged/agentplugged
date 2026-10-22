@@ -65,9 +65,7 @@ describe("the strategy skill", () => {
       "assets/problem-template.md",
       "references/costs.md",
       "references/gestures.md",
-      "references/innovate-frameworks.md",
       "references/innovate.md",
-      "references/solve-methods.md",
       "references/solve.md",
     ]);
     expect((skill().frontmatter as SkillFrontmatter).metadata).toMatchObject({ agent: "lou" });
@@ -117,7 +115,7 @@ describe("the strategy skill", () => {
   });
 
   it("covers every method of the problem course and every framework of the strategy course", () => {
-    const methods = flat(annex("references/solve-methods.md")).toLowerCase();
+    const methods = flat(annex("references/solve.md")).toLowerCase();
     for (const part of [
       "five whys",
       "cause map",
@@ -143,17 +141,13 @@ describe("the strategy skill", () => {
       "risk grid",
       "trial protocol",
       "feasibility",
-      "plan, do, check, adjust",
-      "sequence and dependencies",
-      "people map",
-      "change handling",
-      "indicator board",
       "statement sharpening",
     ]) {
       expect(methods, part).toContain(part);
     }
-    expect(annex("references/solve-methods.md").match(/^- /gm)?.length).toBeGreaterThanOrEqual(30);
-    const frameworks = flat(annex("references/innovate-frameworks.md")).toLowerCase();
+    // A line a step group, the names only: the technique itself is known to the model.
+    expect(annex("references/solve.md").match(/^- [A-Z]/gm)?.length).toBeGreaterThanOrEqual(4);
+    const frameworks = flat(annex("references/innovate.md")).toLowerCase();
     for (const part of [
       "market size in three rings",
       "five forces",
@@ -184,18 +178,15 @@ describe("the strategy skill", () => {
       "s-curve",
       "technology roadmap",
       "open innovation",
-      "digital shift",
     ]) {
       expect(frameworks, part).toContain(part);
     }
-    expect(
-      annex("references/innovate-frameworks.md").match(/^- /gm)?.length,
-    ).toBeGreaterThanOrEqual(30);
+    expect(annex("references/innovate.md").match(/^- [A-Z]/gm)?.length).toBeGreaterThanOrEqual(5);
     // The courses: nine steps each, with the depth of the diagnosis, the options and the roadmap.
     const solve = flat(annex("references/solve.md"));
     for (const part of [
       "9. **Lessons**",
-      "at least ten options",
+      "at least ten, a few wild",
       "plan B",
       "confidence",
       "No dates",
@@ -204,11 +195,11 @@ describe("the strategy skill", () => {
     }
     const innovate = flat(annex("references/innovate.md"));
     for (const part of [
-      "9. **Risks.**",
-      "three different strategic options",
-      "Three phases, no dates",
+      "9. **Risks**",
+      "three different options",
+      "three phases, no dates",
       "decision gate",
-      "break-even",
+      "`costs.md`",
     ]) {
       expect(innovate, part).toContain(part);
     }
@@ -241,7 +232,7 @@ describe("the strategy skill", () => {
       "Story proposed",
       "Maya",
       "Izzy",
-      "`checkpoint.open` with `type: decision`",
+      "`checkpoint.open`, `type: decision`",
       "Write no story and no requirement yourself",
     ]) {
       expect(gestures, part).toContain(part);
@@ -304,13 +295,8 @@ describe("solving and strategy stay light", () => {
   const length = (path: string) => annex(path).length;
   const body = () => skill().body.length;
   const modes = {
-    solve: ["references/solve.md", "references/solve-methods.md", "assets/problem-template.md"],
-    innovate: [
-      "references/innovate.md",
-      "references/innovate-frameworks.md",
-      "references/costs.md",
-      "assets/innovation-template.md",
-    ],
+    solve: ["references/solve.md", "assets/problem-template.md"],
+    innovate: ["references/innovate.md", "references/costs.md", "assets/innovation-template.md"],
   } as const;
 
   it("keeps a short skill and short references, each sent to by the skill", () => {

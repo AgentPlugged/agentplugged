@@ -334,15 +334,15 @@ checks:
         en: "AI tools found: {names}"
         fr: "Outils IA trouvés : {names}"
       missing:
-        en: "No AI tool found (Claude Code, Codex, Antigravity CLI or Cursor): AgentPlugged installs anyway, but you need one to talk to the team"
-        fr: "Aucun outil IA trouvé (Claude Code, Codex, Antigravity CLI ou Cursor) : AgentPlugged s'installe quand même, mais il t'en faut un pour parler à l'équipe"
+        en: "No AI tool found (Claude Code, Codex, Antigravity CLI, Cursor or Kimi): AgentPlugged installs anyway, but you need one to talk to the team"
+        fr: "Aucun outil IA trouvé (Claude Code, Codex, Antigravity CLI, Cursor ou Kimi) : AgentPlugged s'installe quand même, mais il t'en faut un pour parler à l'équipe"
     fix:
       - steps:
           en:
-            - "Install the AI tool you prefer from its official site (Claude Code, Codex, Antigravity CLI or Cursor)."
+            - "Install the AI tool you prefer from its official site (Claude Code, Codex, Antigravity CLI, Cursor or Kimi)."
             - "Then run: npx agentplugged sync"
           fr:
-            - "Installe l'outil IA de ton choix depuis son site officiel (Claude Code, Codex, Antigravity CLI ou Cursor)."
+            - "Installe l'outil IA de ton choix depuis son site officiel (Claude Code, Codex, Antigravity CLI, Cursor ou Kimi)."
             - "Puis lance : npx agentplugged sync"
 
   - id: tools.claude-code
@@ -424,6 +424,25 @@ checks:
     group: tools
     level: warn
     detect: { kind: ai-tool, tool: cursor }
+    say:
+      ok:
+        en: "{name} {version}"
+        fr: "{name} {version}"
+      missing:
+        en: "{name} is targeted by this product but was not found on this machine"
+        fr: "{name} est ciblé par ce produit mais il est introuvable sur cette machine"
+      off_path:
+        en: "{name} {version} found in {dir}, which is not on your PATH: the engine finds it, an editor opened earlier may not"
+        fr: "{name} {version} trouvé dans {dir}, qui n'est pas dans ton PATH : le moteur le trouve, un éditeur ouvert avant peut ne pas le voir"
+      stale:
+        en: "{name} {version} is in {dir}, a folder your system knows but this program does not have yet: it was opened before"
+        fr: "{name} {version} est dans {dir}, un dossier que ton système connaît mais que ce programme n'a pas encore : il a été ouvert avant"
+    fix: *tool_fix
+
+  - id: tools.kimi
+    group: tools
+    level: warn
+    detect: { kind: ai-tool, tool: kimi }
     say:
       ok:
         en: "{name} {version}"

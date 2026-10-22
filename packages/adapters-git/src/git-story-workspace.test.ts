@@ -613,6 +613,88 @@ describe("the creator's Git workflow", () => {
     expect(gitOk(worktree, ["status", "--porcelain"])).toBe("");
   });
 
+  it("commits the paths a sync wrote (changed, deleted, new), and the merge then finds the base clean", async () => {
+    const repo = await makeRepo();
+    await mkdir(join(repo, ".claude/skills/frame"), { recursive: true });
+    await writeFile(join(repo, ".claude/skills/frame/SKILL.md"), "frame\n");
+    await writeFile(join(repo, ".mcp.json"), "{}\n");
+    await writeFile(join(repo, "mine.txt"), "mine\n");
+    await writeFile(join(repo, ".gitignore"), "ignored.txt\n");
+    gitOk(repo, ["add", "."]);
+    gitOk(repo, ["commit", "-m", "installed"]);
+    gitOk(repo, ["checkout", "-q", "-b", "feat/z"]);
+    await writeFile(join(repo, "story.txt"), "story\n");
+    gitOk(repo, ["add", "story.txt"]);
+    gitOk(repo, ["commit", "-m", "story"]);
+    gitOk(repo, ["checkout", "-q", "main"]);
+    const workspace = new GitStoryWorkspace({ cwd: repo });
+    // The phase changes: one file replaced, one removed, one added, one ignored; and a file of
+    // the creator's own that the sync never wrote.
+    await writeFile(join(repo, ".mcp.json"), '{"changed":true}\n');
+    await rm(join(repo, ".claude/skills/frame"), { recursive: true });
+    await mkdir(join(repo, ".claude/skills/build"), { recursive: true });
+    await writeFile(join(repo, ".claude/skills/build/SKILL.md"), "build\n");
+    await writeFile(join(repo, "ignored.txt"), "x\n");
+    await writeFile(join(repo, "mine.txt"), "mine, edited\n");
+    const paths = [
+      ".mcp.json",
+      ".claude/skills/frame/SKILL.md",
+      ".claude/skills/build/SKILL.md",
+      "ignored.txt",
+    ];
+    // Left as changes, they keep the base from taking the merge of a story.
+    await writeFile(join(repo, "mine.txt"), "mine\n");
+    const request = { from: "feat/z", into: "main", method: "merge" as const, message: "m" };
+    expect(await workspace.mergeBranch?.(request)).toMatchObject({
+      ok: false,
+      reason: "base_dirty",
+    });
+    const done = await workspace.commitPaths?.({ branch: "main", paths, message: "Method: phase" });
+    expect(done?.ok).toBe(true);
+    expect(await workspace.mergeBranch?.(request)).toMatchObject({ ok: true });
+    await writeFile(join(repo, "mine.txt"), "mine, edited\n");
+    expect(
+      gitOk(repo, ["show", "--name-status", "--format=%s", done?.ok ? done.commit : "x"]),
+    ).toBe(
+      "Method: phase\n\nA\t.claude/skills/build/SKILL.md\nD\t.claude/skills/frame/SKILL.md\nM\t.mcp.json",
+    );
+    // Only the sync's files: the creator's edit stays, the ignored file stays ignored.
+    expect(gitOk(repo, ["status", "--porcelain"])).toBe("M mine.txt");
+    // Nothing left to commit is a success and adds no commit.
+    const head = gitOk(repo, ["rev-parse", "HEAD"]);
+    expect((await workspace.commitPaths?.({ branch: "main", paths, message: "again" }))?.ok).toBe(
+      true,
+    );
+    expect(gitOk(repo, ["rev-parse", "HEAD"])).toBe(head);
+  });
+
+  it("commits no path on another branch than the one checked out", async () => {
+    const repo = await makeRepo();
+    await writeFile(join(repo, "a.txt"), "a\n");
+    gitOk(repo, ["add", "."]);
+    gitOk(repo, ["commit", "-m", "a"]);
+    await writeFile(join(repo, "a.txt"), "changed\n");
+    const workspace = new GitStoryWorkspace({ cwd: repo });
+    expect(
+      await workspace.commitPaths?.({ branch: "dev", paths: ["a.txt"], message: "m" }),
+    ).toMatchObject({ ok: false, reason: "not_current" });
+    expect(gitOk(repo, ["status", "--porcelain"])).toBe("M a.txt");
+    // No branch named: the main folder's own, and never from a story's worktree.
+    gitOk(repo, ["branch", "feat/w"]);
+    const worktree = join(base, "shop.worktrees", "w");
+    gitOk(repo, ["worktree", "add", worktree, "feat/w"]);
+    await writeFile(join(worktree, "a.txt"), "changed in the worktree\n");
+    const inWorktree = new GitStoryWorkspace({ cwd: worktree });
+    expect(await inWorktree.commitPaths?.({ paths: ["a.txt"], message: "m" })).toMatchObject({
+      ok: false,
+      reason: "not_current",
+    });
+    expect(await workspace.commitPaths?.({ paths: ["a.txt"], message: "m" })).toMatchObject({
+      ok: true,
+    });
+    expect(gitOk(repo, ["status", "--porcelain"])).toBe("");
+  });
+
   it("commits nothing on another branch, on a file with changes or not tracked", async () => {
     const repo = await makeRepo();
     await writeFile(join(repo, "page.md"), "old\n");

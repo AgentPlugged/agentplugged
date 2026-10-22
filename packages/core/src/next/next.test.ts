@@ -22,6 +22,7 @@ import {
   phaseProgress,
   type RecordedEvent,
   resolveProfile,
+  type SheetsWritten,
   type StateStore,
   SYNC_MANIFEST_PATH,
   type SyncFreshness,
@@ -116,6 +117,17 @@ function closed(...phases: PhaseId[]): Record<string, unknown> {
   });
   return checkpoints;
 }
+
+/** The acceptance report the creator approved during the delivery phase (after the build's end). */
+const ACCEPTED = checkpoint("G-AAAAAAAAAA", {
+  type: "document",
+  opened_by: "quentin",
+  documents: [
+    { path: ".agentplugged/docs/acceptance.md", branch: "main", blob_sha: "a".repeat(40) },
+  ],
+  status: "resolved",
+  resolution: { decision: "approved", waiver_until: null, at: "2026-10-03T04:30:00.000Z" },
+});
 
 function story(status: string, agent: string | null, at = "2026-10-04T10:00:00.000Z") {
   return { status, status_by: agent === null ? null : { agent, at } };
@@ -395,6 +407,12 @@ describe("nextStep", () => {
 
   it("goes from the build to the delivery, then the launch, then the build again", () => {
     const built = closed("framing", "planning", "design", "build");
+    // The acceptance run comes first; the engine knows it passed once the creator approved it.
+    expect(nextStep(state({ checkpoints: built }), ALL_DOCS, CONFIG)).toMatchObject({
+      step: "acceptance",
+      agent: "quentin",
+    });
+    built[ACCEPTED.id] = ACCEPTED;
     expect(nextStep(state({ checkpoints: built }), ALL_DOCS, CONFIG)).toMatchObject({
       step: "delivery",
       phase: "delivery",
@@ -662,7 +680,7 @@ describe("nextStep", () => {
           at: "2026-10-03T10:00:00.000Z",
         },
       });
-    const built = closed("framing", "planning", "design", "build");
+    const built = { ...closed("framing", "planning", "design", "build"), [ACCEPTED.id]: ACCEPTED };
     expect(
       nextStep(state({ checkpoints: { ...built, "G-WWWWW": waived("release") } }), ALL_DOCS, CONFIG)
         .step,
@@ -1249,10 +1267,85 @@ describe("next", () => {
     expect(files.writes).toEqual([]);
   });
 
+  it("lists the story sheets behind a cited passage, until written again", async () => {
+    const { files, next, reader, registry } = await product();
+    const prdPath = ".agentplugged/docs/prd.md";
+    const prd = (tip: string) =>
+      `---\nid: prd\nkind: prd\nowner: maya\n---\n# PRD\n\n## Requirements\n\n- EF-1 : A user gets the tip of ${tip}.\n`;
+    files.seed(prdPath, prd("ten percent"));
+    files.seed(
+      ".agentplugged/stories/1-1-tip.md",
+      [
+        "---",
+        "id: 1-1",
+        "kind: story",
+        "owner: izzy",
+        "links: [prd]",
+        'title: "Tip"',
+        "epic: epic-1",
+        "reviewer: quentin",
+        "requirements: [EF-1]",
+        "budget_usd: 5",
+        "branch: feat/1-1-tip",
+        "depends_on: []",
+        "---",
+        "# 1-1 — Tip",
+        "",
+        "## Context",
+        "",
+        "- Implements `EF-1`.",
+        "",
+        "## Intent",
+        "",
+        "The tip.",
+        "",
+        "## Acceptance criteria",
+        "",
+        "- Given a bill, when it runs, then the tip shows.",
+        "",
+        "## Out of scope",
+        "",
+        "- Nothing.",
+        "",
+      ].join("\n"),
+    );
+    const sheet = async () => {
+      const result = await registry.run("docs", reader, { action: "sheet", words: [] });
+      if (!result.ok) throw new Error(`docs sheet failed: ${result.error.code}`);
+      return result.value as SheetsWritten;
+    };
+    expect((await sheet()).sheets).toEqual([
+      expect.objectContaining({ story: "1-1", written: true, excerpts: 1, too_long: false }),
+    ]);
+    expect((await next()).stale_sheets).toBeUndefined();
+    // Iris reads no document by section: no reading with her step.
+    expect((await next()).reading).toBeUndefined();
+    files.seed(prdPath, prd("fifteen percent"));
+    expect((await next()).stale_sheets).toEqual([
+      {
+        story: "1-1",
+        path: ".agentplugged/stories/1-1-tip.md",
+        excerpts: "EF-1 (changed)",
+        command: "npx agentplugged docs sheet 1-1",
+      },
+    ]);
+    expect((await sheet()).sheets[0]).toMatchObject({ written: true });
+    expect((await next()).stale_sheets).toBeUndefined();
+    // Nothing to write again: the file is left as it is.
+    expect((await sheet()).sheets[0]).toMatchObject({ written: false });
+    // A story that does not exist is refused, nothing written.
+    const unknown = await registry.run("docs", reader, { action: "sheet", words: ["9-9"] });
+    expect(!unknown.ok && unknown.error.code).toBe(ErrorCode.INVALID_ARGUMENTS);
+  });
+
   it("refuses any input and a folder without the method", async () => {
     const { reader, registry } = await product();
     const extra = await registry.run("next", reader, { json: true });
     expect(!extra.ok && extra.error.code).toBe(ErrorCode.INVALID_ARGUMENTS);
+    // `reading` is the one input: asked by the agent that does the step, it adds nothing else.
+    const asked = await registry.run("next", reader, { reading: true, json: true });
+    expect(!asked.ok && asked.error.code).toBe(ErrorCode.INVALID_ARGUMENTS);
+    expect((await registry.run("next", reader, { reading: true })).ok).toBe(true);
     const empty = await registry.run("next", { ...reader, files: new MemoryFiles() }, {});
     expect(!empty.ok && empty.error.code).toBe(ErrorCode.METHOD_NOT_INSTALLED);
   });
@@ -1316,7 +1409,9 @@ describe("next: the knowledge base of an existing product", () => {
       expect(step.step, status).not.toBe("knowledge_base");
       expect(step.story, status).toBe("2-1");
     }
-    const delivery = state({ checkpoints: closed("framing", "planning", "design", "build") });
+    const delivery = state({
+      checkpoints: { ...closed("framing", "planning", "design", "build"), [ACCEPTED.id]: ACCEPTED },
+    });
     expect(nextStep(delivery, ALL_DOCS, EXISTING)).toMatchObject({
       step: "delivery",
       agent: "omar",

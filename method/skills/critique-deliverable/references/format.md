@@ -1,25 +1,19 @@
 # The shape of the critique report
 
-One answer, whole; the engine refuses one that is not and lists what is missing. Write in the
-language of the document. Few objections, each aimed at a passage: at most 12, the weakest dropped.
-No objection at all is a valid answer when the method found none.
+One whole answer; the engine refuses an incomplete one and lists what is missing. In the
+document's language. 12 objections at most; none is valid if the method found none.
 
-`review.critique`, one call with:
+`review.critique`, one call:
 
-- `kind`: the document, `brief`, `prd`, `ux` or `architecture` (of `.agentplugged/docs/`).
-- `lenses`: the method, one entry, or two to blend (`references/choose.md` lists the identifiers).
-  A `reconcile` holds at most 5 objections, alone, on a `prd`, `ux` or `architecture`.
-- `summary`: why this method for this document, one line.
-- `findings`, the objections, each with:
-  - `severity`: `blocking` (the product built on this breaks or misses its point), `should_fix`, `minor`.
-  - `claim`: the objection as a statement, one line. It is what a hypothesis kept from it will say.
-  - `passage`: a heading of the document, or an identifier it holds (`EF-3`, `ENF-2`, `AD-5`).
-    The engine checks it is there.
-  - `argument`: what in the passage breaks, and what follows. The proof, never a feeling.
-  - `proposal`: one line, what to change in the document (unless minor).
-  - `proof`: one line, what would show the objection true or false (unless minor): a measure,
-    a test, a user's answer, a delivered story.
+- `kind`: `brief`, `prd`, `ux` or `architecture` (of `.agentplugged/docs/`).
+- `lenses`: the method, or two to blend (identifiers of `references/choose.md`). A `reconcile`
+  holds 5 objections at most, alone, on a `prd`, `ux` or `architecture`.
+- `summary`: why this method, one line.
+- `findings`, each with `severity` (`blocking`: the product breaks or misses its point;
+  `should_fix`; `minor`), `claim` (one checkable line: it is what a hypothesis will say),
+  `passage` (a heading or an identifier the document holds: `EF-3`, `ENF-2`, `AD-5`; the engine
+  checks), `argument` (what breaks and what follows; proof, not feeling), and unless minor
+  `proposal` (one line, what to change) and `proof` (one line: a measure, a test, a user's answer).
 
-A claim is checkable: "the export may time out above 10 000 rows" can be proved or refuted;
-"the document is vague" cannot. Give the same objection once. Never rewrite the document in the
-report.
+A claim is checkable ("the export may time out above 10 000 rows"), never "it is vague". Each
+objection once. Never rewrite the document in the report.

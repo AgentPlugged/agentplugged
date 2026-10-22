@@ -71,20 +71,17 @@ describe("the skill test-idea carries the forge", () => {
       [
         "assets/forge-template.md",
         "assets/prfaq-template.md",
-        "references/bets.md",
-        "references/concept.md",
         "references/faq.md",
         "references/forge.md",
         "references/personas.md",
         "references/prfaq.md",
-        "references/verdict.md",
       ].sort(),
     );
     expect((skill().frontmatter as SkillFrontmatter).metadata).toMatchObject({ agent: "iris" });
     const menu = agents.get("iris")?.agent?.menu ?? [];
     expect(menu.find((item) => item.code === "TI")?.description).toMatch(/forge/i);
     // Each exercise reads its files only: the forge never loads the press release's.
-    expect(annex("references/forge.md")).not.toMatch(/faq\.md|verdict\.md|prfaq\.md/);
+    expect(annex("references/forge.md")).not.toMatch(/faq\.md|verdict|prfaq\.md/);
   });
 
   it("steers like a questioning conversation: modes, log types, the three outcomes, the limit", () => {
@@ -95,13 +92,13 @@ describe("the skill test-idea carries the forge", () => {
     for (const outcome of FORGE_OUTCOMES) expect(forge, outcome).toContain(`*${outcome}*`);
     expect(forge).toContain(`at most ${FORGE_MAX_LINES} lines`);
     // It reads the documents of a change to an existing project, offers to resume, and names the file.
-    for (const part of ["`scope: change`", "no `Outcome:` line", "personas.md", "bets.md"]) {
+    for (const part of ["`scope: change`", "no `Outcome:` line", "personas.md"]) {
       expect(forge, part).toContain(part);
     }
   });
 
   it("names the four kinds of concept, and sends a reader-less idea back to the forge", () => {
-    const concept = flat(annex("references/concept.md"));
+    const concept = flat(annex("references/forge.md"));
     for (const type of CONCEPT_TYPES) expect(concept, type).toContain(`\`${type}\``);
     expect(concept).toContain("back to the forge");
   });
@@ -117,7 +114,7 @@ describe("the skill test-idea carries the forge", () => {
       expect(faq, word).toContain(`[${word}]`);
     }
     for (const word of ["pourquoi-nous", "évité"]) expect(faq, word).toContain(`[${word}]`);
-    expect(faq).toContain("concept.md");
+    expect(faq).toContain("forge.md");
   });
 
   it("holds the release to bars and sends the unsourced claim to research", () => {
@@ -127,14 +124,14 @@ describe("the skill test-idea carries the forge", () => {
       "stays `[assumption]`",
       "`deep-research`",
       "faq.md",
-      "verdict.md",
+      "## Verdict",
     ]) {
       expect(prfaq, part).toContain(part);
     }
   });
 
   it("gives a verdict in three categories, as the engine reads them", () => {
-    const verdict = annex("references/verdict.md");
+    const verdict = annex("references/prfaq.md");
     for (const label of ["Holds:", "Soft:", "Breaks:", "`Tient`", "`Fragile`", "`Casse`"]) {
       expect(verdict, label).toContain(label);
     }
@@ -196,7 +193,7 @@ describe("the files the skill asks for pass the engine", () => {
     expect(problemsOf(PRFAQ, filled("assets/prfaq-template.md"))).toEqual([]);
     const questions = (angles: readonly string[]) =>
       [...angles, angles[0] as string].map((angle) => `- [${angle}] A question — An answer.`);
-    const verdict = annex("references/verdict.md").match(/```\n([\s\S]*?)```/)?.[1] ?? "";
+    const verdict = annex("references/prfaq.md").match(/```\n([\s\S]*?)```/)?.[1] ?? "";
     expect(verdict).toContain("Holds:");
     const closed = filled("assets/prfaq-template.md", {
       "links: []": "links: []\nconcept: internal",

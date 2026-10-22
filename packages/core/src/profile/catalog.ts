@@ -20,6 +20,7 @@ export const AGENT_DOMAINS = {
   iris: "product",
   maya: "product",
   izzy: "product",
+  basile: "product",
   stella: "ux",
   alex: "architecture",
   sam: "code",

@@ -512,6 +512,23 @@ describe("next: text", () => {
     expect(JSON.parse(nextJson({ ...base, fast_track: left })).fast_track).toEqual(left);
   });
 
+  it("tells the story sheets to write again, as text and as data", () => {
+    const sheets = [
+      {
+        story: "1-1",
+        path: ".agentplugged/stories/1-1.md",
+        excerpts: "EF-1 (changed)",
+        command: "npx agentplugged docs sheet 1-1",
+      },
+    ];
+    const step = { ...base, stale_sheets: sheets };
+    expect(JSON.parse(nextJson(step)).stale_sheets).toEqual(sheets);
+    expect(JSON.parse(nextJson(base))).not.toHaveProperty("stale_sheets");
+    expect(formatNext(createTranslator("fr"), step)).toContain(
+      "Fiches à régénérer (un passage cité a changé) : 1-1 (npx agentplugged docs sheet 1-1).",
+    );
+  });
+
   it("speaks of the strict level only at the strict level, and shows the chat path otherwise", () => {
     const en = createTranslator("en");
     const command = "npx agentplugged review G-AAAAAAAAAA";

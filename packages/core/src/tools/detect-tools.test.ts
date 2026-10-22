@@ -78,13 +78,14 @@ describe("compareVersions", () => {
 });
 
 describe("detectTools", () => {
-  it("lists the four tools as not found on an empty machine", async () => {
+  it("lists the five tools as not found on an empty machine", async () => {
     const tools = await detectTools(fakeProbe());
     expect(tools).toEqual([
       { ...notFound("claude-code", "Claude Code"), driveFiles: ["CLAUDE.md", ".claude/"] },
       { ...notFound("codex", "Codex"), driveFiles: ["AGENTS.md", ".codex/"] },
       { ...notFound("antigravity", "Antigravity CLI"), driveFiles: ["GEMINI.md", ".gemini/"] },
       { ...notFound("cursor", "Cursor"), driveFiles: ["AGENTS.md", ".cursor/"] },
+      { ...notFound("kimi", "Kimi Code CLI"), driveFiles: ["AGENTS.md", ".kimi-code/"] },
     ]);
   });
 
@@ -229,7 +230,7 @@ describe("detectTools", () => {
           crash,
         }),
       );
-      expect(tools).toHaveLength(4);
+      expect(tools).toHaveLength(5);
       expect(byId(tools, "codex").found).toBe(true);
     }
   });
@@ -251,7 +252,7 @@ describe("detectTools", () => {
     };
     const detection = detectTools(probe);
     // Every tool has started probing before any probe answers.
-    expect(started).toBe(5);
+    expect(started).toBe(6);
     release();
     await detection;
   });

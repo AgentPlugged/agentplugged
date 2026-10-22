@@ -70,9 +70,8 @@ describe("the constitution's choices and approvals", () => {
       "A plain approval is the whole answer, even for an action that cannot be undone",
     );
     expect(text).not.toContain("repeated confirmation");
-    // Noah's essentials no longer refuse the recommendation outright.
+    // Noah's essentials no longer refuse the recommendation outright (his rule is in his role).
     expect(text).not.toContain("never pick your recommendation for them");
-    expect(text).toContain('a plain approval ("ok", "oui", "vas-y") chooses it');
   });
 });
 

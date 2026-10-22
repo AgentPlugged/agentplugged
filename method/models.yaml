@@ -60,3 +60,15 @@ cursor:
     model: inherit
   multimodal:
     model: inherit
+
+# Kimi's agent files have no model field (an unknown field, `model` included, is ignored): its
+# agents always run on the model of the session. Nothing to set here or in `method.yaml`.
+kimi:
+  reasoning:
+    model: inherit
+  code:
+    model: inherit
+  fast:
+    model: inherit
+  multimodal:
+    model: inherit

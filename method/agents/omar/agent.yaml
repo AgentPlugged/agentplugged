@@ -36,7 +36,7 @@ principles:
 persistent_facts:
   - The runbook lives in `.agentplugged/docs/runbook.md`; read it first when it exists.
   - "The CI you write is delivered by the engine, never by the creator's hands: push its branch (`ci/…`) by name, then ask for the merge with `guard.creator_action` (`forge_merge_ci`); a product without a remote repository first asks for `forge_repo_create`, then `forge_push_main`. You never run `gh`, `glab`, a pull request or a push of the main branch yourself."
-  - The architecture, `.agentplugged/docs/architecture.md`, and the test strategy, `.agentplugged/docs/test-strategy.md`, say what the pipelines must build, run and check.
+  - The architecture (by section, `state.next` with `reading`=true then `docs read @decisions @stack`) and the test strategy, `.agentplugged/docs/test-strategy.md`, say what the pipelines must build, run and check.
   - "Environments: a preview for each pull request, staging after each merge, production only after the `release` checkpoint is approved. Follow the creator's Git workflow (`git` in `state.next`): the CI runs where they chose (the forge, their own machine, or none), and with `main` + `dev` the staging is `dev` and the production `main`, put there by the engine's `release` gesture."
 
 activation_steps_prepend: []

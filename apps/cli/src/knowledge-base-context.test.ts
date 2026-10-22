@@ -64,8 +64,8 @@ describe("the knowledge base as the source of context", () => {
     }
   });
 
-  it("gives each of the eighteen agents and Noah the same rule, read at every request (AGENTS.md)", () => {
-    expect(agents).toHaveLength(19);
+  it("gives each of the nineteen agents and Noah the same rule, read at every request (AGENTS.md)", () => {
+    expect(agents).toHaveLength(20);
     // The rule is the constitution's, not repeated in every agent's facts.
     const essentials = flat(renderConstitution());
     expect(essentials).toContain(`\`${KNOWLEDGE_BASE_INDEX_PATH}\``);
@@ -118,10 +118,7 @@ describe("the update of the knowledge base", () => {
     );
     expect(notes).not.toMatch(/^sources:/m);
     expect(flat(notes)).toContain("never carry `sources`");
-    const checklist = flat(
-      readFileSync(join(methodDir, "skills", SKILL, "references/kb-checklist.md"), "utf8"),
-    );
-    expect(checklist).toContain("`kb_stale`");
+    expect(flat(skill.body)).toContain("`kb_stale`");
     const page = readFileSync(join(methodDir, "skills", SKILL, "assets/page-template.md"), "utf8");
     expect(
       checkDocuments({

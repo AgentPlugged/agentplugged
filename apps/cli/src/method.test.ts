@@ -70,6 +70,14 @@ const TEAM = {
     risk: "medium",
     tier: "fast",
   },
+  basile: {
+    name: "Basile",
+    title: "Devil's Advocate",
+    domain: "product",
+    phase: "planning",
+    risk: "low",
+    tier: "reasoning",
+  },
   // Build, quality, delivery and growth.
   sam: {
     name: "Sam",
@@ -224,7 +232,7 @@ function deliverables(body: string): string[] {
 }
 
 describe("the team", () => {
-  it("ships the eighteen agents and Noah, and nothing else", () => {
+  it("ships the nineteen agents and Noah, and nothing else", () => {
     expect([...agents.keys()].sort()).toEqual([...TEAM_IDS, "noah"].sort());
     // Noah serves every domain: no profile makes him inactive.
     expect(Object.keys(AGENT_DOMAINS).sort()).toEqual([...TEAM_IDS].sort());
@@ -234,8 +242,11 @@ describe("the team", () => {
     for (const id of TEAM_IDS) {
       const metadata = (agentOf(id).frontmatter as AgentFrontmatter).metadata;
       expect(metadata.specialty, id).toBe(SPECIALTIES[id]);
-      // The quick lane is a mode of every developer: a skill of their menu, no agent of its own.
-      const quick = agentOf(id).agent?.menu.some((item) => item.skill === "quick-lane");
+      // The quick lane is a mode of every developer: a menu item that reads the reference of
+      // `develop-story`, no agent nor skill of its own.
+      const quick = agentOf(id).agent?.menu.some(
+        (item) => item.code === "QL" && (item.prompt ?? "").includes("references/quick-lane.md"),
+      );
       expect(quick, id).toBe(SPECIALTIES[id] !== undefined);
     }
   });
@@ -297,10 +308,10 @@ describe("the team", () => {
 
   it.each(TEAM_IDS)("covers overview, deliverables, work and boundaries for %s", (id) => {
     const { body, agent } = agentOf(id);
-    // The developers' mission is the same five times and develop-story says it.
+    // No "Mission" section: the role and the principles of the definition say it, the overview
+    // holds what is left of it once.
     const titles = [
       "Overview",
-      ...(CODE_ONLY.includes(id) ? [] : ["Mission"]),
       "Deliverables",
       `How ${agent?.name} works`,
       "Method rules",
@@ -382,6 +393,7 @@ describe("the team", () => {
     expect(owners.get("docs/drift-report.md")).toBe("quentin");
     expect(owners.get("docs/security-reviews/")).toBe("chloe");
     expect(owners.get("docs/ideas/")).toBe("lou");
+    expect(owners.get("docs/contests/")).toBe("basile");
     expect(owners.get("docs/launch/")).toBe("julien");
     expect(owners.get("docs/sales/")).toBe("milo");
   });
@@ -454,7 +466,10 @@ describe("the team", () => {
     ]);
     const texts = [
       ...CODE_ONLY.flatMap((id) => [agentOf(id).text, agentOf(id).agentText ?? ""]),
-      readFileSync(join(methodDir, "skills", "quick-lane", "SKILL.md"), "utf8"),
+      readFileSync(
+        join(methodDir, "skills", "develop-story", "references", "quick-lane.md"),
+        "utf8",
+      ),
     ];
     for (const text of texts) {
       const found = [...words(text)].filter((word) => STACK.has(word));
@@ -466,10 +481,10 @@ describe("the team", () => {
   });
 
   it("makes the quick lane a mode of the developer, back to the full lane when it must", () => {
-    const body = readFileSync(join(methodDir, "skills", "quick-lane", "SKILL.md"), "utf8").replace(
-      /\s+/g,
-      " ",
-    );
+    const body = readFileSync(
+      join(methodDir, "skills", "develop-story", "references", "quick-lane.md"),
+      "utf8",
+    ).replace(/\s+/g, " ");
     for (const limit of [
       "one story",
       "no public interface",
@@ -527,7 +542,7 @@ describe("the team", () => {
     }
   });
 
-  it("gives the same full story header in Izzy's deliverables and in her story prompt", () => {
+  it("describes the full story header once, in Izzy's deliverables, and her story prompt points to it", () => {
     const { body, agent } = agentOf("izzy");
     const deliverablesText = (section(body, "Deliverables") ?? "").replace(/\s+/g, " ");
     const prompt = (agent?.menu.find((item) => item.code === "ST")?.prompt ?? "").replace(
@@ -548,8 +563,8 @@ describe("the team", () => {
       "`depends_on`",
     ]) {
       expect(deliverablesText, field).toContain(field);
-      expect(prompt, field).toContain(field);
     }
+    expect(prompt).toContain("described under Deliverables");
   });
 
   it("lists the team in the method's README", () => {
@@ -595,14 +610,21 @@ describe("Noah, the main session's assistant", () => {
     expect(agent?.menu.length).toBeGreaterThanOrEqual(4);
     expect(agent?.menu.length).toBeLessThanOrEqual(7);
     expect(agent?.voice).toBeDefined();
-    for (const title of ["Overview", "Mission", "Deliverables", "How Noah works", "Boundaries"]) {
+    // Five sections: his whole role, read at once (no reference before his first answer).
+    for (const title of [
+      "Role and voice",
+      "The engine's contract",
+      "Handing work over",
+      "Decisions",
+      "The session",
+    ]) {
       expect(
         body.split("\n").filter((line) => line === `## ${title}`),
         title,
       ).toHaveLength(1);
     }
     expect(deliverables(body)).toEqual([]);
-    expect(flat(section(body, "Deliverables") ?? "")).toContain("Noah owns no deliverable");
+    expect(flat(section(body, "Role and voice") ?? "")).toContain("Noah owns no deliverable");
   });
 
   it("is the creator's right hand, calm and demanding, who never codes", () => {
@@ -647,12 +669,12 @@ describe("Noah, the main session's assistant", () => {
       "`guard.creator_action`",
       "Noah never breaks the plan down nor plans a sprint: he hands that to Izzy",
       "`ROLE_FORBIDDEN`",
-      "writes nothing: not in `docs/`, `epics/` or `stories/`",
+      "Noah writes nothing: not in `docs/`, `epics/` or `stories/`",
       "He writes no code",
     ]) {
       expect(body, rule).toContain(rule);
     }
-    const boundaries = flat(section(noah().body, "Boundaries") ?? "");
+    const boundaries = flat(section(noah().body, "Handing work over") ?? "");
     for (const id of TEAM_IDS) expect(boundaries, id).toContain(TEAM[id].name);
   });
 
@@ -802,5 +824,30 @@ describe("decisions to click in the texts of the method", () => {
       expect(text, name).toContain('via: "question_tool"');
       expect(text, name).not.toContain("AskUserQuestion");
     }
+  });
+  it("ships no procedure for a document review meeting (the method is written for one agent at a time)", () => {
+    expect(existsSync(join(methodDir, "skills", "round-table", "references", "review.md"))).toBe(
+      false,
+    );
+    const files: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name !== "node_modules") walk(full);
+        } else if (/\.(md|ya?ml)$/.test(entry.name)) files.push(full);
+      }
+    };
+    walk(methodDir);
+    expect(files.length).toBeGreaterThan(50);
+    for (const file of files) {
+      const text = flat(readFileSync(file, "utf8"));
+      const name = relative(methodDir, file);
+      expect(text, name).not.toMatch(/review meeting/i);
+      expect(text, name).not.toContain("references/review.md");
+      expect(text, name).not.toContain("format: review");
+    }
+    // Basile stays in the method as an agent, and is not tied to a meeting in the chat.
+    expect(existsSync(join(methodDir, "agents", "basile", "SKILL.md"))).toBe(true);
   });
 });

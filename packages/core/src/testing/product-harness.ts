@@ -13,6 +13,7 @@ import {
   MemoryStateStore,
   messageDigest,
   normalizeChatText,
+  type PathsCommitRequest,
   resolveProfile,
   type StoryWorkspace,
   type StoryWorkspaceInspection,
@@ -64,6 +65,12 @@ class MemoryChatLog {
 class FakeWorkspace implements StoryWorkspace {
   readonly heads = new Map<string, string>();
   readonly hooks: unknown[] = [];
+  /** The paths committed by the engine itself, one request per commit. */
+  readonly pathCommits: PathsCommitRequest[] = [];
+  commitPaths = async (request: PathsCommitRequest) => {
+    this.pathCommits.push(request);
+    return { ok: true as const, commit: "d".repeat(40) };
+  };
 
   async inspect(target: StoryWorkspaceTarget): Promise<StoryWorkspaceInspection> {
     const head = this.heads.get(target.branch);

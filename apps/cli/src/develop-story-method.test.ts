@@ -72,9 +72,7 @@ describe("the develop-story skill", () => {
     const noah = flat(noahCorpus(methodDir));
     expect(noah).toContain("`story.result` summary (800 characters at most");
     expect(noah).toContain("a partial or blocked result is said as such, before anything else");
-    expect(noah).toContain(
-      "The detail (the progress notes, the pull request, the review) stays one call away",
-    );
+    expect(noah).toContain("the detail stays one call away");
   });
 
   it("reaches every developer of the specialties at work", () => {
@@ -101,11 +99,10 @@ describe("the develop-story skill", () => {
       .split("\n")
       .filter((line) => line.startsWith("## "));
     expect(headings).toEqual([
+      "## Overview",
       "## Before you start",
       "## Decisions",
-      "## Resume",
       "## Steps",
-      "## Budget",
       "## Never",
     ]);
   });
@@ -131,7 +128,10 @@ describe("the develop-story skill", () => {
       "`story.review`",
       "Never edit the `## Intent`",
       "`STORY_INTENT_CHANGED`",
-      "references/self-check.md",
+      // The checks before handing over: the approved intent, word for word.
+      "`git show <blob_sha>`",
+      "only that section",
+      "**Review gate.**",
       // A structured result that moves the story to review; no cost is announced.
       "`measure.cost`",
       "`story.result`",
@@ -147,11 +147,7 @@ describe("the develop-story skill", () => {
     }
     // No pull request, no push, no merge: later stories.
     expect(text).toContain("never push, force-push, open the pull request or merge");
-    const check = flat(read(`skills/${SKILL}/references/self-check.md`));
-    expect(check).toContain("`git show <blob_sha>`");
-    expect(check).toContain("only that section");
-    expect(check).not.toContain("checkout");
-    expect(check).toContain("`STORY_INTENT_CHANGED`");
+    expect(text).not.toContain("checkout");
   });
 
   it("writes the test of each criterion first, from its words, and the engine sees it fail", () => {
@@ -191,14 +187,14 @@ describe("the develop-story skill", () => {
       expect(detail, term).toContain(term);
     }
     // The quick lane does not ask for a red when a test already covers the criterion.
-    expect(flat(read("skills/quick-lane/SKILL.md"))).toContain("needs no red");
+    expect(flat(read(`skills/${SKILL}/references/quick-lane.md`))).toContain("needs no red");
     // The judge takes the engine's trace as it is.
     const judge = flat(read("skills/review-story/references/judge.md"));
     expect(judge).toContain("`trace`");
     expect(judge).toContain("never recompute it");
     expect(flat(read("skills/review-story/SKILL.md"))).toContain("`criteria` with their `trace`");
-    // The self-check asks for the engine's red and green.
-    expect(flat(read(`skills/${SKILL}/references/self-check.md`))).toContain("by the engine");
+    // The review gate asks for the engine's red and green.
+    expect(text).toContain("`green` or `untestable` by the engine");
   });
 
   it("tells every agent that a complete result moves its story to review", () => {

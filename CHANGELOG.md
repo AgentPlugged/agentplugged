@@ -2,6 +2,41 @@
 
 All notable changes to `agentplugged`, newest first. Versions follow semantic versioning.
 
+## 1.4.0 - 2026-10-22
+
+### New features
+
+- Add an acceptance run before a release, with proofs and one gesture, and a look back a week after a launch with measures, a short retrospective and feedback turned into tickets.
+- Run Noah from the web view and the phone with Codex, Antigravity CLI or Cursor too (`agent edit noah --tool`), each missing mechanism reported as a fallback with its cause and one action.
+- Count the same refusal when it comes back and, on the second, tell the agent to change method; each common refusal carries the gesture to make instead, and sync allows the local command it gives the agents.
+- Support Kimi Code CLI beside the other tools and add `kimi-hooks install|remove|status`, which puts the product's guards in Kimi's own settings on request, with a backup.
+- Run Noah from the web view and the phone with Kimi Code CLI too (`agent edit noah --tool kimi`), each mechanism it lacks reported as a fallback with its cause and one action.
+- Make the method lighter: Noah's role is one short file, skills are short work sheets without what a model already knows, and agent sheets no longer repeat their persona, so each start loads less.
+- Tell the web view where the conversation with Noah can be reopened in the AI tool's own terminal, only when the tool can reopen a session and nothing secret is in the answer.
+- Review once and ask early: one reader checks a change without high risk, the creator is asked after 2 passes, and every sub-agent is a named team member so its cost has an owner.
+- Show how heavy Noah's conversation is (the tokens Claude Code reports, never an estimate) and offer a clean conversation, with what it saves, once it grows or before a story starts.
+- Make Noah answer faster with Claude Code by keeping his program open ten minutes between messages (no token spent while waiting) and by showing his answer as he writes it.
+- Tell Noah which page the creator is looking at (its kind and, if one item is singled out, its identifier and title, never its content); the creator can take the page off for one message.
+- Nothing stops in silence: a partial result that leaves the creator a decision is refused until a checkpoint is open, and the next step says when a story failed twice for the same cause.
+- Agents no longer rediscover the project: `init` writes a short project profile, `docs profile refresh` rewrites it, and `docs bricks <words>` tells from a registry of the code whether something exists.
+- Agents no longer read a whole PRD or architecture: `docs read` gives the passages asked for by identifier or section, and `next` hands the agent of a step the passages its task needs.
+- The state summary tells the day each status was last declared, and a refused command carries the first words the creator may allow in one gesture, with the order that applies it.
+- Each story becomes one sheet its developer reads, with the tests expected and the cited passages of the documents; `docs check` refuses a sheet over 300 lines and warns when a cited passage changed.
+- Show which sub-agents Noah launched, how long each worked and the tokens the tool counted for it (never estimated, cost at public prices when it allows), and say so for tools that count none.
+
+### Fixes
+
+- When the creator's answer is read aloud (Voice and Hands-free modes of the chat), Noah now answers in plain sentences only, with no list, heading or bold on top of the table, code, path and address already left out.
+- The next step accepts the agent's name, a story result without its empty lists is accepted, and tool manuals are read when a refusal names an unknown field instead of before the first call.
+
+### What was tried, and what was not
+
+- Works, with automated tests: the project profile and the brick registry, the story sheet, the reading by passage, the identical-refusal count and its gestures, the single review, the dated statuses and the allow-a-command order, the context gauge, the page given to Noah, the live sub-agents and the reopen command.
+- Tried for real only with Claude Code and on Windows: one story built, reviewed and merged from end to end on a throwaway product, with Noah and his sub-agents. The framing steps (brief, PRD, UX, architecture) were not replayed.
+- Not tried with a successful turn: Codex, Antigravity CLI, Cursor and Kimi Code CLI (they keep a fallback that is said); macOS; Linux beyond a short trial in a container (install and start of the MCP server only).
+- The Kimi hook starts the engine through npx at each tool call: measured at 2.5 to 2.9 s per call once the cache is warm.
+- Updating a product from 1.2.0 or 1.3.0 needs one gesture (`npx agentplugged@1.4.0 init --upgrade-engine`; until then the new engine refuses and writes nothing). Tried from 1.2.0 on Windows with an earlier build of this release: your own settings and servers are kept, generated files are rewritten. From 1.3.0 and against the registry: not tried.
+
 ## 1.3.0 - 2026-10-20
 
 ### New features

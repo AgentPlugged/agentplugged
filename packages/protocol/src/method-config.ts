@@ -60,7 +60,7 @@ export const PRODUCT_ORIGINS = ["new", "existing"] as const;
 export type ProductOrigin = (typeof PRODUCT_ORIGINS)[number];
 
 /** AI tools `sync` can target. Identifiers are stable. */
-export const TOOL_IDS = ["claude-code", "codex", "antigravity", "cursor"] as const;
+export const TOOL_IDS = ["claude-code", "codex", "antigravity", "cursor", "kimi"] as const;
 export type ToolId = (typeof TOOL_IDS)[number];
 
 /** Agent identifier: lowercase kebab-case (`sam`, `my-agent`). */

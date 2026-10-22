@@ -43,7 +43,7 @@ describe("the acceptance QA stays light", () => {
   it("keeps a short skill, short references the skill sends to, and a short description", () => {
     expect(SKILL.length).toBeLessThanOrEqual(2_800);
     for (const [index, name] of NAMES.entries()) {
-      expect(REFERENCES[index]?.length ?? 0, name).toBeLessThanOrEqual(3_500);
+      expect(REFERENCES[index]?.length ?? 0, name).toBeLessThanOrEqual(2_500);
       expect(SKILL, name).toContain(`references/${name}.md`);
     }
     const skill = definitions.find((d) => d.name === "acceptance-qa") as Definition;
@@ -87,7 +87,7 @@ describe("the acceptance QA stays light", () => {
     expect(answer).toBeGreaterThan(usual);
     // The skill, its three references, and the engine's answer, once.
     const total = SKILL.length + REFERENCES.join("").length + usual;
-    expect(total / TOKEN, `${Math.round(total / TOKEN)} tokens`).toBeLessThanOrEqual(3_500);
+    expect(total / TOKEN, `${Math.round(total / TOKEN)} tokens`).toBeLessThanOrEqual(2_250);
   });
 
   it("gives Tess the `review` tool the skill cites, through her menu", async () => {

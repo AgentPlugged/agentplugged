@@ -175,6 +175,24 @@ export const JOURNEY_CATALOG: Readonly<Record<JourneyStep, StepInfo>> = {
     danger: "the lessons of the epic are not recorded, so the same mistakes can come back",
     lighter: "a three-line retrospective: what worked, what did not, what to change",
   },
+  acceptance: {
+    label: "the acceptance run",
+    risk: "medium",
+    effect:
+      "proposes replaying the real journeys, comparing the screens with the mockups and checking accessibility and speed before the release",
+    dependents: [],
+    danger: "a release can go out with a journey that no one replayed since the last change",
+    lighter: "replay only the main journey on your own machine",
+  },
+  after_launch: {
+    label: "the look back after a launch",
+    risk: "low",
+    effect:
+      "proposes, a week after a release or a publication, the measures, a short written look back and the feedback turned into tickets",
+    dependents: [],
+    danger: "what the launch taught is not written down, so the next cycle starts blind",
+    lighter: "three lines: what was measured, what went wrong, what to do next",
+  },
   ci_setup: {
     label: "the setting up of the CI",
     risk: "low",

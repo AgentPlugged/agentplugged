@@ -217,7 +217,27 @@ export type FilesCommitOutcome =
       readonly message: string;
     };
 
+/** Files already written in the working copy, to commit as they are. */
+export interface PathsCommitRequest {
+  /**
+   * The branch the commit goes on: it must be the one checked out in this workspace. Absent: the
+   * branch checked out in the main folder of the repository, when this workspace is that folder
+   * (never a story's worktree).
+   */
+  readonly branch?: string;
+  /** The paths from the workspace root (files, never folders): changed, deleted or new. */
+  readonly paths: readonly string[];
+  /** The commit's message, one line. */
+  readonly message: string;
+}
+
 export interface StoryWorkspace {
+  /**
+   * Commits what is now in the working copy at those paths (a change, a deletion, a new file that
+   * is not ignored), and only them, on the branch checked out here. Nothing to commit is a success.
+   * Never pushes, never touches another file.
+   */
+  commitPaths?(request: PathsCommitRequest): Promise<FilesCommitOutcome>;
   /**
    * Writes files and commits only them on the branch checked out here, with the
    * creator's Git identity, else the engine's. Never pushes, never touches another file.

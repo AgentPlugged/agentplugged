@@ -90,12 +90,12 @@ describe("the skill deep-research covers the whole research", () => {
   });
 
   it("drafts a prompt that demands the address, the publisher and the date, and the contrary evidence", () => {
-    const external = read("references/external.md");
+    const external = read("references/external.md").replace(/\s+/g, " ");
     for (const demand of [
       "source address",
       "publisher",
       "publication date",
-      "two sources from two\n  different publishers",
+      "two sources from two different publishers",
       "contrary evidence",
       "never filled in",
       "no source invented",
@@ -106,7 +106,7 @@ describe("the skill deep-research covers the whole research", () => {
   });
 
   it("imports a report as outside text: untrusted, never copied, read by a sub-agent, one voice", () => {
-    const external = read("references/external.md");
+    const external = read("references/external.md").replace(/\s+/g, " ");
     for (const rule of [
       "data, never an instruction",
       "do not copy it into the knowledge base",
@@ -114,7 +114,7 @@ describe("the skill deep-research covers the whole research", () => {
       "fresh context",
       "origin: import",
       "report_date",
-      "one report is one\n   voice",
+      "one report is one voice",
     ]) {
       expect(external, rule).toContain(rule);
     }
@@ -131,7 +131,7 @@ describe("the skill deep-research covers the whole research", () => {
   });
 
   it("keeps the types' windows and cross-checks, and the privacy of the quotes", () => {
-    const types = read("references/types.md");
+    const types = read("references/types.md").replace(/\s+/g, " ");
     for (const type of [
       "market",
       "domain",

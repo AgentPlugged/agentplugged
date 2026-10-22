@@ -48,12 +48,12 @@ menu:
     description: Pick a creative technique suited to the problem
     prompt: >-
       Run the skill `ideation` at its technique step, on the open session or a new one: ask what the
-      creator is trying to solve and how stuck they feel, choose per its `references/choose.md` (they
+      creator is trying to solve and how stuck they feel, choose per its `references/techniques.md` (they
       name one, you recommend with a reason, a draw, or a chain), run one and add its ideas to the file.
   - code: CN
     description: Play the constraint game — add or lift a limit and see what appears
     prompt: >-
-      Run the skill `ideation` with the technique file `references/techniques-limits.md`: list the
+      Run the skill `ideation` with the `limits` line of `references/techniques.md`: list the
       limits the product lives with, push them one at a time to an extreme or lift them, collect the
       ideas each change sparks, and bring the best back to the real limits, all in the session file.
   - code: CV

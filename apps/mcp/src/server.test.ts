@@ -647,7 +647,11 @@ describe("MCP server", () => {
     expect(refused.structuredContent).toEqual({
       code: "CHECKPOINT_OPEN",
       message_key: "error.checkpoint_open",
-      details: { checkpoint: id, action: "story.review" },
+      details: {
+        checkpoint: id,
+        action: "story.review",
+        do: expect.stringContaining("state.next"),
+      },
     });
     expect(await journal.head()).toBe(head);
     const elsewhere = await call("update_story", {
@@ -733,7 +737,11 @@ describe("MCP server", () => {
       expect(refused.structuredContent).toEqual({
         code: "CHECKPOINT_OPEN",
         message_key: "error.checkpoint_open",
-        details: { checkpoint: opened, action: "story.review" },
+        details: {
+          checkpoint: opened,
+          action: "story.review",
+          do: expect.stringContaining("state.next"),
+        },
       });
       const types = (await journal.list()).events.map((event) => event.type);
       expect(types).not.toContain("story.status_changed");

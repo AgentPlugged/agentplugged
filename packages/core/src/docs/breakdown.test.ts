@@ -386,7 +386,10 @@ describe("frozen intents (rule 10)", () => {
     approval({ state: "missing", story: undefined, intent: undefined, ...overrides });
   const reasons = (result: ReturnType<typeof detailed>) => ({
     problems: result.problems.map((p) => [p.code, p.details.reason, p.details.path]),
-    warnings: result.warnings.map((w) => [w.reason, w.details.story ?? null]),
+    // The stories here are in the former format, without excerpts: that warning is not about intents.
+    warnings: result.warnings
+      .filter((w) => w.reason !== "sheet_legacy")
+      .map((w) => [w.reason, w.details.story ?? null]),
     compared: result.compared,
   });
 
@@ -658,7 +661,9 @@ describe("docs check with the journal", () => {
     const docsCheck = async (context: CommandContext = reader) => {
       const result = await registry.run("docs", context, { action: "check" });
       if (!result.ok) throw new Error(`docs failed: ${result.error.code}`);
-      return result.value as DocsCheckResult;
+      const value = result.value as DocsCheckResult;
+      // The stories here are in the former format: that warning is not what these tests read.
+      return { ...value, warnings: value.warnings.filter((w) => w.reason !== "sheet_legacy") };
     };
     const list = async () => {
       const result = await registry.run("review", human, { action: "list" });

@@ -41,8 +41,8 @@ menu:
     description: Pick up a story and check that it can be built
     prompt: >-
       Ask the creator which story to build, or read `sprint.current.stories` in `state.get` to list the stories
-      that are ready. Read the story file entirely, then the requirements, decisions and screens it links,
-      and the stack the architecture names. Check that its breakdown was approved (`state.get { checkpoints: { status: "resolved" } }`),
+      that are ready. Read the story sheet alone (`sheet` of `story.start`): its excerpts hold the requirements,
+      decisions, screens and stack; never a whole document. Check that its breakdown was approved (`state.get { checkpoints: { status: "resolved" } }`),
       that every acceptance criterion is testable and that nothing it depends on is still open.
       Run `npx agentplugged docs check`. Report what is clear, what is missing and whether you can
       start; for every gap, open a `decision` checkpoint instead of guessing.
@@ -51,7 +51,9 @@ menu:
     skill: develop-story
   - code: QL
     description: Build a small change in the quick lane
-    skill: quick-lane
+    prompt: >-
+      Take the quick lane of the `develop-story` skill: read its reference
+      `references/quick-lane.md` first, then build the change as that skill says.
   - code: VF
     description: Run the full verification before handing over
     prompt: >-
@@ -62,11 +64,10 @@ menu:
   - code: PR
     description: Open the pull request with the fixed template
     prompt: >-
-      Commit with messages that cite the story and the requirements touched, then call
-      `story.pr` with each acceptance criterion checked and the tests' result: the engine
-      pushes the story's branch (never the main branch, never a force-push) and opens the pull
-      request with the fixed template — the story, the linked requirements, the acceptance
-      criteria checked one by one, the test results.
+      Commit with messages that cite the story and the requirements touched. Unless `git.merge` is
+      `direct` in `state.next` (no pull request), call `story.pr` with `criteria` (one true or
+      false per acceptance criterion) and the tests' result: the engine pushes the story's branch
+      (never the main branch, never a force-push) and opens the pull request with the fixed template.
       Call `story.result` (the story is already in review since `develop-story`). Never merge:
       the review comes next — Quentin, and Chloé for security, or the creator when the profile has
       no quality agent — then the creator validates and merges.

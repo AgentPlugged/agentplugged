@@ -112,23 +112,22 @@ describe("Noah in the generated files", () => {
         if (other === tool) expect(section, other).toContain(line);
         else expect(section, other).not.toContain(line);
       }
-      // His contract: no deliverable, no code, no checkpoint, never in the creator's place.
+      // His contract lives in his definition (the method's tests hold it): the section only
+      // says who he reports as and how to launch an agent in this tool.
       const flat = section.replace(/\s+/g, " ");
       for (const rule of [
-        "Never write in `.agentplugged/docs/`, `epics/` or `stories/`",
-        "never write code",
-        "never open a checkpoint",
-        "never answer for the creator",
-        "`ROLE_FORBIDDEN`",
-        "`agent.delegate`",
-        "`chat.answer`",
-        "one at a time",
-        "eight at most",
-        "belong to Izzy",
-        "`guard.creator_action`",
+        "your definition (the skill `noah`) is your whole contract",
+        "never as `main`",
+        "`agent.delegate` before you launch anything",
+        "launch the sub-agents yourself",
+        "tell the creator it is a fallback",
       ]) {
         expect(flat, rule).toContain(rule);
       }
+      // The short section never sends him to read the contract twice.
+      expect(shortSection.replace(/\s+/g, " ")).toContain(
+        "read it, and nothing else, before your first answer",
+      );
       // The tool reads the constitution.
       for (const [path, needle] of READS[tool] ?? []) {
         expect(files.files.get(path), path).toContain(needle);

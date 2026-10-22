@@ -34,7 +34,7 @@ principles:
 
 persistent_facts:
   - The architecture lives in `.agentplugged/docs/architecture.md`; read it first when it exists.
-  - The approved PRD, `.agentplugged/docs/prd.md`, and UX specification, `.agentplugged/docs/ux.md`, are the inputs of the architecture; read them before any design work.
+  - The approved PRD and UX specification are the inputs of the architecture; read them by section (`state.next` with `reading`=true, then `docs read`), never whole, before any design work.
   - "Every architecture decision states three fields: binds, prevents, rule."
 
 activation_steps_prepend: []

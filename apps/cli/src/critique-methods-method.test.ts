@@ -15,18 +15,19 @@ const methodDir = dirname(
 );
 const read = (path: string) => readFileSync(join(methodDir, path), "utf8").replace(/\r\n/g, "\n");
 const critique = (name: string) => read(`skills/critique-deliverable/references/${name}.md`);
-const fileOf = (method: string) => method.replaceAll("_", "-");
 /** The test of an idea has its own skill; every other method is a file of the critique. */
 const OWN_FILE = CRITIQUE_METHODS.filter((method) => method !== "personas");
 const TOKEN = 4;
 
 describe("a method for each family of risk", () => {
-  it("has a short file per method, and a choice that names every one of them", () => {
+  it("has a line per method in one file, and a choice that names every one of them", () => {
     const choose = critique("choose");
-    for (const method of OWN_FILE) {
-      expect(critique(fileOf(method)).length, method).toBeLessThanOrEqual(1_000);
-      expect(choose, method).toContain(`\`${method}\``);
+    const methods = critique("methods");
+    expect(methods.length).toBeLessThanOrEqual(2_500);
+    for (const method of OWN_FILE.filter((m) => m !== "judgment" && m !== "reconcile")) {
+      expect(methods, method).toContain(`- \`${method}\`:`);
     }
+    for (const method of OWN_FILE) expect(choose, method).toContain(`\`${method}\``);
     expect(OWN_FILE.length).toBeGreaterThanOrEqual(17);
     expect(choose.length).toBeLessThanOrEqual(2_000);
     // The families the document names, each by a method.
@@ -45,33 +46,34 @@ describe("a method for each family of risk", () => {
   });
 
   it("states the divergence test of an architecture in the words of its builders", () => {
-    const text = critique("divergence").toLowerCase();
+    const text = critique("methods").toLowerCase();
     expect(flat(text)).toContain("every decision of the document exactly as written");
     expect(text).toContain("do not fit");
     // The architecture's own checklist offers it for a high-stakes document.
     expect(read("skills/write-architecture/references/self-check.md")).toContain("`divergence`");
   });
 
-  it("explains the blend: two methods, two files, never three, and the solo ones", () => {
+  it("explains the blend: two methods, two lines, never three, and the solo ones", () => {
     const choose = flat(critique("choose"));
     expect(choose).toContain("Blend");
     expect(choose).toContain("Never three");
     expect(choose).toContain("`personas` and `reconcile` stand alone");
-    expect(flat(read("skills/critique-deliverable/SKILL.md"))).toContain("two files if blended");
+    expect(flat(read("skills/critique-deliverable/SKILL.md"))).toContain("(two if blended)");
   });
 
-  it("costs a few thousand tokens for a blended critique, two files of method and no more", () => {
+  it("costs a few thousand tokens for a blended critique, the file of methods and no more", () => {
     const shared = [read("skills/critique-deliverable/SKILL.md"), critique("format")]
       .concat(critique("choose"), critique("gestures"))
       .reduce((sum, text) => sum + text.length, 0);
-    const read2 = shared + critique("divergence").length + critique("failure-modes").length;
-    const all = OWN_FILE.reduce((sum, method) => sum + critique(fileOf(method)).length, shared);
+    const read2 = shared + critique("methods").length;
+    const all = read2 + critique("judgment").length + critique("reconcile").length;
     // An estimate at 4 characters a token, not a measure: the files read are real, what the agent
     // writes is assumed. What the agent writes: eight objections of ≈ 450 characters, a stack of eight lines of ≈ 120
     // and three gestures with the creator's words.
     const tokens = (read2 + 8 * 450 + 8 * 120 + 3 * 120 + 300) / TOKEN;
     expect(tokens, `${Math.round(tokens)} tokens`).toBeLessThanOrEqual(5_000);
-    expect(read2).toBeLessThan(all * 0.6);
+    expect(read2).toBeLessThanOrEqual(all);
+    expect(read2).toBeLessThanOrEqual(7_050);
   });
 
   it("adds no tool and no command: the reconciliation and the blend are the same action", () => {

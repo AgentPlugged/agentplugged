@@ -46,15 +46,15 @@ function methodTexts(dir = methodDir, base = ""): Array<{ path: string; text: st
 }
 
 describe("the skill chain-stories", () => {
-  it("ships for Noah, short, with its detail in two references it names", () => {
+  it("ships for Noah (and Izzy for the merge order), short, with its detail in references it names", () => {
     const skill = skills.find((definition) => definition.name === "chain-stories");
-    expect(skill?.frontmatter).toMatchObject({ metadata: { agent: "noah", phase: "build" } });
+    expect(skill?.frontmatter).toMatchObject({ metadata: { agent: "noah izzy", phase: "build" } });
     const description = (skill?.frontmatter ?? { description: "" }) as { description: string };
     expect(description.description.length).toBeLessThanOrEqual(180);
     const body = read("skills/chain-stories/SKILL.md");
     expect(body.length).toBeLessThanOrEqual(2_400);
     const dir = join(methodDir, "skills", "chain-stories", "references");
-    expect(readdirSync(dir).sort()).toEqual(["attempts.md", "stops.md"]);
+    expect(readdirSync(dir).sort()).toEqual(["attempts.md", "merge-order.md", "stops.md"]);
     for (const file of readdirSync(dir)) {
       expect(body, file).toContain(`references/${file}`);
       expect(read(`skills/chain-stories/references/${file}`).length, file).toBeLessThanOrEqual(

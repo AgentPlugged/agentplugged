@@ -13,11 +13,24 @@ import { AgentPluggedError } from "./errors.js";
 import type { PresencePrompt } from "./human/human-events.js";
 import type { PresenceAuthenticator } from "./human/presence.js";
 import { checkEngine, type EngineCheck } from "./init/engine-check.js";
+import { METHOD_CONFIG_PATH } from "./init/layout.js";
 import type { JournalBackup } from "./journal/journal-backup.js";
 import type { JournalSync } from "./journal/journal-sync.js";
 import type { KeyStore, MachineLock } from "./journal/key-store.js";
 import type { StateStore } from "./journal/state-store.js";
 import type { Clock, UlidFactory } from "./journal/ulid.js";
+import {
+  clearRefusals,
+  gestureOf,
+  REFUSALS_PATH,
+  readRefusals,
+  reasonOf,
+  recordRefusal,
+  repeatedGesture,
+  TRANSIENT_CODES,
+  targetOf,
+  writeRefusals,
+} from "./loop/refusal-registry.js";
 import type { CommonMemory } from "./memory/common-memory.js";
 import type { MergeProbe } from "./merge/merge-probe.js";
 import type { MethodSource } from "./method/method-source.js";
@@ -30,6 +43,7 @@ import type { StoryDiff } from "./review/review-diff.js";
 import type { MainBranchReader } from "./rules/main-branch.js";
 import type { StoryForge } from "./stories/story-forge.js";
 import type { StoryWorkspace } from "./stories/story-workspace.js";
+import type { KimiHooksState } from "./sync/kimi-hooks.js";
 import type { ExtensionMcpServer } from "./sync/mcp.js";
 import type { ToolProbe } from "./tools/tool-probe.js";
 import type { TestReferenceSource } from "./trace/test-references.js";
@@ -124,6 +138,11 @@ export interface CommandContext {
    * none, and any entry `sync` recorded earlier is removed.
    */
   readonly extensionServers?: readonly ExtensionMcpServer[];
+  /**
+   * What the user's own Kimi settings (outside the project) hold of the product's hooks, read by
+   * the CLI: `sync` writes nothing there and only reports it. Absent: not known, said as missing.
+   */
+  readonly kimiHooks?: KimiHooksState;
   /**
    * Where `history --export` writes, resolved once by the surface: the file's existing folder
    * (possibly outside the product's folder) and the file's name in it.
@@ -378,10 +397,24 @@ export class CommandRegistry {
     return [...this.#commands.values()].filter((command) => command.audience === "agent");
   }
 
+  /**
+   * Runs a command. An agent's refusal goes through the registry of identical refusals: it says
+   * what to do next, and the second identical one says not to try again (`state.next` then asks
+   * to change method). Only the agents' calls are counted; the creator retries freely.
+   */
   async run(
     name: string,
     context: CommandContext,
     input: CommandInput = {},
+  ): Promise<CommandResult<unknown>> {
+    const result = await this.#execute(name, context, input);
+    return context.actor === "agent" ? tracked(name, context, input, result) : result;
+  }
+
+  async #execute(
+    name: string,
+    context: CommandContext,
+    input: CommandInput,
   ): Promise<CommandResult<unknown>> {
     const command = this.#commands.get(keyOf(context.actor, name));
     // A command of the other actor is unknown to this one: an agent never runs `init` or `sync`
@@ -431,6 +464,58 @@ export class CommandRegistry {
     if (checked instanceof AgentPluggedError) return fail(refine(checked, undefined));
     const result = await command.run(context, input);
     if (!result.ok) return fail(refine(result.error, checked.pinned));
+    return result;
+  }
+}
+
+/**
+ * The result of an agent's call, once the registry of identical refusals has seen it: a success
+ * clears the refusals of the same call; a refusal is counted, told what to do, and told not to be
+ * tried again the same way from the second time. The registry is a memory: it never changes an
+ * outcome, and a failure of its own is ignored.
+ */
+async function tracked(
+  name: string,
+  context: CommandContext,
+  input: CommandInput,
+  result: CommandResult<unknown>,
+): Promise<CommandResult<unknown>> {
+  try {
+    const { files } = context;
+    if (!(await files.exists(METHOD_CONFIG_PATH))) return result;
+    const target = targetOf(input);
+    if (result.ok) {
+      if (!(await files.exists(REFUSALS_PATH))) return result;
+      const before = await readRefusals(files);
+      const after = clearRefusals(before, name, target);
+      if (after.length !== before.length) await writeRefusals(files, after);
+      return result;
+    }
+    const { error } = result;
+    const gesture = gestureOf(error.code);
+    const told = (advice: Record<string, unknown>): CommandResult<unknown> =>
+      fail(new AgentPluggedError(error.code, error.message_key, { ...error.details }, advice));
+    if (TRANSIENT_CODES.has(error.code)) return result;
+    const at = new Date((context.now ?? Date.now)()).toISOString();
+    const counted = recordRefusal(
+      await readRefusals(files),
+      {
+        action: name,
+        code: error.code,
+        target,
+        reason: reasonOf(error.details, error.message_key),
+      },
+      at,
+    );
+    await writeRefusals(files, counted.entries);
+    if (counted.entry.count >= 2) {
+      return told({
+        repeated: counted.entry.count,
+        do: repeatedGesture(counted.entry.count, gesture),
+      });
+    }
+    return gesture === undefined || error.details.do !== undefined ? result : told({ do: gesture });
+  } catch {
     return result;
   }
 }

@@ -551,7 +551,7 @@ describe("init", () => {
     expect(stdout).toContain("Write the files of your AI tools now (sync)? (Y/n) ");
     expect(stdout).toContain("Files of your AI tools written (");
     expect(endOfInit(stdout).sentence).toBe(
-      "Ready. Open one of your tools (Claude Code, Codex, Antigravity CLI, Cursor) in this folder and write: noah ?",
+      "Ready. Open one of your tools (Claude Code, Codex, Antigravity CLI, Cursor, Kimi Code CLI) in this folder and write: noah ?",
     );
     const yaml = await config();
     expect(yaml).toContain("permissions:\n  mode: protected\n");

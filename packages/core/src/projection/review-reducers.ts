@@ -263,6 +263,18 @@ export const REVIEW_REDUCERS: Readonly<Record<string, Reducer>> = {
         event: event.id,
       };
     }
+    // A finding of an approved pass the developer will fix: the code changes after the review, so
+    // the commit reviewed is no longer the one to merge. The story goes back to its developer, as
+    // after a failed pass, and comes back to review for a new pass; else the merge point would wait
+    // for an answer the engine refuses on the moved head, with nothing asking for that new pass.
+    const fixing = payload.items.some((item) => item.decision === "fix");
+    if (fixing && story.status === "in_review" && story.started !== undefined) {
+      story.status = "in_progress";
+      const since = story.status_by?.at;
+      const when =
+        since !== undefined && Date.parse(since) > Date.parse(event.at) ? since : event.at;
+      story.status_by = { agent: story.started.agent, at: when };
+    }
   },
   [REVIEW_EVENT_TYPES.published]: (draft, event) => {
     const payload = event.payload as StoryReviewPublishedPayload;

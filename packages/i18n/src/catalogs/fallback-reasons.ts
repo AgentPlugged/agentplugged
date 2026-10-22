@@ -1,3 +1,5 @@
+import { RUN_FALLBACK_REASONS_FR } from "./run-fallback-reasons.js";
+
 /** The hooks of Codex's project are not declared: the creator's `.codex/config.toml` is kept. */
 const CODEX_HOOKS_KEPT_FR =
   "sync n'a pas pu écrire `.codex/config.toml` (le fichier est à toi) : les hooks du projet d'agentplugged (la preuve du chat, la trace des lectures extérieures, les installations) ne sont pas déclarés pour Codex. Ajoute-les toi-même à partir de `.codex/hooks/agentplugged-codex.mjs` (événements `UserPromptSubmit`, `PreToolUse`, `PostToolUse`), ou retire ton fichier et relance `npx agentplugged sync`.";
@@ -5,6 +7,10 @@ const CODEX_HOOKS_KEPT_FR =
 /** The hooks of Cursor's project are not declared: the creator's `.cursor/hooks.json` is kept. */
 const CURSOR_HOOKS_KEPT_FR =
   "sync n'a pas pu écrire `.cursor/hooks.json` (le fichier est à toi) : les hooks du projet d'agentplugged (les règles de permission, la preuve du chat, la trace des lectures extérieures, les installations) ne sont pas déclarés pour Cursor, et le script et la politique du moteur n'ont pas été écrits. Les secrets restent hors de portée de l'agent par `.cursorignore` (et, dans la CLI, par `.cursor/cli.json`), le reste suit la constitution sans garde technique. Déplace ton fichier et relance `npx agentplugged sync`, puis refusionne tes propres hooks dans le fichier généré.";
+
+/** Kimi Code CLI has hooks, but only in the user's own settings file: the part every reason shares. */
+const KIMI_HOOKS_FR =
+  "Kimi Code CLI a des hooks (`PreToolUse`, `UserPromptSubmit`, `PostToolUse`…), mais ne les déclare que dans les `[[hooks]]` du `~/.kimi-code/config.toml` de l'utilisateur ; sa documentation ne nomme aucun fichier de hooks de projet, et `sync` n'écrit jamais en dehors du projet. Lance une fois `npx agentplugged kimi-hooks install` (un seul geste : il sauvegarde d'abord ce fichier, n'ajoute que son propre bloc balisé et ne touche jamais à tes entrées ; `kimi-hooks remove` l'enlève) pour y installer le hook du produit.";
 
 /** The "model" fallback, the same for every tool. */
 const MODEL_INHERIT_FR =
@@ -42,6 +48,25 @@ export const FALLBACK_REASONS: Readonly<Record<"fr", Readonly<Record<string, str
       "Cursor range les formulaires qu'un serveur MCP demande (« elicitation ») parmi ce qu'il sait faire, mais des rapports de son propre forum (Windows 11, Cursor 3.10.20, le 2026-07-07, encore vus sur 3.17.8) montrent le formulaire non affiché et l'appel d'outil qui reste en attente, et aucun n'a été vu affiché dans une session de ce produit (Cursor 3.23.12, le 2026-10-07) : les décisions te sont posées en texte dans le chat (« a, b ou c ? »), et l'agent enregistre ta réponse avec `chat.answer`, en la citant. Le moteur essaie quand même le formulaire d'abord (`chat.ask`) ; dans Cursor il attend 90 secondes un premier signe de vie, et sans rien il pose la question dans le chat pour le reste de la session. Un formulaire déjà répondu une fois est attendu aussi longtemps que dans n'importe quel autre outil.",
     "cursor.usage":
       "Cursor ne garde aucun nombre de jetons nulle part sur la machine : ses transcriptions (`~/.cursor/projects/<projet>/agent-transcripts/`) contiennent les messages et les appels d'outils, sans jetons, sans modèle et sans date par ligne. Le moteur ne mesure donc rien d'une session Cursor (`measure.usage` répond `available: false`) et ne l'estime jamais ; la page d'usage de Cursor (le tableau de bord de ton compte) est la seule source. Le hook `stop` de l'éditeur porte peut-être des jetons (vu dans le code de Cursor lui-même, non vérifié rempli) : il n'est pas utilisé.",
+    // Kimi Code CLI: hooks only in the user's settings, no model per agent, instructions not documented.
+    "kimi.instructions":
+      "la documentation de Kimi Code CLI ne dit pas quel fichier d'instructions de projet il charge (son propre dépôt contient un `AGENTS.md`, mais son chargement n'est pas documenté) : la constitution reste où elle est (`AGENTS.md`, ou `.agentplugged/AGENTS.md`) et les compétences de la méthode sont lues dans `.agents/skills/`, mais rien ne prouve que Kimi lit la constitution tout seul. Tant qu'une session ne le montre pas, commence par lui demander de lire la constitution.",
+    "kimi.model":
+      "les fichiers d'agents de Kimi Code CLI n'ont pas de champ `model` (un champ inconnu est ignoré) : chaque agent utilise le modèle de la session, quel que soit son niveau.",
+    "kimi.permissions": `${KIMI_HOOKS_FR} Aucun hook n'applique les chemins et les commandes protégés du produit, et Kimi n'a pas non plus de fichier de permissions de projet (ses \`[[permission.rules]]\` sont aussi dans le \`config.toml\` de l'utilisateur) : ce sont les approbations de Kimi qui décident (dans son mode sans terminal, \`kimi -p\`, sa politique automatique, avec seulement les règles de refus statiques), et les règles de la constitution restent à toi.`,
+    "kimi.rules": `${KIMI_HOOKS_FR} Les règles de permission du produit (push sur la branche principale, force push, suppression en masse, lecture des secrets, écriture des fichiers protégés du produit) ne sont donc pas appliquées par un hook dans Kimi : avant une telle action, la règle est à toi, et une règle qui demande d'abord (\`ask\`) est posée dans le chat.`,
+    "kimi.untrusted": `${KIMI_HOOKS_FR} Aucun hook n'enregistre ce que la session a lu à l'extérieur : après une lecture de contenu extérieur, l'agent appelle \`guard.external_read\` pour que le journal en garde la trace (source, heure, agent) ; rien n'est bloqué.`,
+    "kimi.chat_proof": `${KIMI_HOOKS_FR} Aucun hook ne retient tes messages : une réponse que tu donnes dans le chat est enregistrée « non vérifiée » (\`chat_unverified\`) et affichée ainsi partout, quel que soit le point (le journal garde la trace de chaque réponse). Pour que chaque réponse soit vérifiée, travaille dans Claude Code ; pour que les points à risque élevé passent par ta clé, choisis le niveau \`strict\`.`,
+    "kimi.installs": `${KIMI_HOOKS_FR} Aucun hook ne voit une installation avant qu'elle s'exécute : le moteur ne l'inscrit pas dans l'activité, et \`installs.mode: validate\` ne peut pas te demander de valider ici. Ce sont les approbations de Kimi qui décident.`,
+    "kimi.budget": `${KIMI_HOOKS_FR} Aucun hook ne voit chaque appel d'outil avant qu'il parte : le moteur ne peut pas arrêter le travail au plafond d'une story au plus proche, ni tenir la pause de l'équipe pendant qu'un agent écrit. Le coût est lu après coup (là où le moteur sait lire les traces de l'outil) et le point de contrôle du budget s'ouvre alors.`,
+    "kimi.rules.hooks-installed":
+      "le hook de Kimi Code CLI (installé dans les réglages de l'utilisateur) refuse ce que le produit refuse (push sur la branche principale, force push, suppression en masse, lecture des secrets, écriture des fichiers protégés du produit) pour une commande et pour un outil dont l'entrée nomme un chemin, mais un hook de Kimi ne sait qu'autoriser ou refuser, jamais demander : une règle qui demande d'abord (`ask`) est refusée avec une raison qui dit à l'agent de te demander dans le chat. La documentation de Kimi ne nomme ni ses outils de fichiers ni les champs de leur entrée : une règle de chemin s'applique à toute entrée d'outil qui a un champ ressemblant à un chemin, au mieux. Pour la même raison, seule une commande qui atteint le réseau est inscrite comme lecture de contenu extérieur : les outils web de Kimi et ceux des autres serveurs MCP ne sont pas vus, donc après une telle lecture appelle `guard.external_read`.",
+    "kimi.chat_proof.hooks-installed":
+      "le hook `UserPromptSubmit` de Kimi Code CLI ne documente aucun champ qui porte le texte que tu as tapé : aucun hook ne retient tes messages. Une réponse que tu donnes dans le chat est enregistrée « non vérifiée » (`chat_unverified`) et affichée ainsi partout, quel que soit le point (le journal garde la trace de chaque réponse). Pour que chaque réponse soit vérifiée, travaille dans Claude Code ; pour que les points à risque élevé passent par ta clé, choisis le niveau `strict`.",
+    "kimi.budget.hooks-installed":
+      "le hook de Kimi Code CLI (installé dans les réglages de l'utilisateur) retient un appel pendant que l'équipe est en pause, mais le plafond d'une story demande le coût de la session, que le moteur ne sait pas lire pour Kimi (ses traces ne sont pas documentées) : l'arrêt à un budget n'est pas appliqué au plus proche appel, et le point de contrôle du budget ne s'ouvre que lorsqu'un coût est rapporté.",
+    "kimi.decisions":
+      "la documentation de Kimi Code CLI ne dit rien des formulaires qu'un serveur MCP demande (« elicitation »), et aucun n'a été vu affiché dans une session de ce produit : les décisions te sont posées en texte dans le chat (« a, b ou c ? »), et l'agent enregistre ta réponse avec `chat.answer`, en la citant. Le moteur essaie toujours d'abord le formulaire (`chat.ask`) et retombe sur le chat quand l'outil ne sait pas l'afficher.",
     "*.budget":
       "cet outil n'a pas de hook qui voit chaque appel d'outil avant qu'il parte : le moteur ne peut pas arrêter le travail au plafond d'une story au plus proche, ni tenir la pause de l'équipe pendant qu'un agent écrit. Le coût est lu après coup (là où le moteur sait lire les traces de l'outil) et le point de contrôle de budget s'ouvre alors.",
     "*.usage":
@@ -86,5 +111,6 @@ export const FALLBACK_REASONS: Readonly<Record<"fr", Readonly<Record<string, str
     // Claude Code, Antigravity CLI, Codex and Cursor have the hook.
     "*.installs":
       "cet outil n'a aucun hook qui voie une installation avant qu'elle s'exécute : le moteur ne l'inscrit pas dans l'activité, et `installs.mode: validate` ne peut pas te demander de valider ici. Ce sont les permissions de l'outil qui décident.",
+    ...RUN_FALLBACK_REASONS_FR,
   },
 };

@@ -27,6 +27,7 @@ import {
   ORDER_TYPE_UNDO_CHECKPOINT_ANSWER,
   UndoCheckpointAnswerParamsSchema,
 } from "./checkpoint-web.js";
+import { CommandAllowParamsSchema, ORDER_TYPE_COMMAND_ALLOW } from "./command-allow.js";
 import {
   BRIDGE_ID_PATTERN,
   DEVICE_ID_PATTERN,
@@ -49,6 +50,7 @@ import {
   UnlinkForgeParamsSchema,
 } from "./forge-link.js";
 import { MACHINE_ROLE_MAX } from "./machines.js";
+import { NoahFreshParamsSchema, ORDER_TYPE_NOAH_FRESH } from "./noah-context.js";
 import { NoahWakeParamsSchema, ORDER_TYPE_NOAH_WAKE } from "./notice.js";
 import {
   CreateProductParamsSchema,
@@ -613,13 +615,21 @@ export const BASE_ORDER_TYPES: readonly OrderTypeDeclaration[] = [
     params: NoahSayParamsSchema,
     risk: "medium",
     target: "primary",
-    sealedParams: ["text"],
+    sealedParams: ["text", "view"],
   },
   {
     // Gives Noah, once more, the notices that wait (a validation he could not read yet): no parameter.
     type: ORDER_TYPE_NOAH_WAKE,
     version: 1,
     params: NoahWakeParamsSchema,
+    risk: "medium",
+    target: "primary",
+  },
+  {
+    // Makes Noah start a clean conversation (a new session of the tool); the old one stays in the tool: no parameter.
+    type: ORDER_TYPE_NOAH_FRESH,
+    version: 1,
+    params: NoahFreshParamsSchema,
     risk: "medium",
     target: "primary",
   },
@@ -642,6 +652,14 @@ export const BASE_ORDER_TYPES: readonly OrderTypeDeclaration[] = [
     type: ORDER_TYPE_TEAM_STOP,
     version: 1,
     params: TeamControlParamsSchema,
+    risk: "medium",
+    target: "primary",
+  },
+  {
+    // Lets the agents of a product run one more command (its first words), after a refusal the creator saw.
+    type: ORDER_TYPE_COMMAND_ALLOW,
+    version: 1,
+    params: CommandAllowParamsSchema,
     risk: "medium",
     target: "primary",
   },

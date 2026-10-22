@@ -13,3 +13,4 @@ playwright-report/
 # Keys of a server or a backup never go in the repository.
 *.key
 *.pem
+tooling/bench/results/

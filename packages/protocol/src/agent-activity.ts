@@ -216,13 +216,26 @@ export const SubmitResultInputSchema = z.strictObject({
   story: StoryIdSchema.optional(),
   ...AgentResultSchema.shape,
   summary: shortText(RESULT_SUMMARY_MAX, "summary"),
-  assumptions: z.array(shortText(RESULT_ITEM_MAX, "assumption")).max(RESULT_ITEMS_MAX),
-  open_questions: z.array(shortText(RESULT_ITEM_MAX, "open question")).max(RESULT_ITEMS_MAX),
-  conflicts: z.array(shortText(RESULT_ITEM_MAX, "conflict")).max(RESULT_ITEMS_MAX),
+  // A list left out is an empty list: an agent that has nothing to say need not say it (a refused
+  // call costs a whole turn, and every run ends with this call).
+  assumptions: z.array(shortText(RESULT_ITEM_MAX, "assumption")).max(RESULT_ITEMS_MAX).default([]),
+  open_questions: z
+    .array(shortText(RESULT_ITEM_MAX, "open question"))
+    .max(RESULT_ITEMS_MAX)
+    .default([]),
+  conflicts: z.array(shortText(RESULT_ITEM_MAX, "conflict")).max(RESULT_ITEMS_MAX).default([]),
 });
 
-/** Input of the agents' `next`: nothing. */
-export const NextInputSchema = z.strictObject({});
+/**
+ * Input of the agents' `next`: `reading: true` adds the passages of the documents the step's agent
+ * reads. The agent that does the step asks for them; whoever only follows the step does not.
+ */
+export const NextInputSchema = z.strictObject({
+  reading: z.boolean().optional(),
+  // Every other call names the agent, so agents name it here too (a refused read costs a turn):
+  // the step is the same for everyone, the name is ignored.
+  agent: z.string().optional(),
+});
 
 /**
  * A note the bridge writes about a run it drives: a stable code and its parameters, never a

@@ -58,6 +58,58 @@ beforeAll(() => {
   if (!existsSync(bin)) throw new Error(`Build the CLI first: ${bin} is missing`);
 });
 
+describe("agentplugged docs sheet", () => {
+  const story = [
+    "---",
+    "id: 1-1",
+    "kind: story",
+    "owner: sam",
+    "links: [prd]",
+    'title: "Sign in"',
+    "epic: epic-1",
+    "reviewer: creator",
+    "requirements: [EF-1]",
+    "budget_usd: 5",
+    "branch: feat/1-1-sign-in",
+    "depends_on: []",
+    "---",
+    "# 1-1 — Sign in",
+    "",
+    "## Context",
+    "",
+    "- Implements `EF-1`.",
+    "",
+    "## Intent",
+    "",
+    "Ada signs in.",
+    "",
+    "## Acceptance criteria",
+    "",
+    "- Given a passkey, when Ada signs in, then her page shows.",
+    "",
+    "## Out of scope",
+    "",
+    "- Signing out: story 1-2.",
+    "",
+  ].join("\n");
+
+  it("writes the excerpts of each story from the documents, then nothing more", async () => {
+    await writeDoc(PRD, ORIGINAL);
+    await writeDoc(".agentplugged/stories/1-1-sign-in.md", story);
+    const first = run(["docs", "sheet"]);
+    expect(first.status).toBe(0);
+    expect(first.stdout).toMatch(
+      /^written: \.agentplugged\/stories\/1-1-sign-in\.md \(\d+ lines, 1 excerpts\)$/m,
+    );
+    const sheet = readFileSync(join(cwd, ".agentplugged/stories/1-1-sign-in.md"), "utf8");
+    expect(sheet).toMatch(/### `EF-1` · prd\.md · [0-9a-f]{12}/);
+    expect(sheet).toContain("EF-1 [É1] : Ada signs in with a passkey.");
+    expect(run(["docs", "sheet", "1-1"]).stdout).toMatch(/^unchanged: /m);
+    // A story that does not exist: refused, as an invalid argument.
+    expect(run(["docs", "sheet", "9-9"]).status).toBe(2);
+  });
+});
+
 describe("agentplugged docs costs", () => {
   const story = (n: number) =>
     `---\nid: 1-${n}\nkind: story\nowner: sam\nlinks: []\n---\n# Story ${n}\n`;
@@ -266,7 +318,7 @@ describe("agentplugged docs check", () => {
       status: 2,
       stdout: "",
       stderr:
-        "Error INVALID_ARGUMENTS: Invalid arguments: docs (check, path, grow, research, slides, costs)\n",
+        "Error INVALID_ARGUMENTS: Invalid arguments: docs (check, path, grow, research, slides, costs, sheet, read, profile, bricks)\n",
     });
     expect(run(["docs", "fix"]).status).toBe(2);
     expect(run(["docs", "check", "extra"]).status).toBe(2);

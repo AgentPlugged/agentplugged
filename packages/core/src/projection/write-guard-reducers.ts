@@ -5,6 +5,7 @@ import {
   type WriteRefusedPayload,
   type WriteRule,
 } from "@agentplugged/protocol";
+import { nextRefusal, type RefusalRepeat } from "../loop/repeat-rules.js";
 import type { StoryState } from "./agent-reducers.js";
 import { openStory } from "./ci-reducers.js";
 import type { ProjectionDraft, Reducer } from "./reducers.js";
@@ -18,6 +19,8 @@ export interface WriteGuardCounts {
   doubted: number;
   /** The files of a story the guard refused a write on (distinct, bounded). */
   paths?: string[];
+  /** The latest refused write of a story and how many times in a row it was refused. */
+  repeat?: RefusalRepeat;
 }
 
 /** The files of a story whose refused writes are kept, at most. */
@@ -58,6 +61,7 @@ export const WRITE_GUARD_REDUCERS: Readonly<Record<string, Reducer>> = {
       const paths = story.paths ?? [];
       if (paths.length < MAX_GUARD_PATHS && !paths.includes(payload.path)) paths.push(payload.path);
       story.paths = paths;
+      story.repeat = nextRefusal(story.repeat, payload.rule, payload.path, event.at);
     }
   },
   [WRITE_GUARD_EVENT_TYPES.doubted]: (draft, event) => {

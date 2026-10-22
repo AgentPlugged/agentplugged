@@ -30,11 +30,7 @@ export const SKILL_OVERRIDE_LIMITS = {
 } as const;
 
 /** The review skills a product reviewer can be added to: the ones that run readers. */
-export const REVIEW_SKILLS: readonly string[] = [
-  "review-story",
-  "review-tests",
-  "critique-deliverable",
-];
+export const REVIEW_SKILLS: readonly string[] = ["review-story", "critique-deliverable"];
 
 /** Why a path is refused, or undefined when it is a path inside the product. */
 export function projectPathProblem(path: string): string | undefined {

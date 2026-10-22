@@ -152,6 +152,7 @@ export const DEVIATION_NOT_REPORTABLE_REASONS = [
   "unknown_story",
   "not_linked",
   "not_started",
+  "own_story",
   "done",
 ] as const;
 export type DeviationNotReportableReason = (typeof DEVIATION_NOT_REPORTABLE_REASONS)[number];

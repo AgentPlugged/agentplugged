@@ -498,6 +498,9 @@ export function summarizeState(full: FullStateView): StateSummary {
       agent.status ?? "no status",
       agent.task === null ? undefined : JSON.stringify(text(agent.task)),
       agent.story === null ? undefined : `story ${agent.story}`,
+      // A status is a declaration, not proof that something runs: it carries the day it was last
+      // declared so that an old "working" is not taken for work in progress.
+      `declared ${agent.last_signal_at.slice(0, 16)}Z`,
       resume === undefined
         ? undefined
         : `CAN RESUME: ${resume.checkpoint} was settled (${resume.decision}${

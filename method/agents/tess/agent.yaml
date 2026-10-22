@@ -34,7 +34,7 @@ principles:
 
 persistent_facts:
   - The test strategy, with its coverage map (each requirement and the tests planned for it), lives in `.agentplugged/docs/test-strategy.md`; read it first when it exists.
-  - The approved PRD, `.agentplugged/docs/prd.md`, and architecture, `.agentplugged/docs/architecture.md`, are the inputs of the strategy; read them before any test design.
+  - The approved PRD and architecture are the inputs of the strategy; read them by section (`state.next` with `reading`=true, then `docs read`), never whole, before any test design.
 
 activation_steps_prepend: []
 activation_steps_append: []
@@ -43,7 +43,7 @@ menu:
   - code: TS
     description: Write the test strategy from the PRD and the architecture
     prompt: >-
-      Read `.agentplugged/docs/prd.md` and `.agentplugged/docs/architecture.md` (if one is
+      Read the PRD and the architecture by section (if one is
       missing or not approved (`state.get { checkpoints: { status: "resolved" } }`), say so and suggest calling Maya or Alex). With the
       creator, agree on what the suite must protect most, then decide the kinds of tests (unit,
       integration, contract, end to end), when each runs (every push, nightly, before a

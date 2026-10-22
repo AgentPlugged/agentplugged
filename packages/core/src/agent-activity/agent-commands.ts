@@ -152,6 +152,7 @@ import {
   usageSessionsOf,
   usageView,
 } from "../usage/usage-rules.js";
+import { silentWaitProblem } from "./silent-wait.js";
 import { fitState, type GetStateResult, stateDetail, summarizeState } from "./state-view.js";
 
 /** What a write tool returns: the event recorded in the journal. */
@@ -1040,10 +1041,10 @@ async function reviewProblem(
 export const submitResultCommand = agentEventCommand({
   name: "submit_result",
   description:
-    "Always end your run with it: how it ended (complete, partial or blocked), a short summary the creator can read (800 characters at most: what is done, what is proven, what remains, what you expect from them, starting with the outcome; the long account goes in story.progress notes and the pull request), and the lists of your assumptions, open questions and conflicts (empty lists when there are none; each item 400 characters at most, 10 items at most). The summary never hides a failure: a partial or blocked result says so first. A blocked result opens a checkpoint on its story (or reuses the one your last blocked result opened there, while it is open), unlike report_status or update_story `blocked`. A complete result is refused with CHECKPOINT_OPEN while an open checkpoint blocks completing the story; without a story, while any open checkpoint blocks completing a story. Your complete result on a story you started (start_story) and that is in_progress also moves it to in_review, recorded in the same write: it is then refused with CHECKPOINT_OPEN while an open checkpoint blocks its review, and with STORY_INTENT_CHANGED while the last commit of its branch no longer holds the intent the creator approved.",
+    "Always end your run with it: how it ended (complete, partial or blocked), a short summary the creator can read (800 characters at most: what is done, what is proven, what remains, what you expect from them, starting with the outcome; the long account goes in story.progress notes and the pull request), and your assumptions, open questions and conflicts (lists, left out when empty; 10 items of 400 characters at most). The summary never hides a failure: a partial or blocked result says so first. A blocked result opens a checkpoint on its story (or reuses the one your last blocked result opened there, while it is open), unlike report_status or update_story `blocked`. A partial result is refused with DECISION_NOT_OPEN while it leaves the creator a decision with no checkpoint open (findings of your story's review not sorted, or open questions): open it first, or end blocked. A complete result is refused with CHECKPOINT_OPEN while an open checkpoint blocks completing the story; without a story, while any open checkpoint blocks completing a story. Your complete result on a story you started (start_story) and that is in_progress also moves it to in_review, recorded in the same write: it is then refused with CHECKPOINT_OPEN while an open checkpoint blocks its review, and with STORY_INTENT_CHANGED while the last commit of its branch no longer holds the intent the creator approved.",
   inputSchema: SubmitResultInputSchema,
   needsState: ({ status, story }) =>
-    status === "blocked" || (status === "complete" && story !== undefined),
+    status === "blocked" || status === "partial" || (status === "complete" && story !== undefined),
   // The move to review is decided from the journal as it is when written.
   replanned: true,
   events: ({ agent, story, status, summary, assumptions, open_questions, conflicts }, state) => {
@@ -1093,7 +1094,10 @@ export const submitResultCommand = agentEventCommand({
   },
   // Moving to review: what update_story `in_review` checks, on the journal and the
   // story's branch as they are when written.
-  check: async ({ agent, story, status }, state, { now, context }) => {
+  check: async ({ agent, story, status, open_questions }, state, { now, context }) => {
+    // A partial result never leaves the creator's decision waiting without a point for them.
+    const silent = silentWaitProblem({ agent, story, status, open_questions }, state, now);
+    if (silent !== undefined) return silent;
     if (story === undefined || !resultMovesToReview(storyIn(state, story), agent, status)) {
       return undefined;
     }

@@ -12,14 +12,14 @@ more, they pick. Run under your own id (`agent: iris`), in their language. Write
 `.agentplugged/docs/prfaq.md` and `.agentplugged/docs/ideas/forge-<slug>.md`.
 
 1. `agent.status` (`working`). Read the brief and the documents that exist; without any, ask for the
-   idea in a few sentences and keep their words. Name the concept type: `references/concept.md`.
-2. **Forge** (clarify, test or improve it): `references/forge.md`. It ends hardened, killed or clearer.
+   idea in a few sentences and keep their words. Name the concept type (`references/forge.md`).
+2. **Forge** (clarify, test or improve it): `references/forge.md`.
 3. **Test**: `references/personas.md`. The personas attack in a fresh context (one sub-agent plays
-   them in turn when you have one: the idea and that file, never your reasoning). Say the synthesis in a few lines.
-4. **Press release**: `references/prfaq.md`, `faq.md`, `verdict.md`. Write it with them from
+   them in turn when you have one: the idea and that file, never your reasoning).
+4. **Press release**: `references/prfaq.md` (with the verdict) and `references/faq.md`, from
    `assets/prfaq-template.md`; open its `document` checkpoint and ask once.
 5. **Bets**: report them (`kind: idea` after the forge or the test, `prfaq` after the release), then the
-   creator's gesture on each: `references/bets.md`.
+   creator's gesture on each: `references/personas.md`, "The bets".
 6. `agent.status` (`idle`), hand back to Noah.
 
 ## Never

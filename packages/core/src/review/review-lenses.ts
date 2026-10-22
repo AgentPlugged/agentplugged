@@ -225,7 +225,7 @@ export type ReaderId = ReviewLens | "depth" | "form" | "whole" | typeof JUDGE_LE
 /**
  * A reader: one sub-agent, one reading of its part of the diff, one
  * report per lens it carries. `judge` is true when it also does the judge's criterion-by-criterion
- * check (small change without risk only); a lone judge is a reader of its own with no lens.
+ * check (change without high risk); a lone judge is a reader of its own with no lens.
  */
 export interface Reader {
   readonly reader: ReaderId;
@@ -265,9 +265,9 @@ const DEPTH_LENSES: readonly ReviewLens[] = ["adversarial", "edge_cases", "verif
  * Who reads what. Every chosen lens is carried by exactly one reader, whatever the
  * grouping; the judge is carried by exactly one reader.
  *
- * - small change without risk (no adversarial nor structure lens, not sensitive): a single reader
- *   carries every lens and the judge's check, no sub-agent more;
- * - otherwise (sensitive included): `security` alone on the whole diff, `depth`
+ * - change without high risk (not sensitive): a single reader carries every lens and the judge's
+ *   check, no sub-agent more;
+ * - sensitive change: `security` alone on the whole diff, `depth`
  *   (adversarial, edge cases, verification gaps) and `form` (structure, relevance, prose), then
  *   the judge alone in a fresh context. A reader without a lens does not exist.
  *
@@ -295,9 +295,10 @@ function planFor(kind: ReviewKind, chosen: readonly LensChoice[], sensitive: boo
   const others = lenses.filter((lens) => lens !== "security");
   const alone = (lens: ReviewLens): Reader => ({ reader: lens, lenses: [lens], judge: false });
   const judge: Reader = { reader: JUDGE_LENS, lenses: [], judge: true };
-  const small = !sensitive && !others.includes("adversarial") && !others.includes("structure");
   const readers: Reader[] = security.map(alone);
-  if (small) {
+  // One independent reading is the rule: a change without high risk is read once, by one reader
+  // who also checks the criteria. Only a sensitive change is split and gets a judge of its own.
+  if (!sensitive) {
     return [...readers, { reader: "whole", lenses: others, judge: true }];
   }
   const depth = others.filter((lens) => DEPTH_LENSES.includes(lens));

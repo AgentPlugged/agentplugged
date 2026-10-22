@@ -36,11 +36,20 @@ import {
   staleKnowledgeStories,
 } from "../docs/knowledge-freshness.js";
 import { POSITIONING_PATH } from "../docs/launch-documents.js";
+import type { StepReading } from "../docs/read-sections.js";
 import { fastTrackHold } from "../fast-track/fast-track-rules.js";
 import type { GitView } from "../git/git-view.js";
 import { METHOD_DIR } from "../init/layout.js";
 import { isSkipped, skippedPhases } from "../journey/journey-rules.js";
 import type { JourneyView } from "../journey/journey-view.js";
+import { isHypothesis } from "../loop/loop-rules.js";
+import {
+  gestureOf,
+  liveRefusals,
+  type RefusalEntry,
+  repeatedGesture,
+} from "../loop/refusal-registry.js";
+import { type RepeatCause, repeatedCause } from "../loop/repeat-rules.js";
 import {
   dueScopes,
   lessonStatuses,
@@ -70,6 +79,7 @@ import { isMergeCheckpoint } from "../projection/merge-reducers.js";
 import { sentBackPublications } from "../publications/publication-rules.js";
 import {
   currentPass,
+  HEAD_MOVED,
   isStoryDeveloper,
   needsSecurity,
   openMergeCheckpoint,
@@ -155,6 +165,10 @@ export const NEXT_STEPS = [
    * writes the notes of the version and updates the user guides.
    */
   "release_notes",
+  /** The acceptance run of the delivery phase: Quentin replays the real journeys before the release. */
+  "acceptance",
+  /** A launch is a week old and no review of it was written: Iris measures and looks back. */
+  "after_launch",
   /**
    * A point the creator did not keep for themselves waits for the agent responsible for it to
    * decide it, with its reason: `decide_checkpoint`.
@@ -180,6 +194,11 @@ export interface WaitingCheckpoint {
   readonly title: string;
   readonly type: CheckpointType;
   readonly risk: CheckpointRisk;
+  /**
+   * Why the engine could not carry out the creator's last answer to it (a merge whose gate was
+   * closed, `MERGE_NOT_READY`): the point is open again. Absent when nothing failed.
+   */
+  readonly failure?: { readonly code: string; readonly reason: string | null };
 }
 
 /** Why the method needs a `sync`. */
@@ -209,6 +228,8 @@ export interface SyncFreshness {
 export interface NextState {
   /** What the reducers built (`ProjectionState["state"]`). */
   readonly projection: Readonly<Record<string, unknown>>;
+  /** The refusals of the agents' calls the engine remembers (the registry of identical failures). */
+  readonly refusals?: readonly RefusalEntry[];
   /** The clock (milliseconds): expiry of waivers. */
   readonly now: number;
   readonly sync: SyncFreshness;
@@ -349,6 +370,21 @@ export interface NextStep {
     readonly documents: readonly string[];
     readonly paths: readonly string[];
   }[];
+  /**
+   * Story sheets that quote a passage changed since they were written (stories not merged): the
+   * scrum master writes each again (`command`), and a validated one is validated again.
+   */
+  readonly stale_sheets?: readonly {
+    readonly story: string;
+    readonly path: string;
+    readonly excerpts: string;
+    readonly command: string;
+  }[];
+  /**
+   * The passages of the documents the step's agent reads, instead of the documents (never a whole
+   * document): the rest is asked for with `command`.
+   */
+  readonly reading?: StepReading;
   /** Zoé's update of the base beside a story under way, when pages are behind. */
   readonly background?: NextBackground;
   /**
@@ -461,6 +497,28 @@ export interface NextStep {
    * opened it.
    */
   readonly point?: { readonly kind: PointKind; readonly opened_by: string | null };
+  /**
+   * The step's story failed twice for the same cause: no third identical try. Noah has the cause
+   * investigated (an agent or a stronger model: reading the code and the logs, one targeted try at
+   * most) or puts the block to the creator in one question. Absent otherwise.
+   */
+  readonly change_method?: {
+    readonly cause: RepeatCause;
+    readonly times: number;
+    readonly what: string;
+  };
+  /**
+   * The engine's latest refusal of an agent's call, still live: the action, the code, what it was
+   * about, how many times in a row it was the same, and the gesture to make instead. From the
+   * second time, `change_method` says it too. Absent when nothing was refused lately.
+   */
+  readonly refused?: {
+    readonly action: string;
+    readonly code: string;
+    readonly target?: string;
+    readonly times: number;
+    readonly do: string;
+  };
   /**
    * The step is work that does not depend on the points waiting for the creator: the
    * agents go on with it while those points wait.
@@ -855,6 +913,58 @@ function releaseNotesDue(
   return Math.max(0, ...notes) < Math.max(...covered);
 }
 
+/** The acceptance report of the delivery phase, and the look back after a launch. */
+export const ACCEPTANCE_PATH = `${METHOD_DIR}/docs/acceptance.md`;
+export const AFTER_LAUNCH_PATH = `${METHOD_DIR}/docs/after-launch.md`;
+
+/** How long after a release or a publication the look back is proposed (milliseconds). */
+export const AFTER_LAUNCH_DELAY_MS = 7 * 24 * 60 * 60 * 1000;
+
+const citesDocument = (checkpoint: CheckpointState, path: string): boolean =>
+  checkpoint.type === "document" &&
+  (checkpoint.documents ?? []).some((cited) => pathKey(cited.path) === path);
+
+/** True when the creator approved the acceptance report during the current delivery phase. */
+function acceptancePassed(
+  checkpoints: readonly CheckpointState[],
+  since: string | null,
+  now: number,
+): boolean {
+  return checkpoints.some(
+    (checkpoint) =>
+      citesDocument(checkpoint, ACCEPTANCE_PATH) &&
+      approvedAt(checkpoint, now) &&
+      checkpoint.resolution !== null &&
+      atOrAfter(checkpoint.resolution.at, since),
+  );
+}
+
+/**
+ * True when the last release or publication the creator approved is at least a week old and no
+ * look back (a `document` point citing the after-launch report) was opened since: open ones wait in
+ * `validation`, so only a missing or a refused one makes it due.
+ */
+function afterLaunchDue(checkpoints: readonly CheckpointState[], now: number): boolean {
+  const launched = checkpoints
+    .filter(
+      (checkpoint) =>
+        (checkpoint.type === "release" || checkpoint.type === "publication") &&
+        approvedAt(checkpoint, now) &&
+        checkpoint.resolution,
+    )
+    .map((checkpoint) => Date.parse(checkpoint.resolution?.at ?? ""))
+    .filter((at) => Number.isFinite(at));
+  if (launched.length === 0) return false;
+  const launchedAt = Math.max(...launched);
+  if (now - launchedAt < AFTER_LAUNCH_DELAY_MS) return false;
+  return !checkpoints.some(
+    (checkpoint) =>
+      citesDocument(checkpoint, AFTER_LAUNCH_PATH) &&
+      Date.parse(checkpoint.opened_at) >= launchedAt &&
+      (statusAt(checkpoint, now) === "open" || approvedAt(checkpoint, now)),
+  );
+}
+
 /** The step the creator skips to skip a structuring document. */
 const DOCUMENT_STEPS: Partial<Record<DocumentKind, JourneyStep>> = {
   brief: "brief",
@@ -978,6 +1088,11 @@ function computeStep(
       title: checkpoint.title,
       type: checkpoint.type,
       risk: checkpoint.risk,
+      ...(checkpoint.web_failure === undefined || checkpoint.web_failure === null
+        ? {}
+        : {
+            failure: { code: checkpoint.web_failure.code, reason: checkpoint.web_failure.reason },
+          }),
     }));
   const pending = Object.values(recordOf<HumanState>(state.projection, "humans"))
     .filter((human) => human.trust === "pending")
@@ -1173,6 +1288,21 @@ function computeStep(
     });
   }
 
+  // 4a''. The acceptance report or the look back after a launch waits for the creator.
+  const waitingReport = open.find(
+    (checkpoint) =>
+      (citesDocument(checkpoint, ACCEPTANCE_PATH) && !skip("acceptance")) ||
+      (citesDocument(checkpoint, AFTER_LAUNCH_PATH) && !skip("after_launch")),
+  );
+  if (waitingReport !== undefined) {
+    const rest = open.filter((checkpoint) => checkpoint.id !== waitingReport.id);
+    return yours("validation", {
+      waiting: waitingOf([waitingReport, ...rest]),
+      command: `${COMMAND} review ${waitingReport.id}`,
+      checkpoint: waitingReport.id,
+    });
+  }
+
   // 4b. The knowledge base before new work, so the agents learn the product from it; never
   // before a refused end, a story under way or the delivery.
   const baseWork =
@@ -1267,6 +1397,19 @@ function computeStep(
     )
   ) {
     return call("release_notes", KNOWLEDGE_BASE_WRITER);
+  }
+
+  // 4c''. A launch a week old, and no look back: Iris measures what happened and writes it.
+  // A proposal, never over a story under way, and one answer of the creator skips it.
+  if (
+    config.domains.includes("product") &&
+    active("iris") &&
+    !skip("after_launch") &&
+    refused === null &&
+    !storiesUnderWay(checkpoints, recordOf<StoryState>(state.projection, "stories")) &&
+    afterLaunchDue(checkpoints, state.now)
+  ) {
+    return call("after_launch", "iris");
   }
 
   // 4d. A structuring document the creator refused, and no new point supersedes it:
@@ -1426,9 +1569,17 @@ function computeStep(
       return ready();
     }
     if (current === "delivery") {
-      return approvedSince(checkpoints, "release", since, state.now)
-        ? ready()
-        : firstOf("delivery", ["omar"]);
+      if (approvedSince(checkpoints, "release", since, state.now)) return ready();
+      // The acceptance run comes before the release: the engine knows it passed once the creator
+      // approved its report.
+      if (
+        active("quentin") &&
+        !skip("acceptance") &&
+        !acceptancePassed(checkpoints, since, state.now)
+      ) {
+        return call("acceptance", "quentin");
+      }
+      return firstOf("delivery", ["omar"]);
     }
     // Launch: a publication the creator approved during the phase.
     if (approvedSince(checkpoints, "publication", since, state.now)) return ready();
@@ -1617,6 +1768,31 @@ function computeStep(
     if (!reviewSkipped && untriagedFindings(story).length > 0) return triageStep(id);
     if (reviewSkipped || storyReviewDone(story, undefined, skip("story_ci", id))) {
       const merge = openMergeCheckpoint(checkpoints, id);
+      // The engine refused the creator's approval: the branch moved past the commit reviewed.
+      // Asking for the same merge again would be refused again: a new pass, on the new head.
+      const last = reviewOf(story)?.passes.at(-1);
+      const failure = merge?.web_failure ?? null;
+      if (
+        !reviewSkipped &&
+        failure !== null &&
+        failure.reason === HEAD_MOVED &&
+        last?.closed_by !== null &&
+        last?.closed_by !== undefined &&
+        // Journal ids sort in the order they were written: refused after the last pass closed.
+        failure.event > last.closed_by
+      ) {
+        const reviewers = reviewersOf("qa").filter((agent) => !isStoryDeveloper(story, agent));
+        const review: NextReview = {
+          ...reviewInfo(id),
+          pass: last.number + 1,
+          qa: reviewers.length > 0 ? "pending" : "unavailable",
+          reviewers: reviewers.slice(0, 1),
+        };
+        const [first] = reviewers;
+        return first === undefined
+          ? { ...yours("review", { story: id, command: historyCommand(id) }), review }
+          : { ...call("review", first, id), review };
+      }
       if (merge !== undefined && !held(merge)) {
         const rest = open.filter((checkpoint) => checkpoint.id !== merge.id);
         return yours("validation", {
@@ -1879,6 +2055,7 @@ const INDEPENDENT_STEPS: ReadonlySet<NextStepId> = new Set([
   "knowledge_base",
   "knowledge_base_update",
   "release_notes",
+  "after_launch",
   "deferred_work",
   "setup_ci",
   "breakdown",
@@ -1898,11 +2075,82 @@ export function nextStep(state: NextState, docs: NextDocs, config: NextConfig): 
   // The creator holds the team: whatever the method would propose, nothing starts.
   const pause = openPause(state.projection);
   if (pause !== undefined) return heldStep(step, pause);
+  // Two identical failures of the step's story: the method changes, never a third identical try.
+  const repeated = repeatOf(state, step);
+  const refused = refusalOf(state);
+  // A call the engine refused twice the same way: the story's own repeat comes first, else this one.
+  const method =
+    repeated ??
+    (refused !== undefined && refused.times >= 2
+      ? {
+          cause: "action" as const,
+          times: refused.times,
+          what: `${refused.action}: ${refused.code}`,
+        }
+      : undefined);
+  const told = {
+    ...step,
+    ...(method === undefined ? {} : { change_method: method }),
+    ...(refused === undefined ? {} : { refused }),
+  };
   // Zoé's update beside a story under way, never in its place.
   const background = backgroundUpdate(state, docs, config);
-  return background === undefined || step.step === "knowledge_base_update"
-    ? step
-    : { ...step, background };
+  return background === undefined || told.step === "knowledge_base_update"
+    ? told
+    : { ...told, background };
+}
+
+/**
+ * The latest refusal of an agent's call still live, as `next` tells it, or undefined. A refusal
+ * about a story is dropped once a hypothesis was put forward on that story, or a point of it was
+ * opened, since: the method already changed.
+ */
+function refusalOf(state: NextState): NextStep["refused"] {
+  const stories = recordOf<StoryState>(state.projection, "stories");
+  const checkpoints = Object.values(recordOf<CheckpointState>(state.projection, "checkpoints"));
+  const live = liveRefusals(state.refusals ?? [], state.now).find((entry) => {
+    const story = entry.target === "" ? undefined : own(stories, entry.target);
+    if (story === undefined) return true;
+    const since = Date.parse(entry.at);
+    return !(
+      (story.attempts ?? []).some(
+        (record) => isHypothesis(record) && Date.parse(record.at) >= since,
+      ) ||
+      checkpoints.some(
+        (checkpoint) =>
+          checkpoint.story === entry.target && Date.parse(checkpoint.opened_at) >= since,
+      )
+    );
+  });
+  if (live === undefined) return undefined;
+  const gesture = gestureOf(live.code);
+  return {
+    action: live.action,
+    code: live.code,
+    ...(live.target === "" ? {} : { target: live.target }),
+    times: live.count,
+    do: live.count >= 2 ? repeatedGesture(live.count, gesture) : (gesture ?? NO_GESTURE),
+  };
+}
+
+/** When a code has no gesture of its own: read the message, then `state.next`. */
+const NO_GESTURE =
+  "Read the message above for what to fix, then read state.next before trying again.";
+
+/** The repeated failure of the story an agent's step works on, as `next` tells it, or undefined. */
+function repeatOf(state: NextState, step: NextStep): NextStep["change_method"] {
+  // The creator's merge point is the one creator's step Noah must also hear a repeat on.
+  if (step.story === null || (step.you ? step.step !== "validation" : step.agent === null)) {
+    return undefined;
+  }
+  const repeated = repeatedCause(
+    own(recordOf<StoryState>(state.projection, "stories"), step.story),
+    step.story,
+    Object.values(recordOf<CheckpointState>(state.projection, "checkpoints")),
+  );
+  return repeated === undefined
+    ? undefined
+    : { cause: repeated.cause, times: repeated.times, what: repeated.what };
 }
 
 /**

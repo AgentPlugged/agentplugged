@@ -25,6 +25,7 @@ const NOT_THE_PRODUCT: ReadonlySet<string> = new Set([
   ".cursorrules",
   ".cursorignore",
   ".gemini",
+  ".kimi-code",
   ".mcp.json",
   ".windsurf",
   ".windsurfrules",

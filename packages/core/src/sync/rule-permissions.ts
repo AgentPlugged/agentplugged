@@ -340,13 +340,28 @@ export function claudeCommandRules(rules: readonly string[]): string[] {
 export const ENGINE_MCP_RULE = "mcp__agentplugged";
 
 /**
+ * The reads of the repository that change nothing, allowed by default so that a reviewer can compare
+ * two passes of a story without a refusal. Only the plain forms are named: `git -C <folder> …` is
+ * not (a rule matches the start of the command, so allowing `git -C` would allow every Git command
+ * with it, a push included): an agent works in the project's folder and needs no `-C`.
+ */
+export const READ_ONLY_GIT_RULES = [
+  "Bash(git diff:*)",
+  "Bash(git log:*)",
+  "Bash(git show:*)",
+  "Bash(git status:*)",
+] as const;
+
+/**
  * Claude Code (`.claude/settings.json`): each action's patterns in `allow`, `ask` or `deny`.
  * Claude Code evaluates `deny`, then `ask`, then `allow`, whatever the settings file: a creator's
- * own `allow` never lifts an `ask` or a `deny` written here.
+ * own `allow` never lifts an `ask` or a `deny` written here. `engine` is the command the agents run
+ * for the engine (`engineCommand`).
  */
 export function claudeRulePermissions(
   rules: Readonly<Record<RuleAction, RuleValue>>,
   mainBranch?: string,
+  engine?: string,
 ): RulePermissions {
   const lists: Record<RuleValue, string[]> = { allow: [], ask: [], deny: [] };
   for (const action of RULE_ACTIONS) {
@@ -355,7 +370,13 @@ export function claudeRulePermissions(
   // Every tool of the engine's own MCP server is allowed. They bypass nothing: the engine
   // checks the proof of every answer itself (Claude Code's automatic mode refused `answer_checkpoint`
   // for a merge, as a merge without review, while the engine had checked the creator's answer).
-  push(lists.allow, [ENGINE_MCP_RULE]);
+  push(lists.allow, [ENGINE_MCP_RULE, ...claudeCommandRules(READ_ONLY_GIT_RULES)]);
+  // The command the agents are given for the engine (`engineCommand`: `npx -y agentplugged@x`, or
+  // the creator's local launch, `node <path>/bin.js`) is allowed as it is written in their texts, so
+  // that what they are told to run and what their rules allow always agree.
+  if (engine !== undefined && engine !== "") {
+    push(lists.allow, claudeCommandRules([`Bash(${engine}:*)`]));
+  }
   return lists;
 }
 

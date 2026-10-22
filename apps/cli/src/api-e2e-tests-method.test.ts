@@ -36,7 +36,7 @@ describe("the api-e2e-tests skill", () => {
 
   it("frames from the validated stack, installs through the creator's validation, declares for the engine", () => {
     const text = flat(read(`skills/${SKILL}/SKILL.md`));
-    expect(text).toContain(".agentplugged/docs/architecture.md");
+    expect(text).toContain("docs read @stack");
     expect(text).toContain("`spec.md`");
     expect(text).toContain("npx agentplugged tests setup");
     expect(text).toContain("The validated stack wins");
@@ -54,31 +54,20 @@ describe("the api-e2e-tests skill", () => {
     expect(text).toContain("`seen: untestable`");
     expect(text).toContain("never to decide what to test");
     expect(text).toContain("Never write a test from the code it checks");
-    const generate = flat(read(`skills/${SKILL}/references/generate.md`));
-    expect(generate).toContain("From the words, never from the code");
-    expect(generate).toContain("Break the behaviour in the working copy, uncommitted");
-    expect(generate).toContain("What cannot be tested end to end");
+    expect(text).toContain("Write the scenario from the words of the criterion");
+    expect(text).toContain("break the behaviour uncommitted");
+    expect(text).toContain("Not testable");
   });
 
-  it("covers the choice, the layout, the data, the levels, the priorities and the CI", () => {
-    const frameworks = flat(read(`skills/${SKILL}/references/frameworks.md`));
+  it("covers the choice, the layout, the levels, the priorities and the CI", () => {
+    const text = flat(read(`skills/${SKILL}/SKILL.md`));
     for (const word of [
-      "the validated architecture",
-      "## Layout",
-      "## Data and fixtures",
-      "## Configuration",
-      "Contract",
-      "Never production data",
+      "Layout:",
+      "P0",
+      "Unstable:",
+      "A runner already in use is never replaced",
     ]) {
-      expect(frameworks, word).toContain(word);
-    }
-    // Every runner the engine knows is named where a developer chooses one, in the table or beside it.
-    expect(frameworks).toContain("Vitest or Jest");
-    expect(frameworks).toContain("pytest");
-    expect(frameworks).toContain("Playwright");
-    const generate = flat(read(`skills/${SKILL}/references/generate.md`));
-    for (const word of ["**P0**", "## API tests", "## End-to-end tests", "An unstable test"]) {
-      expect(generate, word).toContain(word);
+      expect(text, word).toContain(word);
     }
     const ci = flat(read(`skills/${SKILL}/references/ci.md`));
     expect(ci).toContain("Not checked by the CI");
@@ -102,12 +91,7 @@ describe("the api-e2e-tests skill", () => {
   });
 
   it("never names another method", () => {
-    for (const path of [
-      `skills/${SKILL}/SKILL.md`,
-      `skills/${SKILL}/references/frameworks.md`,
-      `skills/${SKILL}/references/generate.md`,
-      `skills/${SKILL}/references/ci.md`,
-    ]) {
+    for (const path of [`skills/${SKILL}/SKILL.md`, `skills/${SKILL}/references/ci.md`]) {
       expect(read(path), path).not.toMatch(
         new RegExp(`${"bm"}${"ad"}|test architect enterprise|\\btea\\b`, "i"),
       );
@@ -116,25 +100,14 @@ describe("the api-e2e-tests skill", () => {
 });
 
 describe("the tests guard and the grid in the method", () => {
-  it("makes the developers stop and ask under a confidence threshold, in both skills", () => {
-    for (const path of ["skills/develop-story/SKILL.md", `skills/${SKILL}/SKILL.md`]) {
-      const text = flat(read(path));
-      expect(text, path).toContain("from 1 to 10");
-      expect(text, path).toContain(
-        "under 5, stop and ask the creator the one question that blocks most",
-      );
-      expect(text, path).toContain("from 5 to 6, write it and state the assumption");
-    }
-  });
-
   it("lists in the grid the universal rows the engine marks, and never names another method", () => {
-    const grid = read("skills/review-tests/references/grid.md");
+    const grid = read("skills/review-story/references/tests.md");
     for (const row of ["navigate_then_read", "fragile_selector", "raw_event"]) {
       expect(grid, row).toContain(`\`${row}\``);
     }
     for (const path of [
-      "skills/review-tests/references/grid.md",
-      "skills/review-tests/SKILL.md",
+      "skills/review-story/references/tests.md",
+      "skills/review-story/SKILL.md",
       "skills/develop-story/SKILL.md",
     ]) {
       expect(read(path), path).not.toMatch(

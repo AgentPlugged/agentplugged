@@ -1,7 +1,7 @@
 # agentplugged
 
 Installs the AgentPlugged method in a repository, then makes its agents callable by name from
-Claude Code, Codex, Antigravity CLI and Cursor. No account, no server, no native
+Claude Code, Codex, Antigravity CLI, Cursor and Kimi Code CLI. No account, no server, no native
 module: Node.js 24 or later is all it needs, on Windows, macOS and Linux.
 
 ## Quick start
@@ -204,7 +204,8 @@ Set `AGENTPLUGGED_LANG=fr` for French messages.
 
 `sync` declares the `agentplugged` MCP server in each targeted tool's project configuration:
 `.mcp.json` (Claude Code), `[mcp_servers.agentplugged]` in `.codex/config.toml` (Codex),
-`.agents/mcp_config.json` (Antigravity CLI) and `.cursor/mcp.json` (Cursor).
+`.agents/mcp_config.json` (Antigravity CLI), `.cursor/mcp.json` (Cursor) and `.kimi-code/mcp.json`
+(Kimi Code CLI).
 By default the tools start it with `npx -y agentplugged@<engine_version> mcp`.
 
 - **Windows:** AI tools cannot start `npx` directly there, so `sync` run on Windows declares

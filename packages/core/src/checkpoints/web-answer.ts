@@ -18,6 +18,7 @@ import { type MergeDone, mergedEvent, mergesOn } from "../merge/story-merge.js";
 import { type CheckpointState, checkpointsOf, heldNow } from "../projection/checkpoint-reducers.js";
 import { computeProjection } from "../projection/compute-projection.js";
 import { isMergeCheckpoint } from "../projection/merge-reducers.js";
+import { HEAD_MOVED, reviewedHeadMoved } from "../review/review-rules.js";
 import { answerable, answeredElsewhere, resolutionProblem } from "./resolution-rules.js";
 
 /**
@@ -333,11 +334,15 @@ export interface WebCarryOut {
 const TOKEN = /^[A-Za-z][A-Za-z0-9_.]{0,47}$/;
 
 /** The code, and the reason when it has one, a failed carrying out records. */
-function failureOf(cause: AgentPluggedError | AnswerOrderCode): {
+function failureOf(
+  cause: AgentPluggedError | AnswerOrderCode,
+  why?: string,
+): {
   readonly code: string;
   readonly reason?: string;
 } {
-  if (typeof cause === "string") return { code: cause };
+  if (typeof cause === "string")
+    return { code: cause, ...(why === undefined ? {} : { reason: why }) };
   const reason = (cause.details as Record<string, unknown> | undefined)?.reason;
   return {
     code: TOKEN.test(cause.code) ? cause.code : "FAILED",
@@ -409,8 +414,11 @@ export async function carryOutWebAnswers(
       }
     };
     /** Releases the held answer: nothing was decided, the point says why. */
-    const release = async (cause: AgentPluggedError | AnswerOrderCode): Promise<void> => {
-      const why = failureOf(cause);
+    const release = async (
+      cause: AgentPluggedError | AnswerOrderCode,
+      reason?: string,
+    ): Promise<void> => {
+      const why = failureOf(cause, reason);
       await journal.appendAll(
         [
           {
@@ -454,7 +462,13 @@ export async function carryOutWebAnswers(
             check.code === ANSWER_ORDER_CODES.refused ||
             check.code === ANSWER_ORDER_CODES.mergeNotReady
           ) {
-            await release(check.code);
+            // A review done on a commit the branch moved past: said, so that the next step asks
+            // for a new pass instead of the same merge again.
+            const moved =
+              check.code === ANSWER_ORDER_CODES.mergeNotReady &&
+              typeof point.story === "string" &&
+              reviewedHeadMoved(fresh, point.story, head);
+            await release(check.code, moved ? HEAD_MOVED : undefined);
           }
           continue;
         }

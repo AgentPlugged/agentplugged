@@ -41,6 +41,8 @@ import {
   writeProfile,
   writeValidationMode,
 } from "../profile/profile.js";
+import { PROFILE_PATH, renderProfile } from "../project-profile/profile-file.js";
+import { scanProject } from "../project-profile/scan.js";
 import { resolveRules } from "../rules/resolve-rules.js";
 import { fallbacksFor } from "../sync/compatibility.js";
 import { engineCommand, mcpLaunch, withEngineCommand } from "../sync/mcp.js";
@@ -339,6 +341,18 @@ export const initCommand = defineCommand<InitResult>({
       `${GENERATED_HEADER_HASH}\n.cache/\noverrides/skills/*.local.yaml\n`,
       GENERATED_HEADER_HASH,
     );
+
+    // The project profile: written once from the product's own files; afterwards `docs profile
+    // refresh` rewrites it and keeps what people declared in it.
+    if (await files.exists(PROFILE_PATH)) plan.add(PROFILE_PATH, "unchanged");
+    else {
+      const content = renderProfile(await scanProject(files), {
+        sources: [],
+        acceptance: "",
+        notes: "",
+      });
+      plan.add(PROFILE_PATH, "created", { kind: "write", path: PROFILE_PATH, content });
+    }
 
     for (const copy of shipped) {
       const writes = copy.writes.map((write): Operation => ({ kind: "write", ...write }));

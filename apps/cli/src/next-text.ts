@@ -13,7 +13,7 @@ import { stagingLine } from "./workflow-flow.js";
 
 /**
  * How the creator calls an agent in a tool: `/iris` in Claude Code (its skill), `@agent-iris` in
- * Antigravity CLI and Cursor (their sub-agents), and by its name in Codex, which has no command.
+ * Antigravity CLI and Cursor (their sub-agents), `/skill:iris` in Kimi, and by its name in Codex, which has no command.
  */
 export function agentCall(tool: ToolId, id: string): string | undefined {
   switch (tool) {
@@ -22,6 +22,8 @@ export function agentCall(tool: ToolId, id: string): string | undefined {
     case "antigravity":
     case "cursor":
       return `@agent-${id}`;
+    case "kimi":
+      return `/skill:${id}`;
     case "codex":
       return undefined;
   }
@@ -105,6 +107,45 @@ function waitingLine(t: Translate, result: NextResult): string {
     : t("next.waiting.other", { count: result.waiting.length, id, title });
 }
 
+/** An answer of the creator the engine could not carry out, and what to do; the same failure twice. */
+function failureLines(t: Translate, result: NextResult): string[] {
+  const lines: string[] = [];
+  for (const point of result.waiting) {
+    if (point.failure === undefined) continue;
+    const id = displayText(point.id);
+    lines.push(
+      point.failure.reason === "base_dirty"
+        ? t("next.failure.base_dirty", { id })
+        : t("next.failure.other", {
+            id,
+            code: displayText(point.failure.code),
+            reason: displayText(point.failure.reason ?? "-"),
+          }),
+    );
+  }
+  const refused = result.refused;
+  if (refused !== undefined) {
+    lines.push(
+      t("next.refused", {
+        action: displayText(refused.action),
+        code: displayText(refused.code),
+        times: refused.times,
+        gesture: displayText(refused.do),
+      }),
+    );
+  }
+  const repeated = result.change_method;
+  if (repeated !== undefined) {
+    lines.push(
+      t("next.change_method", {
+        cause: displayText(repeated.cause),
+        what: displayText(repeated.what),
+      }),
+    );
+  }
+  return lines;
+}
+
 /** The sprint in force, when there is one: its goal and how many stories are done. */
 function sprintLines(t: Translate, result: NextResult): string[] {
   const sprint = result.sprint;
@@ -142,6 +183,7 @@ export function formatNext(t: Translate, result: NextResult): string {
     phaseLine(t, result),
     agentLine(t, result),
     waitingLine(t, result),
+    ...failureLines(t, result),
     ...sprintLines(t, result),
   ];
   // The deferred item that locks a story: the one to treat, or a story left aside.
@@ -251,6 +293,27 @@ export function formatNext(t: Translate, result: NextResult): string {
       t("next.late_pages", { pages: latePages.map((page) => displayText(page.path)).join(", ") }),
     );
   }
+  // The passages of the documents this step's agent reads, instead of the documents.
+  const reading = result.reading;
+  if (reading !== undefined) {
+    lines.push(
+      t("next.reading", {
+        ids: reading.passages.map((found) => displayText(found.id)).join(", "),
+        command: displayText(reading.command),
+      }),
+    );
+  }
+  // Story sheets quoting a passage changed since: to write again.
+  const staleSheets = result.stale_sheets;
+  if (staleSheets !== undefined) {
+    lines.push(
+      t("next.stale_sheets", {
+        stories: staleSheets
+          .map((sheet) => `${displayText(sheet.story)} (${displayText(sheet.command)})`)
+          .join(", "),
+      }),
+    );
+  }
   // Zoé's update beside a story under way: never in place of the step.
   const background = result.background;
   if (background !== undefined) {
@@ -356,7 +419,18 @@ export function nextJson(result: NextResult): string {
       agent: result.agent,
       agent_name: result.agent_name,
       tool: result.tool,
-      waiting: result.waiting.map(({ id, title, type, risk }) => ({ id, title, type, risk })),
+      waiting: result.waiting.map(({ id, title, type, risk, failure }) => ({
+        id,
+        title,
+        type,
+        risk,
+        // Why the engine could not carry out the last answer (a merge refused), when it failed.
+        ...(failure === undefined ? {} : { failure: { ...failure } }),
+      })),
+      // The same failure twice: no third identical try.
+      ...(result.change_method === undefined ? {} : { change_method: { ...result.change_method } }),
+      // The engine's latest refusal of an agent's call, and the gesture to make instead.
+      ...(result.refused === undefined ? {} : { refused: { ...result.refused } }),
       command: result.command,
       // Where the creator answers the step's checkpoint: `chat`, `terminal` or null.
       answer: result.answer ?? null,
@@ -435,6 +509,12 @@ export function nextJson(result: NextResult): string {
             },
           }),
       ...(result.morning === undefined ? {} : { morning: result.morning }),
+      // The passages the step's agent reads of the documents.
+      ...(result.reading === undefined ? {} : { reading: result.reading }),
+      // The story sheets quoting a passage changed since.
+      ...(result.stale_sheets === undefined
+        ? {}
+        : { stale_sheets: result.stale_sheets.map((sheet) => ({ ...sheet })) }),
       // The steps the creator skipped.
       ...(result.journey === undefined ? {} : { journey: result.journey }),
       // The creator's Git workflow, and what waits in staging.

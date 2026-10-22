@@ -15,7 +15,7 @@ document. Run it under your own id (`agent: izzy`), in the creator's language.
    written. `stack` holds what it computed (documents validated and unchanged, identifiers known,
    requirements, stories, journeys and decisions traced both ways), the graver first; `documents`
    what to read. Never judge again what the stack already says.
-2. Judge what only a reading tells, in a fresh context (a sub-agent when you have one): it reads the
+2. Judge what only a reading tells, in a fresh context (a sub-agent of your own id when you have one): it reads the
    documents, the epics, the stories the stack or a doubt points to, and `references/judge.md`.
 3. `review.ready` with `summary` and `findings` (possibly none): `references/judge.md` gives the
    shape; fix what the engine says is missing. It answers `verdict` (`ready`, `reserves`,

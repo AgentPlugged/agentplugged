@@ -169,6 +169,25 @@ describe("init: origin", () => {
     expect(files.files.get(".agentplugged/method.yaml")).not.toContain("origin");
   });
 
+  it("writes the project profile once from the product's own files, and never over a later one", async () => {
+    const files = new MemoryFiles({ "Cargo.toml": "[package]\n" });
+    const first = await initCommand.run(context(files), {});
+    expect(first.ok && first.value.entries).toContainEqual({
+      path: ".agentplugged/profile.md",
+      action: "created",
+    });
+    const profile = files.files.get(".agentplugged/profile.md") ?? "";
+    expect(profile).toContain("Rust (Cargo.toml)");
+    expect(profile).toContain("`cargo test`");
+    files.seed(".agentplugged/profile.md", "# mine\n");
+    const again = await initCommand.run(context(files), {});
+    expect(again.ok && again.value.entries).toContainEqual({
+      path: ".agentplugged/profile.md",
+      action: "unchanged",
+    });
+    expect(files.files.get(".agentplugged/profile.md")).toBe("# mine\n");
+  });
+
   it("refuses an unknown origin in method.yaml", () => {
     const text = `format_version: ${METHOD_FORMAT_VERSION}\nengine_version: 1.0.0\norigin: old\n`;
     expect(parseMethodConfig(text)).toMatchObject({ details: { field: "origin" } });

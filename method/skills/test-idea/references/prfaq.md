@@ -1,33 +1,33 @@
 # The press release, written first
 
-Write as though the product already shipped, under a future date the creator picks, then the
-questions it would draw. Their words and facts come first; what they do not know stays a question,
-never filled in by you. The sections present show where you are: to resume, read them.
+Write as though the product shipped, under a future date they pick. Their words and facts first;
+what they do not know stays a question. Start from the reader (`forge.md`), their trouble, its cost,
+the rough answer.
 
-**Four things first**: who the reader is, the trouble they feel, what it costs them, the rough
-answer (`concept.md`). Given all four at once, start drafting.
+**The release**: headline (could the reader repeat it?) and subheading; opening; the problem felt,
+without the solution; the solution as the reader's day changes; the creator's quote; how it works;
+a reader's quote marked `[imagined]`, never passed off as real; how to start. Draft each part, pick holes in it
+aloud; they correct, you never overwrite.
 
-**The release**, one aim per part:
-1. Headline: could the reader repeat it? Subheading: who gains, what changes.
-2. Opening: what is announced, for whom, why it matters to them.
-3. Problem: make the trouble felt, without the solution yet.
-4. Solution: what changes in the reader's day, not what was built.
-5. The creator's quote: the ambition behind the features.
-6. How it works, as the reader lives it.
-7. A reader's quote, marked `[imagined]`, never passed off as real.
-8. How to start (`concept.md`: how to take part, roll out or join).
+**Bars**: no jargon, no praise words (« unique », « innovative »): give the fact; no figure without a
+source or `[assumption]`; a claim about rivals or the market with no source stays `[assumption]`, and
+you offer once to look it up (skill `deep-research`); no requirement identifier; `npx agentplugged
+docs check` reports nothing.
 
-**Coaching.** For each part draft first, pick holes in your own draft aloud, ask them to sharpen it,
-then go one level deeper: a vague answer is asked for a case. If stuck, offer two or three concrete
-versions. They correct; you never overwrite.
+Then `faq.md` and the verdict. Once in, the `document` checkpoint (`type: document`, low risk,
+no story, no blocks) cites `.agentplugged/docs/prfaq.md` with its `branch` and `blob_sha`.
 
-**Bars**, applied quietly: no jargon; no words that praise instead of showing (« unique »,
-« innovative », « cutting-edge », « game-changing »): give the fact; someone outside the field gets
-why it matters; each sentence survives "and then?"; no overselling, the FAQ would expose it. No
-figure without a source or `[assumption]`; a claim about rivals or the market with no source stays
-`[assumption]`, and you offer once to look it up (skill `deep-research`). No requirement identifier;
-`npx agentplugged docs check` reports nothing.
+## The verdict
 
-Then `faq.md`, `verdict.md`. Once the verdict is in, the `document` checkpoint (`type: document`,
-low risk, no story, no blocks) cites `.agentplugged/docs/prfaq.md` with its `branch` and `blob_sha`.
-Later `write-positioning` starts from the validated release.
+A last section `## Verdict`, three lines the engine checks:
+
+```
+- Holds: what is clear, honest and defensible.
+- Soft: what is promising but thin → what would firm it up.
+- Breaks: a real risk, a contradiction or a hole → what facing it would take.
+```
+
+Each item of `Soft` and `Breaks` ends with `→` and a next move; a category with nothing says `none`; labels follow the language (`Tient`, `Fragile`, `Casse`). The call is the
+worst category that has items, in one sentence; no score. `concept:` must be in the header or the
+closed release is refused. `Soft`, `Breaks` and `[open]` become bets (`personas.md`). Never decide
+for them what to do about a crack.

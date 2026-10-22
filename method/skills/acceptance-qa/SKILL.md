@@ -13,7 +13,7 @@ in the browser", "show me it works"). You are not the story's developer. Run und
 criteria to scenarios), `references/run.md` (pilots, the `browser-qa` command, proofs),
 `references/verdicts.md` (the closed form of the check).
 
-1. **Start.** `agent.status` (`working`). Read the story's criteria and the journeys of the UX
+1. **Start.** `agent.status` (`working`). Read the story's criteria and the UX journeys it cites (`docs read`), never the whole
    specification, and nothing else: never the code, never the diff. Scenarios come from the words of
    the criteria.
 2. **Sort.** Each criterion is a scenario when a person can see its result in the interface, else

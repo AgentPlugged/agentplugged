@@ -227,7 +227,7 @@ function conflict(id: string, path: string): AgentPluggedError {
  *   (`AGENT_ID_CONFLICT`, naming it): a folder that holds exactly the shipped `SKILL.md` is the
  *   method's own (a run of `migrate` interrupted after its files);
  * - the shipped copies of the former agents leave `.agentplugged/agents/`, and the method is
- *   copied again (the renamed team, the new developers, the quick-lane skill);
+ *   copied again (the renamed team and the new developers);
  * - `overrides/agents/<former>.yaml` moves to its successor's name; one without successor goes to
  *   `overrides/agents/retired/`, which `sync` does not read.
  */
@@ -241,7 +241,7 @@ export async function planRenameAgentsFiles(
     if (!(await method.listFiles(`${dir}/${name}`)).includes(path)) return undefined;
     return normalizeText(await method.readText(path));
   };
-  for (const name of [...NEW_NAMES, "quick-lane"]) {
+  for (const name of NEW_NAMES) {
     for (const dir of ["agents", "skills"] as const) {
       const folder = `${METHOD_DIR}/${dir}/${name}`;
       if ((await files.listFiles(folder)).length === 0) continue;

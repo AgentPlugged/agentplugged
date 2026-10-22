@@ -32,6 +32,7 @@ import { loadMethodConfig } from "../init/method-config.js";
 import { methodNotInstalled } from "../profile/profile-command.js";
 import type { StoryState } from "../projection/agent-reducers.js";
 import { deviationComment, type ForgePosting, forgeTarget } from "../review/review-forge.js";
+import { isStoryDeveloper } from "../review/review-rules.js";
 import { oneLine } from "../stories/pull-request.js";
 import {
   agentMayResolve,
@@ -111,7 +112,7 @@ const reportDeviation = agentEventCommand<typeof ReportDeviationInputSchema, Rep
       ],
     };
   },
-  check: ({ story, requirements }, state, { prepared }) => {
+  check: ({ agent, story, requirements }, state, { prepared }) => {
     const cited = prepared?.requirements;
     if (cited === undefined) return notReportable(story, "unknown_story");
     const missing = requirements.find((requirement) => !cited.includes(requirement));
@@ -120,6 +121,9 @@ const reportDeviation = agentEventCommand<typeof ReportDeviationInputSchema, Rep
     const projected = Object.hasOwn(stories, story) ? stories[story] : undefined;
     if (tracedStoryStatus(state, story) === "done") return notReportable(story, "done");
     if (projected?.started === undefined) return notReportable(story, "not_started");
+    // Only another agent reports a deviation: the one who reported it lifts it, never the
+    // story's developer, so a developer's own report could only be lifted by the creator.
+    if (isStoryDeveloper(projected, agent)) return notReportable(story, "own_story");
     return undefined;
   },
 });

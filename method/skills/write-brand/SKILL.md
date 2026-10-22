@@ -1,6 +1,6 @@
 ---
 name: write-brand
-description: Brand platform (Julien, mission, values, voice, name) and visual identity (Stella, logo, palette, type, fixed rules). The engine checks the rules.
+description: Brand platform (Julien, mission, values, voice, name) and visual identity (Stella, logo, palette, type, fixed rules). The engine checks them.
 metadata:
   agent: julien
   phase: launch
@@ -10,7 +10,7 @@ metadata:
 On the creator's ask, or when they talk of brand, logo, colours, tone of voice or name. Two modes: the
 **platform** (Julien) then the **identity** (Stella), each with its file. Run under your own id, in their language.
 
-1. `agent.status` (`working`). **Read what exists**: brief, PRD, `launch/positioning.md`, `research/`, `ux.md`, and
+1. `agent.status` (`working`). **Read what exists**: brief, PRD and `ux.md` by section (`docs read`), `launch/positioning.md`, `research/`, and
    what the creator shares (logo, screenshots, a brand they admire). Say in two lines what you found; ask only for
    what is missing, one question at a time. Their words are kept as said.
 2. **Platform** (Julien): `references/platform.md`, `assets/brand-template.md`, to `.agentplugged/docs/launch/brand.md`.

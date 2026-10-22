@@ -23,7 +23,7 @@ import {
 } from "../chat/validation-settings.js";
 import { delegationOf, type PointsView, pointsView } from "../checkpoints/point-rules.js";
 import { existingCi } from "../ci/ci-rules.js";
-import { defineCommand, fail, ok } from "../command.js";
+import { type CommandContext, defineCommand, fail, ok } from "../command.js";
 import { type CourseNote, courseNote } from "../course/course-rules.js";
 import { type CritiqueNext, critiqueNext } from "../critique/critique-next.js";
 import { currentState } from "../deferred/deferred-commands.js";
@@ -33,14 +33,18 @@ import { knowledgePagesOf, mergedStoriesOf } from "../docs/knowledge-freshness.j
 import { noticeBranchOf, syncLateNotices } from "../docs/knowledge-notice.js";
 import { isPositioning } from "../docs/launch-documents.js";
 import { type ParsedDocument, parseDocumentFile } from "../docs/parse-document.js";
+import { stepReading } from "../docs/read-sections.js";
+import { sheetCommand, sheetStates, staleList } from "../docs/story-sheet.js";
 import { engineUpdateOf, updateAvailableOf } from "../engine-update.js";
 import { AgentPluggedError } from "../errors.js";
 import { gitView } from "../git/git-view.js";
+import { workflowOf } from "../git/git-workflow.js";
 import { isExistingProduct } from "../init/existing-product.js";
 import { METHOD_CONFIG_PATH, METHOD_DIR } from "../init/layout.js";
 import { loadMethodConfig } from "../init/method-config.js";
 import { isSkipped } from "../journey/journey-rules.js";
 import { journeyView } from "../journey/journey-view.js";
+import { readRefusals } from "../loop/refusal-registry.js";
 import { ARCHITECTURE_PATH, readWorkingBytes } from "../phases/design-review.js";
 import { methodNotInstalled } from "../profile/profile-command.js";
 import type { StoryState } from "../projection/agent-reducers.js";
@@ -55,7 +59,9 @@ import { validatedStories } from "../sprints/sprint-rules.js";
 import { readSprintStories } from "../sprints/sprint-stories.js";
 import { syncInputsFingerprint } from "../sync/inputs.js";
 import { loadManifest, SYNC_MANIFEST_PATH } from "../sync/manifest.js";
-import { activeDefinitions, loadDefinitions } from "../sync/sync-command.js";
+import { KIMI_MCP_PATH } from "../sync/mcp.js";
+import { skillPhaseKey, skillPhaseOf } from "../sync/phase-skills.js";
+import { activeDefinitions, loadDefinitions, syncCommand } from "../sync/sync-command.js";
 import { GEMINI_MD_PATH } from "../sync/targets/antigravity.js";
 import { CLAUDE_SETTINGS_PATH } from "../sync/targets/claude-code.js";
 import { CODEX_CONFIG_PATH } from "../sync/targets/codex.js";
@@ -91,6 +97,7 @@ export const TOOL_MARKERS: Readonly<Record<ToolId, string>> = {
   codex: CODEX_CONFIG_PATH,
   antigravity: GEMINI_MD_PATH,
   cursor: CURSOR_RULE_PATH,
+  kimi: KIMI_MCP_PATH,
 };
 
 /** The kinds `next` looks for, and the file name that stands for each without a header. */
@@ -149,6 +156,64 @@ async function syncFreshness(
     recorded: manifest ? ((await loadManifest(files)).inputs ?? null) : null,
     current: await syncInputsFingerprint(files),
   };
+}
+
+/**
+ * Runs `sync` again when the phase whose skills it installed is no longer the current one, and
+ * nothing else changed since (a stale method is the creator's `sync` step). A failure changes
+ * nothing: the skills of the former phase stay, and every skill stays callable by its name.
+ */
+async function refreshPhaseSkills(
+  context: CommandContext,
+  config: MethodConfig,
+  projection: Record<string, unknown>,
+  now: number,
+): Promise<void> {
+  const { files } = context;
+  if (!(await files.exists(SYNC_MANIFEST_PATH))) return;
+  const manifest = await loadManifest(files);
+  if (manifest.skills_phase === undefined) return;
+  if (manifest.skills_phase === skillPhaseKey(skillPhaseOf(projection, config, now))) return;
+  if (manifest.inputs !== (await syncInputsFingerprint(files))) return;
+  try {
+    const synced = await syncCommand.run(context, {});
+    if (synced.ok) await commitPhaseSync(context, projection, synced.value.entries);
+  } catch {
+    // The next call tries again.
+  }
+}
+
+/** The commit message of the files a change of phase installed. */
+export const PHASE_SYNC_COMMIT_MESSAGE = "Method: skills of the new phase";
+
+/**
+ * The files a change of phase wrote are committed by the engine where the creator's Git settings
+ * allow a direct commit: left as changes, they would keep the main branch from taking a merge
+ * (`base_dirty`). Where no direct commit is allowed, or the branch is not the one checked out
+ * here, they stay as `sync` left them. Never fails.
+ */
+async function commitPhaseSync(
+  context: CommandContext,
+  projection: Record<string, unknown>,
+  entries: readonly { readonly path: string; readonly action: string }[],
+): Promise<void> {
+  const flow = workflowOf(projection).resolved;
+  const workspace = context.storyWorkspace;
+  // Only where stories are merged here, by the engine: through a pull request, the working copy of
+  // the main branch does not stand in the way of a merge. No branch named: the one checked out here.
+  if (flow.merge !== "direct" || workspace?.commitPaths === undefined) return;
+  const branch = flow.integration ?? flow.production;
+  const paths = [
+    ...new Set([
+      ...entries.filter((entry) => entry.action !== "unchanged").map((entry) => entry.path),
+      SYNC_MANIFEST_PATH,
+    ]),
+  ];
+  try {
+    await workspace.commitPaths({ branch, paths, message: PHASE_SYNC_COMMIT_MESSAGE });
+  } catch {
+    // The files stay as `sync` wrote them.
+  }
 }
 
 /** A document's kind: its header's `kind` when known, else its file name (`PRD.md` → `prd`). */
@@ -285,7 +350,10 @@ function preferredTools(config: MethodConfig): Record<string, ToolId> {
 export const nextCommand = defineCommand<NextResult>({
   name: "next",
   async run(context, input) {
-    const extra = Object.keys(input)[0];
+    // `reading` (true) asks for the passages of the documents the step's agent reads: only that
+    // agent asks for it; whoever just follows the step (Noah) does not pay for it.
+    const wantsReading = input.reading === true;
+    const extra = Object.keys(input).find((key) => key !== "reading");
     if (extra !== undefined) {
       return fail(
         new AgentPluggedError(ErrorCode.INVALID_ARGUMENTS, "error.invalid_arguments", {
@@ -302,6 +370,7 @@ export const nextCommand = defineCommand<NextResult>({
       // What the creator did on the forge is recorded before the step is computed.
       await (await import("../merge/forge-follow.js")).followForge(context);
       let projection: ProjectionState["state"] = {};
+      let journalRead = false;
       if (context.journal !== undefined) {
         try {
           const listing = await context.journal.list();
@@ -312,6 +381,7 @@ export const nextCommand = defineCommand<NextResult>({
             allowTestTypes: context.allowTestTypes === true,
           });
           projection = state.state;
+          journalRead = true;
         } catch (error) {
           // A folder without Git has no journal yet: nothing waits, nothing is blocked.
           if (!(error instanceof AgentPluggedError && error.code === ErrorCode.NOT_A_GIT_REPO)) {
@@ -340,7 +410,14 @@ export const nextCommand = defineCommand<NextResult>({
         ...(delegation === undefined ? {} : { delegation }),
       };
       const now = (context.now ?? Date.now)();
-      const state = { projection, now, sync: await syncFreshness(files, tools) };
+      // A phase ended since the last `sync`: the engine installs the skills of the new one itself.
+      if (journalRead) await refreshPhaseSkills(context, config, projection, now);
+      const state = {
+        projection,
+        now,
+        sync: await syncFreshness(files, tools),
+        refusals: await readRefusals(files),
+      };
       const docs = await readDocs(files);
       // The knowledge base: Zoé's first step on an existing product, and what the
       // positioning of the launch is drawn from.
@@ -409,10 +486,34 @@ export const nextCommand = defineCommand<NextResult>({
               },
             };
       const decisions = decisionQueue(projection, now, mode, delegation);
+      // The story sheets behind the documents they quote; never a reason for `next` to fail.
+      const merged = new Set(mergedStoriesOf(projection).map((entry) => entry.story));
+      const staleSheets = await readDocumentFiles(files, true)
+        .then((current) =>
+          sheetStates(current)
+            .filter((sheet) => sheet.stale.length > 0 && !merged.has(sheet.story))
+            .map((sheet) => ({
+              story: sheet.story,
+              path: sheet.path,
+              excerpts: staleList(sheet.stale),
+              command: sheetCommand(sheet.story),
+            })),
+        )
+        .catch(() => []);
+      // What the step's agent reads of the documents: passages, never a document; never a reason
+      // for `next` to fail.
+      const reading =
+        !wantsReading || step.agent === null || step.you
+          ? undefined
+          : await readDocumentFiles(files, true)
+              .then((current) => stepReading(current, step.agent ?? "", step.story))
+              .catch(() => undefined);
       return ok({
         ...step,
         ...fast,
+        ...(reading === undefined ? {} : { reading }),
         ...(notices.pending.length === 0 ? {} : { late_pages: notices.pending }),
+        ...(staleSheets.length === 0 ? {} : { stale_sheets: staleSheets }),
         answer,
         ...(reason === undefined ? {} : { answer_reason: reason }),
         decisions,
@@ -440,14 +541,17 @@ export const nextAgentCommand = defineCommand<AgentNextResult>({
   name: "next",
   audience: "agent",
   description:
-    "Read the product's next step: the step, the active agent to call and in which tool, the story or checkpoint it concerns, the open checkpoints (`waiting`), where the creator answers (`answer`: `chat`, or `terminal` with its `answer_reason`: `strict`, a high risk at the strict level only) and `decisions`: the checkpoints waiting for the creator in the order to present them one at a time (by risk, then by the actions they block, then oldest first), each with its recommendation. `validation` says how the creator is asked right now: `channels` (`available`: the ways to click an answer, in the order the engine tries them, then `chat`; call ask_creator or ask_stack when it holds more than `chat`), `elicitation` (the form alone is usable), `mode` and `proof`; it is read at each call, so read it before each decision, never from an earlier reading; `validation.points` says which points the creator keeps (`fixed`) and which the agents decide (`delegated`). `validation.unpublished` (when not null) says the local main branch holds commits not published to the remote, the creator's settings among them, which apply anyway: Noah offers once to publish them with request_creator_action `forge_push_main` (never forced), one « oui », never a command to type. The step `point_decision` hands a point the creator did not keep to the agent it names (decide_checkpoint). `independent: true` marks work that does not depend on the points waiting for the creator: do it; `stop: true`: nothing independent is left, stop. `pile` is the single stack of everything waiting (open_stack with `pile.stack`), and `morning` the summary of what happened since the creator last answered. `journey.skipped` lists the steps of the proposed journey the creator skipped: they are never errors, never proposed again, and the creator may take one up again (`step_resume`); never skip a step yourself, the creator says it. `update_available` / `engine_update`: a newer engine to propose once (request_creator_action `engine_update`). `background`, when present, is Zoé's update of the knowledge base pages that are behind, to run beside the step (in another session, never in place of it, never holding a developer). `critique`, when present (`kind`, `why`), is the critique of the structuring document the creator is about to validate, at risk: offer it in one line, once (review.critique `propose` records it; never impose it); `kind: idea` offers to test the idea or write the press release first. `table`, when present (`format: three_views`, `story`, `agents`: product, delivery, quality), offers the three views of a sensitive story whose merge waits for the creator: one line, once per story (chat.table with `table` {`story`} alone records it; never impose it). `hypotheses_due` lists the open hypotheses an evidence arrived for (a proof, a merged story): show them in one line each and let the creator close them or keep them open. `spec_path`, when present, is the short path (one spec instead of the brief, the PRD and the architecture): `choose` (a new product at its framing: propose the path, once, after `docs path`), `grow` (the spec outgrew it, `spec_path_why` says why: offer the full path in one line), `risk` (the spec speaks of sensitive data its scope does not declare: same line) or `carry` (the full path is on again while a spec stands: `docs grow` carries it over). `web_answers`: answers given in the web view to your points (yours = `agent`), until you write something: apply like a chat answer.`late_pages` lists knowledge base pages that are behind the code and carry no late notice (the creator's Git settings give the engine no commit): treat them as late, never rely on them. It writes nothing but, where the creator's Git settings allow it, a commit of its own adding the late notice to a knowledge base page.",
+    "Read the product's next step: the step, the active agent to call and in which tool, the story or checkpoint it concerns, the open checkpoints (`waiting`), where the creator answers (`answer`: `chat`, or `terminal` with its `answer_reason`: `strict`, a high risk at the strict level only) and `decisions`: the checkpoints waiting for the creator in the order to present them one at a time (by risk, then by the actions they block, then oldest first), each with its recommendation. `validation` says how the creator is asked right now: `channels` (`available`: the ways to click an answer, in the order the engine tries them, then `chat`; call ask_creator or ask_stack when it holds more than `chat`), `elicitation` (the form alone is usable), `mode` and `proof`; it is read at each call, so read it before each decision, never from an earlier reading; `validation.points` says which points the creator keeps (`fixed`) and which the agents decide (`delegated`). `validation.unpublished` (when not null) says the local main branch holds commits not published to the remote, the creator's settings among them, which apply anyway: Noah offers once to publish them with request_creator_action `forge_push_main` (never forced), one « oui », never a command to type. The step `point_decision` hands a point the creator did not keep to the agent it names (decide_checkpoint). `independent: true` marks work that does not depend on the points waiting for the creator: do it; `stop: true`: nothing independent is left, stop. `pile` is the single stack of everything waiting (open_stack with `pile.stack`), and `morning` the summary of what happened since the creator last answered. `journey.skipped` lists the steps of the proposed journey the creator skipped: they are never errors, never proposed again, and the creator may take one up again (`step_resume`); never skip a step yourself, the creator says it. `update_available` / `engine_update`: a newer engine to propose once (request_creator_action `engine_update`). `background`, when present, is Zoé's update of the knowledge base pages that are behind, to run beside the step (in another session, never in place of it, never holding a developer). `critique`, when present (`kind`, `why`), is the critique of the structuring document the creator is about to validate, at risk: offer it in one line, once (review.critique `propose` records it; never impose it); `kind: idea` offers to test the idea or write the press release first. `table`, when present (`format: three_views`, `story`, `agents`: product, delivery, quality), offers the three views of a sensitive story whose merge waits for the creator: one line, once per story (chat.table with `table` {`story`} alone records it; never impose it). `hypotheses_due` lists the open hypotheses an evidence arrived for (a proof, a merged story): show them in one line each and let the creator close them or keep them open. `spec_path`, when present, is the short path (one spec instead of the brief, the PRD and the architecture): `choose` (a new product at its framing: propose the path, once, after `docs path`), `grow` (the spec outgrew it, `spec_path_why` says why: offer the full path in one line), `risk` (the spec speaks of sensitive data its scope does not declare: same line) or `carry` (the full path is on again while a spec stands: `docs grow` carries it over). `web_answers`: answers given in the web view to your points (yours = `agent`), until you write something: apply like a chat answer.`reading`, asked with `reading: true` by the agent doing the step only, holds the passages of the PRD, architecture and UX specification that agent needs and the `command` (`docs read`) for the rest: never read a whole document. `refused`: the latest refusal of an agent's call with its gesture `do`; refused twice the same way, `change_method` says not to try again. `stale_sheets` lists story sheets quoting a passage changed since: the scrum master writes each again (`command`) and opens the story's `document` checkpoint again when it was validated. `late_pages` lists knowledge base pages that are behind the code and carry no late notice (the creator's Git settings give the engine no commit): treat them as late, never rely on them. It writes nothing but, where the creator's Git settings allow it, a commit of its own adding the late notice to a knowledge base page.",
   inputSchema: NextInputSchema,
   // It says that the session must move to the version the product pins.
   allowsOlderEngine: () => true,
   async run(context, input) {
     const parsed = NextInputSchema.safeParse(input);
     if (!parsed.success) return fail(invalidInput("next", parsed.error));
-    const step = await nextCommand.run(context, {});
+    const step = await nextCommand.run(
+      context,
+      parsed.data.reading === true ? { reading: true } : {},
+    );
     if (!step.ok) return step;
     // Always fresh: read now, from this session (never from the journal, never cached).
     const loaded = await loadMethodConfig(context.files);

@@ -37,6 +37,8 @@ export const JOURNEY_STEPS = [
   "knowledge_base",
   "positioning",
   "retrospective",
+  "acceptance",
+  "after_launch",
   "ci_setup",
   "docs_check",
   // A story's steps.

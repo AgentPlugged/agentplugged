@@ -58,6 +58,7 @@ import { type RulesSource, type RulesWarning, resolveRules } from "../rules/reso
 import { detectTools } from "../tools/detect-tools.js";
 import { targetedTools } from "../tools/targeted-tools.js";
 import type { AntigravityPolicy } from "../trust/antigravity-policy.js";
+import { KIMI_POLICY_PATH } from "../trust/kimi-guard.js";
 import { sameBytes } from "../values.js";
 import type { WorkspaceFiles } from "../workspace-files.js";
 import { type ResolvedAgent, resolveAgent } from "./agent-render.js";
@@ -65,6 +66,7 @@ import { type ClientId, fallbacksFor, type ToolFallback } from "./compatibility.
 import { withCursorIgnoreBlock, withoutCursorIgnoreBlock } from "./cursor-ignore.js";
 import { cleanLegacyGemini, hasLegacyGeminiFiles, isLegacyGeminiAgent } from "./gemini-legacy.js";
 import { syncInputsFingerprint } from "./inputs.js";
+import type { KimiHooksState } from "./kimi-hooks.js";
 import { loadManifest, renderManifest, SYNC_MANIFEST_PATH } from "./manifest.js";
 import {
   engineCommand,
@@ -92,6 +94,7 @@ import {
   type SettingsFlavor,
   type SettingsRecord,
 } from "./permissions.js";
+import { currentSkillPhase, skillPhaseKey, skillsOfPhase } from "./phase-skills.js";
 import {
   claudeCommandRules,
   claudeRulePermissions,
@@ -120,6 +123,7 @@ import {
   renderCursor,
   renderCursorGuard,
 } from "./targets/cursor.js";
+import { renderKimi, renderKimiGuard } from "./targets/kimi.js";
 import { renderSharedSkills } from "./targets/shared-skills.js";
 import { claudeTrustHooks, type TrustHooks, withTrustHooks } from "./trust-hooks.js";
 import { worktreesFolderOf } from "./worktrees-folder.js";
@@ -182,6 +186,11 @@ export interface SyncResult {
    * workspace the creator trusts, which the creator is reminded of.
    */
   readonly cursorHooksReminder: boolean;
+  /**
+   * What the user's own Kimi settings hold of the product's hooks, when Kimi is targeted: `sync`
+   * never writes there, the creator installs them with `kimi-hooks install`.
+   */
+  readonly kimiHooks?: KimiHooksState;
   /** Generated agents with a preferred tool, in definition order. */
   readonly preferredTools: readonly PreferredTool[];
   /** The permission rules written: where they come from, and what to report. */
@@ -427,6 +436,7 @@ const TOOL_ROOTS: Readonly<Record<ToolId, readonly string[]>> = {
   codex: [".agents", ".codex"],
   antigravity: [".agents", ".gemini"],
   cursor: [".agents", ".cursor"],
+  kimi: [".agents", ".kimi-code"],
 };
 
 /** Folders each tool reads, kept even when empty while the tool is targeted. */
@@ -442,6 +452,7 @@ const TOOL_FOLDERS: Readonly<Record<ToolId, readonly string[]>> = {
     ".cursor/hooks",
     ".cursor/rules",
   ],
+  kimi: [".agents", ".agents/skills", ".kimi-code", ".kimi-code/agents"],
 };
 
 /** Generated folders of the targeted tools, in a fixed order. */
@@ -586,10 +597,9 @@ export const syncCommand = defineCommand<SyncResult>({
    * Generates the files of the targeted AI tools (the `tools` list of `method.yaml`) from
    * `.agentplugged/agents/` and `.agentplugged/skills/`.
    */
-  async run(
-    { files, tools: probe, method, platform, mainBranch, projectRoot, extensionServers },
-    options,
-  ) {
+  async run(context, options) {
+    const { files, tools: probe, method, platform, mainBranch, projectRoot } = context;
+    const { extensionServers, kimiHooks } = context;
     if (!(await files.exists(METHOD_CONFIG_PATH))) return fail(methodNotInstalled());
     // The cleanup of the retired Gemini CLI's files: it writes nothing else.
     if (options.clean_gemini === true) {
@@ -742,9 +752,20 @@ export const syncCommand = defineCommand<SyncResult>({
       plan.warn("gemini_legacy", ".gemini");
     }
     const worktreesFolder = projectRoot === undefined ? undefined : worktreesFolderOf(projectRoot);
+    // Only the skills of the current phase are installed; an agent's menu row that calls another
+    // sends to its definition, so every skill stays callable.
+    const skillPhase = await currentSkillPhase(context, loaded.config);
+    const installed = new Set(skillsOfPhase(active, skillPhase).map((d) => d.name));
+    const uninstalledSkills = new Set(
+      active.filter((d) => d.kind === "skill" && !installed.has(d.name)).map((d) => d.name),
+    );
+    if (uninstalledSkills.size > 0) {
+      for (const [name, resolved] of agents) agents.set(name, { ...resolved, uninstalledSkills });
+    }
     const input: RenderInput = {
       source: files,
       definitions: active,
+      ...(skillPhase === undefined ? {} : { skillPhase }),
       agents,
       skillSections: skillSections(skillOverrides),
       constitution,
@@ -761,12 +782,13 @@ export const syncCommand = defineCommand<SyncResult>({
 
     const targets: Target[] = [];
     if (has("claude-code")) targets.push(...(await renderClaudeCode(input)));
-    if (has("codex") || has("antigravity") || has("cursor")) {
+    if (has("codex") || has("antigravity") || has("cursor") || has("kimi")) {
       targets.push(...(await renderSharedSkills(input)));
     }
     if (has("codex")) targets.push(...renderCodex(input));
     if (has("antigravity")) targets.push(...renderAntigravity(input));
     if (has("cursor")) targets.push(...renderCursor(input));
+    if (has("kimi")) targets.push(...(await renderKimi(input)));
 
     const produced = new Set<string>();
     const owned = new Map<string, boolean>();
@@ -855,6 +877,7 @@ export const syncCommand = defineCommand<SyncResult>({
       modelInherit: inheritClients(models),
       mcpConflicts,
       antigravityPluginKept,
+      ...(has("kimi") ? { kimiHooks: kimiHooks ?? "missing" } : {}),
     });
     // Noah's section: only while Noah is installed and active.
     const noah = active.some((d) => d.kind === "agent" && d.name === NOAH_AGENT);
@@ -947,7 +970,7 @@ export const syncCommand = defineCommand<SyncResult>({
       [...new Set([resolvedMain, loaded.config.git?.integration, loaded.config.git?.production])]
         .filter((name): name is string => name !== undefined)
         .join("\n") || undefined;
-    const claudeRules = claudeRulePermissions(ruleTable, mainName);
+    const claudeRules = claudeRulePermissions(ruleTable, mainName, engine);
     const cursorRules = cursorRulePermissions(
       ruleTable,
       mainName,
@@ -996,6 +1019,19 @@ export const syncCommand = defineCommand<SyncResult>({
       for (const rendered of renderCursorGuard(input, policy)) {
         await planRendered(rendered);
       }
+    }
+
+    // Kimi's policy: the lists the hook of the user's Kimi settings reads here. Kimi's own settings
+    // are protected on top of Claude Code's lists.
+    if (has("kimi")) {
+      const policy: AntigravityPolicy = {
+        version: 1,
+        rules: ruleTable,
+        ...(mainName === undefined ? {} : { main_branch: mainName }),
+        deny: unique([...denyRules(permissionInputs), ...claudeRules.deny, ...KIMI_HOME_DENY]),
+        ask: claudeRules.ask,
+      };
+      for (const rendered of renderKimiGuard(policy)) await planRendered(rendered);
     }
 
     // `.cursorignore`: the secrets, in a block of the creator's file; the block leaves with
@@ -1184,6 +1220,7 @@ export const syncCommand = defineCommand<SyncResult>({
         : {}),
       // What these files were generated from, read after the writes (`tools` may be added).
       inputs: await syncInputsFingerprint(files),
+      skills_phase: skillPhaseKey(skillPhase),
       ...(Object.keys(permissionLists).length > 0 ? { permission_lists: permissionLists } : {}),
     });
     const previousManifest = (await files.exists(SYNC_MANIFEST_PATH))
@@ -1208,6 +1245,7 @@ export const syncCommand = defineCommand<SyncResult>({
       fallbacks,
       codexTrustReminder,
       cursorHooksReminder,
+      ...(has("kimi") ? { kimiHooks: kimiHooks ?? "missing" } : {}),
       preferredTools,
       rules: {
         source: resolvedRules.source,
@@ -1229,7 +1267,8 @@ function isHeaderlessJson(path: string): boolean {
     (path.startsWith(`${ANTIGRAVITY_PLUGIN_DIR}/`) && path.endsWith(".json")) ||
     path === CODEX_POLICY_PATH ||
     path === CURSOR_HOOKS_PATH ||
-    path === CURSOR_POLICY_PATH
+    path === CURSOR_POLICY_PATH ||
+    path === KIMI_POLICY_PATH
   );
 }
 
@@ -1245,6 +1284,17 @@ const CURSOR_HOME_DENY = [
   "Edit(~/.cursor/mcp.json)",
   "Edit(~/.cursor/projects/**)",
   "Edit(~/.cursor/chats/**)",
+];
+
+/**
+ * Kimi's own settings in the home folder: an agent never writes them (they hold the hooks, a login,
+ * the sessions the creator's messages would be read from).
+ */
+const KIMI_HOME_DENY = [
+  "Edit(~/.kimi-code/config.toml)",
+  "Edit(~/.kimi-code/mcp.json)",
+  "Edit(~/.kimi-code/hooks/**)",
+  "Edit(~/.kimi-code/sessions/**)",
 ];
 
 /** Codex's own settings in the home folder: an agent never writes them (they hold hooks, rules, a login). */
@@ -1272,5 +1322,6 @@ function groupOf(path: string): TargetGroup {
   }
   if (path === GEMINI_MD_PATH) return "antigravity";
   if (path.startsWith(".cursor/")) return "cursor";
+  if (path.startsWith(".kimi-code/")) return "kimi";
   return "shared";
 }

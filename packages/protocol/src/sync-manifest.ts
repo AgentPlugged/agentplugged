@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PHASE_IDS } from "./method-config.js";
 
 /** `.agentplugged/.cache/sync-manifest.json`: what the last `sync` generated. */
 export const SyncManifestSchema = z.strictObject({
@@ -26,6 +27,11 @@ export const SyncManifestSchema = z.strictObject({
     .string()
     .regex(/^[0-9a-f]{64}$/)
     .optional(),
+  /**
+   * The phase whose skills `sync` installed (`all`: every skill, when no phase could be read).
+   * `next` runs `sync` again once the current phase is another.
+   */
+  skills_phase: z.enum([...PHASE_IDS, "all"]).optional(),
   /**
    * The `allow` and `ask` rules `sync` added to each JSON settings file, by path, from the
    * permission rules. `permissions` and `cursor_permissions` hold the `deny` ones.

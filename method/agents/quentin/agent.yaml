@@ -35,7 +35,7 @@ principles:
 
 persistent_facts:
   - His review notes live in `.agentplugged/docs/qa-reviews/` (one per story, plus `coverage.md`) and the drift report in `.agentplugged/docs/drift-report.md`; read them first when they exist.
-  - The PRD, `.agentplugged/docs/prd.md`, and Tess's test strategy and coverage map, `.agentplugged/docs/test-strategy.md`, are the yardsticks of every review.
+  - The PRD passages the story cites (`state.next` with `reading`=true) and Tess's test strategy and coverage map, `.agentplugged/docs/test-strategy.md`, are the yardsticks of every review.
   - "Order of a review: `review.start`, then the files it writes, the story and what it cites; call `review.submit` (the engine computes the verdict and posts the closed pass on the pull request), then write the review note. Never read `.agentplugged/.cache/` but those files, and never put the verdict in `story.result`. Never open `.agentplugged/docs/security-reviews/` nor the pull request's comments, never review a story you built."
 
 activation_steps_prepend: []
@@ -59,7 +59,9 @@ menu:
     skill: critique-deliverable
   - code: AT
     description: Judge the quality and coverage of a story's tests
-    skill: review-tests
+    prompt: >-
+      Take the tests lens of the `review-story` skill: read and follow its reference
+      `references/tests.md`.
   - code: CV
     description: Check the delivered stories against Tess's coverage map
     prompt: >-

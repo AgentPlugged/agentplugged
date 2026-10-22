@@ -7,7 +7,7 @@ export type ModelTier = (typeof MODEL_TIERS)[number];
 /**
  * Clients of the model table: the AI tools as they read a sub-agent.
  */
-export const MODEL_CLIENT_IDS = ["claude-code", "codex", "antigravity", "cursor"] as const;
+export const MODEL_CLIENT_IDS = ["claude-code", "codex", "antigravity", "cursor", "kimi"] as const;
 export type ModelClientId = (typeof MODEL_CLIENT_IDS)[number];
 
 /**
@@ -51,6 +51,9 @@ export const ModelTableSchema = z.strictObject({
   // Retired tool: tolerated in an older table, ignored.
   [LEGACY_GEMINI_CLIENT]: z.unknown().optional(),
   cursor: tiers(ModelOnly),
+  // Kimi's agent files have no model field: always the session's model. Absent from a table copied
+  // before Kimi was supported, which is read as `inherit`.
+  kimi: tiers(ModelOnly).optional(),
 });
 
 /** One cell of the table: the model, and the reasoning effort where the tool has one. */
@@ -93,6 +96,7 @@ export const ModelOverridesSchema = z.strictObject({
   // Retired tool: tolerated in an older `method.yaml`, ignored.
   [LEGACY_GEMINI_CLIENT]: z.unknown().optional(),
   cursor: partialTiers(ModelOnly.partial()),
+  // No `kimi` key: its agent files take no model, so there is nothing to override.
 });
 
 export type ModelOverrides = z.infer<typeof ModelOverridesSchema>;

@@ -687,8 +687,15 @@ describe("the lenses are grouped by reader", () => {
   const covered = (readers: ReturnType<typeof plan>) => readers.flatMap((r) => r.lenses);
   const wide = Array.from({ length: 12 }, (_, i) => file(`src/d${i % 4}/f${i}.ts`, 30));
 
-  it("reads a common change with two readers and a judge, each carrying its lenses", () => {
+  it("reads a common change once, with one reader that also checks the criteria", () => {
     const readers = plan(wide);
+    expect(readers.map((r) => r.reader)).toEqual(["whole"]);
+    expect(readers[0]?.judge).toBe(true);
+    expect(readers.some((r) => r.reader === "judge")).toBe(false);
+  });
+
+  it("reads a high-risk change with two readers and a judge, each carrying its lenses", () => {
+    const readers = planReaders("qa", chooseLenses(wide, []), true);
     expect(readers.map((r) => r.reader)).toEqual(["depth", "form", "judge"]);
     expect(readers[0]?.lenses).toEqual(["adversarial", "edge_cases", "verification_gaps"]);
     expect(readers[1]?.lenses).toEqual(["structure", "relevance"]);
@@ -929,7 +936,7 @@ describe("the lenses are grouped by reader", () => {
       "prose",
     ] as const;
     const chosen = lenses.map((lens) => ({ lens, why: ["x"] }));
-    const readers = planReaders("qa", chosen, false);
+    const readers = planReaders("qa", chosen, true);
     expect(readers.map((r) => r.reader)).toEqual(["depth", "form", "judge"]);
     const rules = { kind: "qa", required: [...lenses], criteria: 3 } as const;
     for (let round = 0; round < 300; round += 1) {

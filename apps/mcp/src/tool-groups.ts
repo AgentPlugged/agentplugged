@@ -19,8 +19,8 @@ export const TOOL_DESCRIPTIONS: Readonly<Record<string, string>> = {
   state:
     "Read-only. Actions: get (ONE option), next, trace, merge_order, environment. Ref: tool-state",
   checkpoint:
-    "Validation points. Actions: open (before asking the creator; files in documents, as paths from the product root), decide (only a point the creator did not keep), measures, gap. Never answer for the creator. Ref: tool-checkpoint",
-  chat: "Ask the creator. Actions: ask, answer (only the creator's words in quote, or via question_tool), stack_open, stack_ask, stack_answer, table. Never answer, reword or waive for the creator. Ref: tool-chat",
+    "Validation points. Actions: open (before asking the creator; files in documents, as paths from the root), decide (only a point the creator did not keep), measures, gap. Never answer for the creator. Ref: tool-checkpoint",
+  chat: "Actions: ask, answer (only the creator's words in quote, or via question_tool), stack_open, stack_ask, stack_answer, table. Never answer, reword or waive for the creator. Ref: tool-chat",
   story:
     "Actions: start (only in its workdir), status, progress, result (end with it), pr (never merge), ci, deviation, lift_deviation, leave_fast_track, merge_conflict, criterion, loop. Never skip hooks or push the main branch. Ref: tool-story",
   review:
@@ -31,7 +31,7 @@ export const TOOL_DESCRIPTIONS: Readonly<Record<string, string>> = {
     "Creator-only actions, sensitive data. Actions: request, check (refused means never), external_read, call, creator_action (only with their yes), read_sensitive, write_sensitive (never read salle/ or memory/ files directly). what = action. Ref: tool-guard",
   plan: "Actions: sprint (creator approves), defer, complete_deferred, course (change of mind). Never start a story an open deferred item locks. Ref: tool-plan",
   memory:
-    "Lessons. Actions: read (before first answer), retrospective, record, promote_propose, promote. Never record or promote a lesson before the creator approved it. Ref: tool-memory",
+    "Actions: read (before first answer), retrospective, record, promote_propose, promote. Never record or promote a lesson before the creator approved it. Ref: tool-memory",
   measure:
     "Actions: cost (never invent an amount), usage, requirements, proof (real results only), run (a command the creator accepted). Ref: tool-measure",
 };

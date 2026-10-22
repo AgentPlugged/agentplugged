@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { canLaunchSubAgents, canTakeLiveInput, terminalCommandFor } from "./terminal.js";
+import {
+  canContinueSession,
+  canLaunchSubAgents,
+  canNameSession,
+  canReportContext,
+  canTakeLiveInput,
+  terminalCommandFor,
+} from "./terminal.js";
 
 describe("the command that reopens a session in the tool's own terminal", () => {
   it("is the resume command of Claude Code for a plain session identifier", () => {
@@ -29,27 +36,60 @@ describe("the command that reopens a session in the tool's own terminal", () => 
     }
   });
 
-  it("does not exist for a tool that has no resume command yet", () => {
-    for (const tool of ["codex", "antigravity", "cursor"] as const) {
+  it("is the resume command of Codex, checked with the program itself", () => {
+    expect(terminalCommandFor("codex", "0b9f5c1e-7a2d-4f1c-9a53-1d2c3e4f5a6b")).toEqual({
+      program: "codex",
+      args: ["resume", "0b9f5c1e-7a2d-4f1c-9a53-1d2c3e4f5a6b"],
+      line: "codex resume 0b9f5c1e-7a2d-4f1c-9a53-1d2c3e4f5a6b",
+    });
+  });
+
+  it("is the resume command of Kimi, checked in the program's own help", () => {
+    expect(terminalCommandFor("kimi", "0b9f5c1e-7a2d-4f1c-9a53-1d2c3e4f5a6b")).toEqual({
+      program: "kimi",
+      args: ["--session", "0b9f5c1e-7a2d-4f1c-9a53-1d2c3e4f5a6b"],
+      line: "kimi --session 0b9f5c1e-7a2d-4f1c-9a53-1d2c3e4f5a6b",
+    });
+  });
+
+  it("does not exist for a tool that has no verified resume command yet", () => {
+    for (const tool of ["antigravity", "cursor"] as const) {
       expect(terminalCommandFor(tool, "abc-123")).toBeUndefined();
     }
   });
 });
 
-describe("the tools whose run can launch sub-agents", () => {
-  it("is Claude Code only; the others keep their present behaviour until their own trial", () => {
-    expect(canLaunchSubAgents("claude-code")).toBe(true);
-    for (const tool of ["codex", "antigravity", "cursor", "kimi", ""]) {
-      expect(canLaunchSubAgents(tool)).toBe(false);
+describe("what each tool's run can do, as its adapter declares it", () => {
+  it("launches sub-agents in Claude Code, Codex, Antigravity CLI and Kimi, not in Cursor or an unknown tool", () => {
+    for (const tool of ["claude-code", "codex", "antigravity", "kimi"]) {
+      expect(canLaunchSubAgents(tool)).toBe(true);
+    }
+    for (const tool of ["cursor", ""]) expect(canLaunchSubAgents(tool)).toBe(false);
+  });
+
+  it("takes a message while it goes on in Claude Code and Antigravity CLI only", () => {
+    for (const tool of ["claude-code", "antigravity"]) expect(canTakeLiveInput(tool)).toBe(true);
+    for (const tool of ["codex", "cursor", "kimi", ""]) expect(canTakeLiveInput(tool)).toBe(false);
+  });
+
+  it("continues a session in the five tools the bridge starts", () => {
+    for (const tool of ["claude-code", "codex", "antigravity", "cursor", "kimi"]) {
+      expect(canContinueSession(tool)).toBe(true);
+    }
+    expect(canContinueSession("")).toBe(false);
+  });
+
+  it("names a new session before the start in Claude Code only", () => {
+    expect(canNameSession("claude-code")).toBe(true);
+    for (const tool of ["codex", "antigravity", "cursor", "kimi"]) {
+      expect(canNameSession(tool)).toBe(false);
     }
   });
-});
 
-describe("the tools whose run takes messages while it goes on", () => {
-  it("is Claude Code only; a message to any other tool waits for the end of the run", () => {
-    expect(canTakeLiveInput("claude-code")).toBe(true);
+  it("reports how heavy the conversation is in Claude Code only (no other flux is tried)", () => {
+    expect(canReportContext("claude-code")).toBe(true);
     for (const tool of ["codex", "antigravity", "cursor", "kimi", ""]) {
-      expect(canTakeLiveInput(tool)).toBe(false);
+      expect(canReportContext(tool)).toBe(false);
     }
   });
 });

@@ -36,8 +36,10 @@ import {
   researchLine,
   researchLines,
   resolveAgent,
+  type SkillPhase,
   sensitivePath,
   shapeResponse,
+  skillsOfPhase,
   type TestsSetupResult,
   TOOL_GROUPS,
   tableOffer,
@@ -238,18 +240,70 @@ describe("the correspondence table: no capability lost", () => {
   });
 });
 
+/**
+ * What Noah reads before his first answer: his definition, and the reference files the constitution
+ * sends him to first. Before the merge of his role it was his skill and three files read at start
+ * (`noah`, `talking`, his `conduct`): 34 243 characters; his definition now holds them.
+ */
+function noahStartup(): number {
+  const skill = renderAgentSkill(
+    resolveAgent(definitions.find((d) => d.name === "noah") as Definition),
+  ).length;
+  const files = renderConstitutionReferenceFiles([], DEFAULT_RULES, assistant);
+  const table = agentsFile.slice(agentsFile.indexOf("## Where to read the detail"));
+  // A file the table sends everyone to « before your first message » without leaving Noah out.
+  const first = [...table.matchAll(/^- `([a-z-]+)`: before your first message(.*)$/gm)]
+    .filter((match) => !(match[2] ?? "").includes("not Noah"))
+    .map((match) => match[1]);
+  // How to launch an agent in his tool: read before his first handover.
+  const read = ["noah", ...first].reduce(
+    (sum, name) =>
+      sum + (files.find((file) => file.path.endsWith(`/${name}.md`))?.content.length ?? 0),
+    0,
+  );
+  return skill + read;
+}
+
 describe("Noah is small", () => {
-  it("renders under 10 000 characters, and his detail is in references the table names", () => {
+  it("holds his whole role in at most 12 000 bytes, and reads nothing else to start", () => {
+    const dir = join(methodDir, "agents", "noah");
+    const role = ["SKILL.md", "agent.yaml"].reduce(
+      (sum, file) => sum + Buffer.byteLength(readFileSync(join(dir, file), "utf8")),
+      0,
+    );
+    expect(role).toBeLessThanOrEqual(11_950);
+    expect(existsSync(join(dir, "references", "conduct.md"))).toBe(false);
+    // The constitution no longer sends him to its `noah` and `talking` files before he answers.
+    expect(agentsFile).not.toContain("`noah`: if you are Noah");
+    expect(agentsFile).toContain("`talking`: before your first message (not Noah)");
+    // His definition, rendered, holds the three files he read at start (34 243 characters with
+    // his skill before); his startup adds only the launch lines of the targeted tools.
+    const skill = renderAgentSkill(
+      resolveAgent(definitions.find((d) => d.name === "noah") as Definition),
+    ).length;
+    expect(skill).toBeLessThanOrEqual(11_900);
+    expect(noahStartup()).toBeLessThanOrEqual(NOAH_STARTUP_CEILING);
+  });
+
+  it("names every reference he reads on demand, each short", () => {
     const noah = definitions.find((definition) => definition.name === "noah");
     if (noah === undefined) throw new Error("noah is not shipped");
     const rendered = renderAgentSkill(resolveAgent(noah));
-    expect(rendered.length).toBeLessThan(10_000);
     const dir = join(methodDir, "agents", "noah", "references");
     const files = readdirSync(dir).sort();
     expect(files.length).toBeGreaterThanOrEqual(5);
+    const ceilings: Readonly<Record<string, number>> = {
+      "decisions.md": 5_700,
+      "team.md": 5_700,
+      "environment.md": 2_850,
+      "journey.md": 2_600,
+      "facts.md": 2_050,
+    };
     for (const file of files) {
       expect(rendered, file).toContain(`references/${file}`);
-      expect(existsSync(join(dir, file))).toBe(true);
+      const ceiling = ceilings[file];
+      expect(ceiling, file).toBeDefined();
+      expect(readFileSync(join(dir, file), "utf8").length, file).toBeLessThanOrEqual(ceiling ?? 0);
     }
   });
 
@@ -265,6 +319,29 @@ describe("Noah is small", () => {
       "Only the engine merges",
       "never sends the creator to a terminal",
       "he cannot open one",
+      // What protects the creator's decisions: the point first, then one question, one gesture.
+      "the agent that owns the subject opens it first, then the creator is asked, once",
+      "`anticipated: true` with the whole message in `quote`",
+      "One validation, one gesture",
+      "never asks for a second message",
+      // What the bridge used to repeat at every message: his role says it once.
+      "records it with `agent.delegate` BEFORE any launch",
+      "Every sub-agent is a named agent of the team",
+      "never a generic one: its cost has an owner",
+      "a story never goes to two developers",
+      "One independent review per pass: after 2 passes without agreement",
+      "`agent.summarize`",
+      "`exchanges` of `state.get`",
+      "goes to THAT agent",
+      "He holds the team (`agent.pause`) only after the creator said yes",
+      "never resumes it",
+      "he says « tu » to the creator, always",
+      "never by a file's time or a declared status",
+      "`change_method` in `state.next`",
+      "Without a head",
+      "never redone by another path",
+      "No work of a later phase starts before the creator approved the current `phase_end`",
+      "any other skill is `.agentplugged/skills/<name>/SKILL.md`",
     ]) {
       expect(noah, rule).toContain(rule);
     }
@@ -339,7 +416,7 @@ describe("the lists the tools load at every request stay short", () => {
     // of Noah's session, so it only goes up when a capability is added on purpose. Some skills have
     // no menu row for Noah, to spare his body, and the descriptions of the developers drop the
     // phase their metadata already says.
-    expect(frontmatters).toBeLessThanOrEqual(13_130);
+    expect(frontmatters).toBeLessThanOrEqual(12_530);
   });
 });
 
@@ -353,20 +430,19 @@ describe("the fixed cost of a request stays low", () => {
       inputSchema: tool.schema,
     }));
     const toolsList = JSON.stringify({ tools }).length;
-    const noah = renderAgentSkill(
-      resolveAgent(definitions.find((d) => d.name === "noah") as Definition),
-    ).length;
+    const noah = noahStartup();
     const session = toolsList + agentsFile.length + noah;
     // Each thing loaded at every request has its own ceiling, set just above its measure and
     // never raised without a reason:
     // - tools/list: the descriptions do not repeat what the schema's `action` enumeration and the
     //   reference files say; every action name and safety word stays;
     // - AGENTS.md: 6 000 (its own test below);
-    // - Noah's skill: his menu carries one row per skill he routes to;
-    // - the three together stay under their own ceiling.
-    expect(toolsList).toBeLessThanOrEqual(8_970);
-    expect(noah).toBeLessThanOrEqual(8_590);
-    expect(session).toBeLessThanOrEqual(23_480);
+    // - Noah's startup: his definition and the launch lines (8 590 for his skill alone before, but
+    //   he also read three files at start: 34 243 in all);
+    // - the three together stay under their own ceiling (23 480 before, 49 133 with his reads).
+    expect(toolsList).toBeLessThanOrEqual(8_960);
+    expect(noah).toBeLessThanOrEqual(NOAH_STARTUP_CEILING);
+    expect(session).toBeLessThanOrEqual(SESSION_CEILING);
   });
 });
 
@@ -375,6 +451,9 @@ describe("the fixed cost of a request stays low", () => {
  * generates, with the same hypotheses. 1 token ≈ 4 characters.
  */
 const TOKEN = 4;
+/** Noah's startup and the fixed cost of one of his requests, as measured (they only go down). */
+const NOAH_STARTUP_CEILING = 14_330;
+const SESSION_CEILING = 29_060;
 /** Total of the reference method on the scenario, in thousands of tokens. */
 const REFERENCE_SCENARIO_K = 2_350;
 
@@ -392,7 +471,16 @@ const agentBody = (name: string) =>
 interface Plan {
   readonly noah: number;
   readonly sessions: ReadonlyArray<readonly [number, string, string]>;
+  /**
+   * The phases Noah's requests spread over, evenly: the tools list the skills of the current
+   * phase only (the full path by default: framing, planning, design, build).
+   */
+  readonly phases?: readonly SkillPhase[];
 }
+
+const FULL_PATH_PHASES: readonly SkillPhase[] = (
+  ["framing", "planning", "design", "build"] as const
+).map((phase) => ({ phase, shortPath: false }));
 
 /** Three framing sessions of 25 requests, one builder of 40, two reviewers of 15; 60 for Noah. */
 const FULL_PLAN: Plan = {
@@ -417,11 +505,15 @@ function scenario(plan: Plan = FULL_PLAN) {
       inputSchema: tool.schema,
     })),
   }).length;
-  const noah = renderAgentSkill(
-    resolveAgent(definitions.find((d) => d.name === "noah") as Definition),
-  ).length;
-  // Every agent is also a skill, and Noah has no sub-agent file.
-  const skillsList = definitions.reduce((sum, d) => sum + d.frontmatterYaml.length, 0);
+  const noah = noahStartup();
+  // Every agent is also a skill, and Noah has no sub-agent file; the skills are those of the phase.
+  const phases = plan.phases ?? FULL_PATH_PHASES;
+  const skillsList =
+    phases
+      .map((phase) =>
+        skillsOfPhase(definitions, phase).reduce((sum, d) => sum + d.frontmatterYaml.length, 0),
+      )
+      .reduce((a, b) => a + b, 0) / phases.length;
   const agentsList = definitions
     .filter((d) => d.kind === "agent" && d.name !== "noah")
     .reduce((sum, d) => sum + d.frontmatterYaml.length, 0);
@@ -479,7 +571,7 @@ describe("the published descriptions send to files that exist", () => {
 
 describe("AGENTS.md and the reference", () => {
   it("keeps AGENTS.md to the safety essentials, 6 000 characters at most", () => {
-    expect(agentsFile.length).toBeLessThanOrEqual(6_000);
+    expect(agentsFile.length).toBeLessThanOrEqual(5_780);
     // It was 14 239 characters before: the rest is read on demand, a file at a time.
     expect(renderConstitutionReferenceFiles([], DEFAULT_RULES, assistant).length).toBeGreaterThan(
       25,
@@ -491,119 +583,157 @@ describe("AGENTS.md and the reference", () => {
  * What is read only by the session that runs it: a body is not a cost for the other sessions, so a
  * new skill does not make the others shorten. What is paid at every request has its own strict
  * ceilings (the tests above: tools/list, AGENTS.md, the lists of names and descriptions, Noah; and
- * `scenario()` below). What is paid only when it serves is bounded one by one:
- * - no body goes over `BODY_CEILING`, except the named exceptions, each with its own ceiling;
- * - no body grows past its recorded size by more than 10 % (and 300 characters at least), which
+ * `scenario()` below). What is paid only when it serves is bounded one by one, and the ceilings
+ * only go down:
+ * - a skill is a work sheet (the step, the document and its size, what to read, the validation
+ *   point, the product's own rules): its body at most `SKILL_CEILING`, each of its references at
+ *   most `REFERENCE_CEILING`, the sheet and its references together at most `FOLDER_CEILING`, and
+ *   no reference that nothing names;
+ * - an agent's rendered body at most `BODY_CEILING`;
+ * - no body grows past its recorded size by more than 5 % (and 300 characters at least), which
  *   stops the slow swelling a ceiling does not see. The record is this table: a body that grows on
  *   purpose raises its line.
  */
-const BODY_CEILING = 16_700;
-/** Large on purpose: each carries the method of a whole deliverable. */
-const BODY_EXCEPTIONS: Readonly<Record<string, { ceiling: number; why: string }>> = {
-  "skill:generate-knowledge-base": {
-    ceiling: 18_250,
-    why: "generates and updates a whole knowledge base, with an update mode and the checks that keep it true",
-  },
-  "skill:write-sales": {
-    ceiling: 18_100,
-    why: "offer pages and email sequences in one skill, trimmed once",
-  },
-  "skill:write-content": {
-    ceiling: 17_450,
-    why: "articles, community posts and campaign plans in one skill, trimmed once",
-  },
-};
+const SKILL_CEILING = 5_000;
+const REFERENCE_CEILING = 2_500;
+const FOLDER_CEILING = 8_000;
+const BODY_CEILING = 13_100;
+/**
+ * The files the engine hands one by one to the readers and the judge of a review (`review.start`,
+ * `review.export`): each reader reads its own, never the folder, so they count apart (each still
+ * under `REFERENCE_CEILING`).
+ */
+const READER_FILES = /^(lens-.+|pass-.+|format|judge)\.md$/;
 /** The size of each body when it was last measured, in characters. */
 const BODY_RECORD: Readonly<Record<string, number>> = {
-  "agent:alex": 10915,
-  "skill:acceptance-qa": 2674,
-  "skill:api-e2e-tests": 4272,
-  "skill:audit-pillars": 1535,
-  "skill:check-requirements": 6749,
-  "agent:chloe": 10842,
-  "skill:check-readiness": 1927,
-  "skill:correct-course": 509,
-  "skill:critique-deliverable": 1416,
-  "skill:deep-research": 2913,
-  "skill:develop-story": 16203,
-  "agent:ethan": 7132,
-  "skill:generate-knowledge-base": 18216,
-  "agent:hugo": 6968,
-  "skill:ideation": 3256,
-  "agent:iris": 7726,
-  "agent:izzy": 16604,
-  "agent:jade": 7157,
-  "agent:julien": 11804,
-  "agent:lina": 7190,
-  "agent:lou": 7019, // One menu row (IS), the body grows within its 10 %
-  "agent:maya": 9336,
-  "agent:milo": 9456,
-  "agent:noah": 8248,
-  "agent:omar": 10737,
-  "skill:order-merges": 5063,
-  "skill:plan-sprint": 10218,
-  "agent:quentin": 8911,
-  "skill:diagnose-bug": 5300,
-  "skill:improve-code": 5415,
-  "skill:quick-lane": 10067, // a bug whose cause is not seen goes to diagnose-bug
-  "skill:resolve-merge-conflict": 6229,
-  "skill:review-story": 6926, // whole file (free review, rulings, export and amendment go to references)
-  "skill:round-table": 1672,
-  "skill:run-retrospective": 12899,
-  "agent:sam": 7109,
-  "skill:security-review-architecture": 7729,
-  "skill:setup-ci": 7617,
-  "skill:split-into-stories": 13564,
-  "agent:stella": 8419,
-  "agent:tess": 7629,
-  "skill:pitch": 2774,
-  "skill:strategy": 3074,
-  "skill:test-idea": 1745, // the forge joins the skill
-  "skill:write-architecture": 14904,
-  "skill:write-brief": 12140,
-  "skill:write-content": 17427,
-  "skill:write-positioning": 16670,
-  "skill:write-prd": 14026,
-  "skill:write-sales": 18071,
-  "skill:workshop": 2623,
-  "skill:write-spec": 1904,
-  "skill:improve-session": 3157,
-  "skill:write-ux-spec": 12775,
+  "agent:alex": 9856,
+  "agent:chloe": 10032,
+  "agent:ethan": 7176,
+  "agent:hugo": 7011,
+  "agent:iris": 7084,
+  "agent:izzy": 13056,
+  "agent:jade": 7107,
+  "agent:julien": 10409,
+  "agent:lina": 7142,
+  "agent:lou": 6897,
+  "agent:maya": 8703,
+  "agent:milo": 8641,
+  "agent:noah": 11512,
+  "agent:omar": 9746,
+  "agent:quentin": 8242,
+  "agent:sam": 7032,
+  "agent:stella": 8364,
+  "agent:tess": 7422,
+  "agent:zoe": 9677,
+  "skill:acceptance-qa": 2521,
+  "skill:api-e2e-tests": 4124,
+  "skill:audit-pillars": 1417,
+  "skill:chain-stories": 1729,
+  "skill:check-readiness": 1774,
+  "skill:check-requirements": 3919,
+  "skill:correct-course": 335,
+  "skill:critique-deliverable": 1182,
+  "skill:deep-research": 2386,
+  "skill:develop-story": 4851,
+  "skill:diagnose-bug": 3905,
+  "skill:generate-knowledge-base": 4807,
+  "skill:ideation": 2416,
+  "skill:improve-code": 4030,
+  "skill:improve-session": 2904,
+  "skill:pitch": 2332,
+  "skill:plan-sprint": 4022,
+  "skill:resolve-merge-conflict": 3663,
+  "skill:review-story": 3914,
+  "skill:round-table": 1607,
+  "skill:run-retrospective": 4686,
+  "skill:security-review-architecture": 4014,
+  "skill:setup-ci": 3868,
+  "skill:split-into-stories": 4978,
+  "skill:strategy": 2623,
+  "skill:test-idea": 1476,
+  "skill:workshop": 2140,
+  "skill:write-architecture": 4982,
   "skill:write-brand": 2522,
-  "agent:zoe": 10460,
+  "skill:write-brief": 4991,
+  "skill:write-content": 4996,
+  "skill:write-positioning": 4994,
+  "skill:write-prd": 4854,
+  "skill:write-sales": 4985,
+  "skill:write-spec": 1658,
+  "skill:write-ux-spec": 4787,
 };
 
 describe("a body is read only when it serves: one ceiling each, no sum", () => {
   const bodyOf = (definition: Definition) =>
     definition.kind === "agent"
       ? renderAgentBody(resolveAgent(definition)).length
-      : definition.text.length;
+      : definition.body.length;
   const key = (definition: Definition) => `${definition.kind}:${definition.name}`;
+  const skills = () => definitions.filter((definition) => definition.kind === "skill");
+  const referencesOf = (name: string) => {
+    const dir = join(methodDir, "skills", name, "references");
+    return existsSync(dir)
+      ? readdirSync(dir).map((file) => ({
+          file,
+          text: readFileSync(join(dir, file), "utf8").replace(/\r\n/g, "\n"),
+        }))
+      : [];
+  };
 
-  it("keeps every body under the ceiling, or under the ceiling of its named exception", () => {
-    for (const definition of definitions) {
-      const exception = BODY_EXCEPTIONS[key(definition)];
-      const ceiling = exception?.ceiling ?? BODY_CEILING;
-      expect(bodyOf(definition), key(definition)).toBeLessThanOrEqual(ceiling);
-    }
-    // The record and the exceptions name definitions that still exist (a rename updates them).
-    const names = new Set(definitions.map(key));
-    for (const name of [...Object.keys(BODY_RECORD), ...Object.keys(BODY_EXCEPTIONS)]) {
-      expect(names.has(name), name).toBe(true);
-    }
-    // An exception is real: it is over the common ceiling, and says why.
-    for (const [name, exception] of Object.entries(BODY_EXCEPTIONS)) {
-      expect(BODY_RECORD[name], name).toBeGreaterThan(BODY_CEILING);
-      expect(exception.why.length, name).toBeGreaterThan(20);
+  it("keeps every skill a work sheet: its body, each reference and its folder under their ceilings", () => {
+    for (const skill of skills()) {
+      expect(skill.body.length, skill.name).toBeLessThanOrEqual(SKILL_CEILING);
+      const references = referencesOf(skill.name);
+      for (const { file, text } of references) {
+        expect(text.length, `${skill.name}/${file}`).toBeLessThanOrEqual(REFERENCE_CEILING);
+      }
+      const folder =
+        skill.body.length +
+        references
+          .filter(({ file }) => skill.name !== "review-story" || !READER_FILES.test(file))
+          .reduce((sum, { text }) => sum + text.length, 0);
+      expect(folder, `${skill.name}: the sheet and its references`).toBeLessThanOrEqual(
+        FOLDER_CEILING,
+      );
     }
   });
 
-  it("stops a body from swelling past its recorded size by more than 10 %", () => {
+  it("leaves no reference that nothing names", () => {
+    for (const skill of skills()) {
+      const references = referencesOf(skill.name);
+      for (const { file } of references) {
+        // Named by the sheet or by another reference of the folder; the reader files by the engine.
+        const named =
+          skill.text.includes(file) ||
+          references.some((other) => other.file !== file && other.text.includes(file)) ||
+          (skill.name === "review-story" && READER_FILES.test(file));
+        expect(named, `${skill.name}/${file}`).toBe(true);
+      }
+    }
+  });
+
+  it("keeps every agent under the ceiling, with no exception", () => {
+    for (const definition of definitions.filter((d) => d.kind === "agent")) {
+      expect(bodyOf(definition), key(definition)).toBeLessThanOrEqual(BODY_CEILING);
+    }
+    // The record names definitions that still exist (a rename updates it).
+    const names = new Set(definitions.map(key));
+    for (const name of Object.keys(BODY_RECORD)) expect(names.has(name), name).toBe(true);
+  });
+
+  it("keeps the reporting rules every agent reads short", () => {
+    const reporting = renderConstitutionReferenceFiles([], DEFAULT_RULES, assistant).find((file) =>
+      file.path.endsWith("/reporting.md"),
+    );
+    expect(reporting?.content.length ?? Infinity).toBeLessThanOrEqual(4_100);
+  });
+
+  it("stops a body from swelling past its recorded size by more than 5 %", () => {
     for (const definition of definitions) {
       const recorded = BODY_RECORD[key(definition)];
       // A new agent or skill has no record yet: only the ceiling holds it until the next story.
       if (recorded === undefined) continue;
-      const allowed = Math.max(recorded * 1.1, recorded + 300);
+      const allowed = Math.max(recorded * 1.05, recorded + 150);
       expect(bodyOf(definition), key(definition)).toBeLessThanOrEqual(allowed);
     }
   });
@@ -617,13 +747,22 @@ describe("lighter than the reference method on the scenario", () => {
     // is raised only on purpose: the list of the tools and the constitution are no longer the weight
     // they were, and the descriptions of the tools do not repeat what the `action` enumeration of
     // the schema, the reference files and the commands' own descriptions already say.
-    expect(parts.tools).toBeLessThanOrEqual(459.5);
-    // 5 928 characters of AGENTS.md × 205 requests (the 6 000 of its own test is the story's figure).
-    expect(parts.agentsFile).toBeLessThanOrEqual(303.9);
+    expect(parts.tools).toBeLessThanOrEqual(459.0);
+    // 5 787 characters of AGENTS.md × 205 requests (the 6 000 of its own test is the story's figure).
+    expect(parts.agentsFile).toBeLessThanOrEqual(296.1);
+    // Noah's startup carried by his 60 requests: his definition and the launch lines. Before the
+    // merge of his role the scenario counted his skill only (128.9 k), not the three files he read
+    // at start (384.8 k more): 2 715 k in all, honestly counted.
+    expect(parts.noah).toBeLessThanOrEqual(214.9);
+    // The list of the skills of the current phase only (196.9 k when every skill was installed,
+    // 104.0 k before the skills were merged into work sheets).
+    expect(parts.skillsList).toBeLessThanOrEqual(99.6);
+    expect(total).toBeLessThanOrEqual(1_995.5);
     // The reads of Noah carried by the requests that follow them (measured 264.1 k).
     expect(parts.responses).toBeLessThanOrEqual(264.2);
-    // The bodies the scenario really loads (the five sessions and the shared rules): 908.0 k at most.
-    expect(parts.bodies).toBeLessThanOrEqual(908.0);
+    // The bodies the scenario really loads (the five sessions and the shared rules): 908.0 k before
+    // the skills became work sheets, 613.4 k since.
+    expect(parts.bodies).toBeLessThanOrEqual(596.9);
   });
 });
 
@@ -635,6 +774,8 @@ describe("the short path costs clearly less than the full path", () => {
    */
   const SHORT_PLAN: Plan = {
     noah: 48,
+    // The short path skips the framing, the planning and the design: one phase, with the spec.
+    phases: [{ phase: "build", shortPath: true }],
     sessions: [
       [25, "maya", "write-spec"],
       [40, "hugo", "develop-story"],
@@ -676,7 +817,7 @@ describe("the short path costs clearly less than the full path", () => {
     expect(shortTotal).toBeLessThan(REFERENCE_SCENARIO_K);
     // The detail of the review of a spec is a file read when needed, short.
     const detail = join(methodDir, "skills", "security-review-architecture", "references");
-    expect(readFileSync(join(detail, "spec-review.md"), "utf8").length).toBeLessThanOrEqual(3_500);
+    expect(readFileSync(join(detail, "spec-review.md"), "utf8").length).toBeLessThanOrEqual(2_500);
   });
 
   it("keeps the skill short and its detail in files read when needed", () => {
@@ -685,8 +826,8 @@ describe("the short path costs clearly less than the full path", () => {
     // What the author reads besides the skill: the guide once, the template once.
     const guide = readFileSync(join(dir, "references", "spec-guide.md"), "utf8").length;
     const template = readFileSync(join(dir, "assets", "spec-template.md"), "utf8").length;
-    expect(guide).toBeLessThanOrEqual(3_000);
-    expect(template).toBeLessThanOrEqual(3_000);
+    expect(guide).toBeLessThanOrEqual(2_500);
+    expect(template).toBeLessThanOrEqual(2_250);
     // And it is the only skill the short path adds: the spec is not five skills.
     expect(skillText("write-spec")).toContain("references/spec-guide.md");
   });
@@ -814,11 +955,32 @@ describe("a review in lenses costs less than the reference method", () => {
       ...Array.from({ length: 5 }, (_, i) => [`docs/page${i}.md`, 2_500] as [string, number]),
     ]);
     const { before, after, reference, readers, lensesBefore } = cost(typical);
-    expect(readers).toEqual(["depth", "form", "judge"]);
+    expect(readers).toEqual(["whole"]);
     // The old way cost more than the reference here.
     expect(before).toBeGreaterThan(reference);
     expect(after, `${after} against ${reference}`).toBeLessThan(reference);
     expect(after).toBeLessThan(before * 0.7);
+    // One independent reading reads the whole diff once: it is not compared with the split reading.
+    expect(lensesBefore).toBeGreaterThan(0);
+  });
+
+  it("keeps the split reading, a judge of its own and its bound for a high-risk story", () => {
+    // The same story with a file of the authentication: three readers and a judge in a fresh context.
+    const risky = diffOf([
+      ...Array.from(
+        { length: 14 },
+        (_, i) => [`src/area${i % 5}/file${i}.ts`, 4_000] as [string, number],
+      ),
+      ...Array.from(
+        { length: 10 },
+        (_, i) => [`src/area${i % 5}/file${i}.test.ts`, 4_500] as [string, number],
+      ),
+      ["src/auth/login.ts", 3_000] as [string, number],
+    ]);
+    const { before, after, reference, readers, lensesBefore } = cost(risky);
+    expect(readers).toEqual(["depth", "form", "judge"]);
+    expect(after, `${after} against ${reference}`).toBeLessThan(reference);
+    expect(after).toBeLessThan(before);
     // The rulings, the passes and the longer files cost under a tenth more than the lenses alone.
     expect(after, `${after} against ${lensesBefore}`).toBeLessThan(lensesBefore * 1.1);
   });
@@ -832,7 +994,7 @@ describe("a review in lenses costs less than the reference method", () => {
       ["src/a/two.test.ts", 1_500],
     ]);
     const { before, after, reference, readers } = cost(middle);
-    expect(readers).toEqual(["depth", "form", "judge"]);
+    expect(readers).toEqual(["whole"]);
     expect(after, `${after} against ${reference}`).toBeLessThan(reference);
     expect(after).toBeLessThan(before);
   });
@@ -913,24 +1075,23 @@ describe("an audit of one pillar reads only that pillar", () => {
   const reference = (name: string) =>
     texts.get(`skills/audit-pillars/references/${name}.md`) as string;
 
-  it("keeps a file per pillar, short, and a skill that reads one of them at a time", () => {
-    for (const pillar of PILLARS) {
-      expect(reference(pillar), pillar).toBeDefined();
-      expect(reference(pillar).length, pillar).toBeLessThanOrEqual(1_000);
-    }
+  it("keeps one short file for the pillars, and a skill that reads one section at a time", () => {
+    const pillars = reference("pillars");
+    expect(pillars).toBeDefined();
+    expect(pillars.length).toBeLessThanOrEqual(2_500);
+    for (const pillar of PILLARS) expect(pillars, pillar).toContain(pillar);
     const skill = skillText("audit-pillars");
-    expect(skill.length).toBeLessThanOrEqual(6_000);
-    expect(flat(skill)).toContain("read only its file");
-    expect(flat(skill)).toContain("never the other pillars' files");
-    expect(flat(skill)).toContain("40 at most");
-    // The pillars' files stay in the folder, read one at a time: none is inlined in the skill.
-    for (const pillar of PILLARS) expect(skill).not.toContain(`# Pillar: ${pillar}`);
+    expect(skill.length).toBeLessThanOrEqual(1_700);
+    expect(flat(skill)).toContain("read only its section of `references/pillars.md`");
+    expect(flat(skill)).toContain("at most 40 project files per pillar");
+    // The pillars' sections stay in the file: none is inlined in the skill.
+    for (const pillar of PILLARS) expect(skill).not.toContain(`**${pillar}.`);
   });
 
-  it("costs a few thousand tokens of method for one pillar, far under all of them", () => {
-    const shared = skillText("audit-pillars").length + reference("format").length;
-    const one = shared + reference("performance").length;
-    const all = shared + PILLARS.reduce((sum, pillar) => sum + reference(pillar).length, 0);
+  it("costs under two thousand tokens of method for one pillar, under what it cost before", () => {
+    // A pillar costs the skill and the pillars' file (before: the skill, the shape of the report,
+    // the method and the pillar's own file, 5 984 characters for the lightest).
+    const one = skillText("audit-pillars").length + reference("pillars").length;
     // What the engine answers: the register view (bounded) and a typical report.
     const view = JSON.stringify({
       changed: false,
@@ -945,8 +1106,8 @@ describe("an audit of one pillar reads only that pillar", () => {
     });
     const report = 2_400;
     const tokens = (one + view.length + report) / TOKEN;
-    expect(tokens, `${Math.round(tokens)} tokens`).toBeLessThanOrEqual(3_500);
-    expect(one).toBeLessThan(all * 0.6);
+    expect(tokens, `${Math.round(tokens)} tokens`).toBeLessThanOrEqual(2_000);
+    expect(one).toBeLessThan(5_984);
   });
 
   it("answers the register's calls in a few characters", () => {
@@ -964,39 +1125,38 @@ describe("an audit of one pillar reads only that pillar", () => {
  */
 describe("the critique of a deliverable reads one method only", () => {
   const METHODS = [
-    "pre-mortem",
-    "red-team",
+    "pre_mortem",
+    "red_team",
     "socratic",
-    "first-principles",
-    "devils-advocate",
+    "first_principles",
+    "devils_advocate",
     "inversion",
   ];
   const texts = new Map(methodTexts().map(({ path, text }) => [path, text]));
   const reference = (name: string) =>
     texts.get(`skills/critique-deliverable/references/${name}.md`) as string;
 
-  it("keeps a short file per method, and a skill that sends to the one chosen", () => {
-    for (const method of METHODS) {
-      expect(reference(method), method).toBeDefined();
-      expect(reference(method).length, method).toBeLessThanOrEqual(1_000);
-    }
+  it("keeps one file of methods, a line each, and a skill that sends to the one chosen", () => {
+    expect(reference("methods")).toBeDefined();
+    expect(reference("methods").length).toBeLessThanOrEqual(2_500);
+    for (const method of METHODS)
+      expect(reference("methods"), method).toContain(`- \`${method}\`:`);
     const skill = skillText("critique-deliverable");
     expect(skill.length).toBeLessThanOrEqual(1_800);
-    expect(flat(skill)).toContain("the method's file here, nothing else");
+    expect(flat(skill)).toContain("the method's line of `references/methods.md`");
     for (const method of METHODS) expect(skill).not.toContain(`# ${method}`);
     // The detail is read when it is needed: the gestures only once the stack is shown.
     expect(reference("gestures").length).toBeLessThanOrEqual(1_800);
     expect(reference("format").length).toBeLessThanOrEqual(1_800);
   });
 
-  it("costs a few thousand tokens for a typical critique, far under the method files together", () => {
+  it("costs a few thousand tokens for a typical critique", () => {
     const shared =
       skillText("critique-deliverable").length +
       reference("format").length +
       reference("choose").length +
       reference("gestures").length;
-    const one = shared + reference("pre-mortem").length;
-    const all = shared + METHODS.reduce((sum, method) => sum + reference(method).length, 0);
+    const one = shared + reference("methods").length;
     // What the agent writes and the engine answers: eight objections of ≈ 450 characters, the
     // stack of eight lines, three gestures with the creator's words.
     const objections = Array.from({ length: 8 }, (_, index) => ({
@@ -1014,8 +1174,8 @@ describe("the critique of a deliverable reads one method only", () => {
     );
     const written = 8 * 450 + 3 * 120 + 300;
     const tokens = (one + stack.length + written) / TOKEN;
-    expect(tokens, `${Math.round(tokens)} tokens`).toBeLessThanOrEqual(4_500);
-    expect(one).toBeLessThan(all * 0.8);
+    expect(tokens, `${Math.round(tokens)} tokens`).toBeLessThanOrEqual(3_100);
+    expect(one).toBeLessThan(7_100);
   });
 
   it("bounds what the engine answers, and adds no tool", () => {
@@ -1084,7 +1244,7 @@ describe("testing an idea and the press release stay light", () => {
   const own = (name: string) => file(`test-idea/references/${name}.md`);
   // The method of an exercise in one file may run to 2 300 characters; the others stay at 1 500.
   const LONG = ["forge", "prfaq", "faq"];
-  const SHORT = ["personas", "bets", "concept", "verdict"];
+  const SHORT = ["personas"];
 
   it("keeps a short skill and short references, read only for the exercise that runs", () => {
     expect(skill().length).toBeLessThanOrEqual(1_800);
@@ -1096,13 +1256,12 @@ describe("testing an idea and the press release stay light", () => {
       expect(file(`test-idea/assets/${template}-template.md`).length).toBeLessThanOrEqual(1_200);
     }
     // The skill sends to each file; the exercise it does not run is never read.
-    for (const name of ["personas", "prfaq", "bets", "forge", "concept"]) {
+    for (const name of ["personas", "prfaq", "forge", "faq"]) {
       expect(skill()).toContain(`references/${name}.md`);
     }
-    for (const name of ["faq", "verdict"]) expect(skill()).toContain(`\`${name}.md\``);
     // The report and the gestures are those of the critique, not copied.
     expect(own("personas")).toContain("critique-deliverable/references/format.md");
-    expect(own("bets")).toContain("critique-deliverable/references/gestures.md");
+    expect(own("personas")).toContain("critique-deliverable/references/gestures.md");
   });
 
   it("costs a few thousand tokens for a typical exercise, and no tool is added", () => {
@@ -1110,12 +1269,10 @@ describe("testing an idea and the press release stay light", () => {
     // gestures with the creator's words; for the release, ≈ 2 500 characters in four sections, two
     // lists of six questions of ≈ 200 characters and a verdict of ≈ 500; for the forge, twelve log
     // lines of ≈ 100 characters and a closed file of ≈ 800.
-    const bets =
-      skill().length + own("bets").length + critique("format").length + critique("gestures").length;
+    const bets = skill().length + critique("format").length + critique("gestures").length;
     const test = bets + own("personas").length + 5 * 350 + 6 * 450 + 3 * 120;
     const forge =
       bets +
-      own("concept").length +
       own("forge").length +
       own("personas").length +
       file("test-idea/assets/forge-template.md").length +
@@ -1125,18 +1282,17 @@ describe("testing an idea and the press release stay light", () => {
       3 * 120;
     const release =
       bets +
-      own("concept").length +
+      own("forge").length +
       own("prfaq").length +
       own("faq").length +
-      own("verdict").length +
       file("test-idea/assets/prfaq-template.md").length +
       2_500 +
       12 * 200 +
       500 +
       3 * 450;
-    expect(test / TOKEN, `${Math.round(test / TOKEN)} tokens`).toBeLessThanOrEqual(4_500);
-    expect(forge / TOKEN, `${Math.round(forge / TOKEN)} tokens`).toBeLessThanOrEqual(4_500);
-    expect(release / TOKEN, `${Math.round(release / TOKEN)} tokens`).toBeLessThanOrEqual(5_250);
+    expect(test / TOKEN, `${Math.round(test / TOKEN)} tokens`).toBeLessThanOrEqual(3_100);
+    expect(forge / TOKEN, `${Math.round(forge / TOKEN)} tokens`).toBeLessThanOrEqual(3_100);
+    expect(release / TOKEN, `${Math.round(release / TOKEN)} tokens`).toBeLessThanOrEqual(4_300);
     expect(createCommandRegistry().agentCommands()).toHaveLength(65);
   });
 });
@@ -1150,21 +1306,13 @@ describe("design thinking, story and deck stay light", () => {
   const texts = new Map(methodTexts().map(({ path, text }) => [path, text]));
   const file = (path: string) => texts.get(`skills/pitch/${path}`) as string;
   const skill = () => skillText("pitch");
-  const references = [
-    "design-thinking",
-    "design-methods",
-    "design-implementation",
-    "story",
-    "story-frameworks",
-    "deck",
-    "deck-types",
-  ];
+  const references = ["design", "design-implementation", "story", "deck"];
 
   it("keeps a short skill and short references, each sent to by the skill", () => {
     expect(skill().length).toBeLessThanOrEqual(3_000);
     for (const name of references) {
       expect(file(`references/${name}.md`), name).toBeDefined();
-      expect(file(`references/${name}.md`).length, name).toBeLessThanOrEqual(2_700);
+      expect(file(`references/${name}.md`).length, name).toBeLessThanOrEqual(2_500);
       expect(skill(), name).toContain(`references/${name}.md`);
     }
     for (const name of ["design", "narrative", "deck"]) {
@@ -1187,18 +1335,18 @@ describe("design thinking, story and deck stay light", () => {
         6 * 300) /
       TOKEN;
     for (const [mode, used, template] of [
-      ["design thinking", ["design-thinking", "design-methods"], "design"],
-      ["story", ["story", "story-frameworks"], "narrative"],
-      ["deck", ["deck", "deck-types"], "deck"],
+      ["design thinking", ["design"], "design"],
+      ["story", ["story"], "narrative"],
+      ["deck", ["deck"], "deck"],
     ] as const) {
       const tokens = path([...used], template);
-      expect(tokens, `${mode}: ${Math.round(tokens)} tokens`).toBeLessThanOrEqual(3_600);
+      expect(tokens, `${mode}: ${Math.round(tokens)} tokens`).toBeLessThanOrEqual(2_600);
     }
     // The last step of design thinking (implementation) is a seventh file, read only
-    // when the course gets there; the whole course, with it, stays under 4 000 tokens.
-    const whole = path(["design-thinking", "design-methods", "design-implementation"], "design");
+    // when the course gets there; the whole course, with it, stays under 2 900 tokens.
+    const whole = path(["design", "design-implementation"], "design");
     expect(whole, `design thinking to the end: ${Math.round(whole)} tokens`).toBeLessThanOrEqual(
-      4_000,
+      2_900,
     );
     expect(createCommandRegistry().agentCommands()).toHaveLength(65);
     expect(Object.keys(TOOL_GROUPS)).toHaveLength(10);
@@ -1310,9 +1458,9 @@ describe("the acceptance tests first cost few tokens", () => {
     });
     const method = reference.length / TOKEN;
     const story = (red: string) => 5 * ((red.length + green.length) / TOKEN) + method;
-    expect(story(typical)).toBeLessThanOrEqual(2_500);
+    expect(story(typical)).toBeLessThanOrEqual(1_700);
     // Even when every red shows its twelve lines.
-    expect(story(worst)).toBeLessThanOrEqual(3_500);
+    expect(story(worst)).toBeLessThanOrEqual(2_500);
     // The judge gets the line of the story instead of recomputing it from the diff.
     expect(RESPONSE_FORMS["review.start"]?.max).toBeLessThanOrEqual(900);
   });
@@ -1395,12 +1543,12 @@ describe("the proofs the engine produces cost few tokens", () => {
 /**
  * The test framework and the API and end-to-end tests add no tool (the plan
  * is a command of the command line, the runs are `story.criterion`), one name and one
- * description to the lists, a short skill and three short files read when a mode runs.
+ * description to the lists, a short skill and one short file read when a mode runs.
  */
 describe("the test framework and the API and end-to-end tests stay light", () => {
   const texts = new Map(methodTexts().map(({ path, text }) => [path, text]));
   const own = (name: string) => texts.get(`skills/api-e2e-tests/${name}`) as string;
-  const references = ["frameworks", "generate", "ci"].map((name) => own(`references/${name}.md`));
+  const references = ["ci"].map((name) => own(`references/${name}.md`));
 
   it("adds no tool and no action: the plan is for the creator's command line", () => {
     expect(createCommandRegistry().agentCommands()).toHaveLength(65);
@@ -1412,12 +1560,12 @@ describe("the test framework and the API and end-to-end tests stay light", () =>
   it("keeps a short skill and short references, each sent to by the skill", () => {
     const skill = skillText("api-e2e-tests");
     expect(skill.length / TOKEN).toBeLessThan(1_200);
-    for (const [index, name] of ["frameworks", "generate", "ci"].entries()) {
+    for (const [index, name] of ["ci"].entries()) {
       expect(references[index]?.length ?? 0, name).toBeGreaterThan(0);
       expect((references[index] as string).length / TOKEN, name).toBeLessThan(1_000);
       expect(skill, name).toContain(`references/${name}.md`);
     }
-    // The detail (the table of runners, the data rules, the CI) is not in the skill.
+    // The detail (the table of runners, the data rules) is not in the skill; the CI is in its file.
     expect(skill).not.toContain("Playwright");
     expect(skill).not.toContain("fixture");
     const description = (definitions.find((d) => d.name === "api-e2e-tests") as Definition)
@@ -1463,8 +1611,8 @@ describe("the test framework and the API and end-to-end tests stay light", () =>
     const perCriterion = 500 + 250;
     const frame = (skill.length + references.join("").length + plan) / TOKEN;
     const cover = (5 * perCriterion) / TOKEN;
-    expect(frame, `${Math.round(frame)} tokens`).toBeLessThanOrEqual(4_500);
-    expect(frame + cover, `${Math.round(frame + cover)} tokens`).toBeLessThanOrEqual(5_500);
+    expect(frame, `${Math.round(frame)} tokens`).toBeLessThanOrEqual(1_900);
+    expect(frame + cover, `${Math.round(frame + cover)} tokens`).toBeLessThanOrEqual(2_850);
   });
 });
 
@@ -1584,7 +1732,7 @@ describe("a change of course costs few tokens", () => {
     // What the agent writes: the change in a line, the creator's words twice, the starts, seven gestures.
     const written = 150 + 2 * 120 + 40 + 7 * 40;
     const tokens = (read + answered + written) / TOKEN;
-    expect(tokens, `${Math.round(tokens)} tokens`).toBeLessThanOrEqual(2_500);
+    expect(tokens, `${Math.round(tokens)} tokens`).toBeLessThanOrEqual(1_450);
   });
 });
 
@@ -1648,7 +1796,7 @@ describe("a deep research is light, and reusing it is lighter", () => {
     expect(line.length).toBeLessThanOrEqual(330);
     const reuse = skill().length + 5 * line.length + 600;
     // 5 700; the dates, the key claims and the effort cost about 12 % more.
-    expect(search / TOKEN, `${Math.round(search / TOKEN)} tokens`).toBeLessThanOrEqual(6_400);
+    expect(search / TOKEN, `${Math.round(search / TOKEN)} tokens`).toBeLessThanOrEqual(5_750);
     expect(reuse / TOKEN, `${Math.round(reuse / TOKEN)} tokens`).toBeLessThanOrEqual(1_260);
     expect(reuse).toBeLessThan(search / 2);
   });
@@ -1717,15 +1865,7 @@ describe("the round table stays light", () => {
 
   // The detail of an open conversation (who speaks, guests, saved rooms, independent
   // minds) is in files of its own, each read only when the situation comes up.
-  const REFERENCES = [
-    "cast",
-    "gestures",
-    "guests",
-    "independence",
-    "rooms",
-    "three-views",
-    "turns",
-  ];
+  const REFERENCES = ["table", "guests", "closing", "rooms"];
 
   it("keeps a skill under 1 800 characters and a short file for each situation", () => {
     expect(skillText("round-table").length).toBeLessThanOrEqual(1_800);
@@ -1753,8 +1893,7 @@ describe("the round table stays light", () => {
   });
 
   it("costs a few thousand tokens for a table of three agents in two rounds", () => {
-    const shared =
-      skillText("round-table").length + reference("turns").length + reference("cast").length;
+    const shared = skillText("round-table").length + reference("table").length;
     const personas = ["maya", "quentin", "omar"].reduce(
       (sum, name) => sum + persona(name).length,
       0,
@@ -1762,7 +1901,7 @@ describe("the round table stays light", () => {
     // What is said: the list in a line, two rounds of three turns of ≈ 350 characters, the
     // creator's two interventions, the synthesis and the question of the gesture.
     const said = 150 + 6 * 350 + 2 * 120 + 700 + 150;
-    const closing = reference("gestures").length;
+    const closing = reference("closing").length;
     // The call is one the engine's own schema accepts.
     const record = {
       agent: "noah",
@@ -1791,8 +1930,8 @@ describe("the round table stays light", () => {
     // A closing answers a few hundred characters; only the recall of a saved room is larger.
     expect(answer.length).toBeLessThanOrEqual(700);
     const tokens = (shared + personas + said + closing + call + answer.length) / TOKEN;
-    // The file `cast`, the rules of conduct and of the closing are read at the start and at the end.
-    expect(tokens, `${Math.round(tokens)} tokens`).toBeLessThanOrEqual(3_850);
+    // The file `table`, the rules of conduct and of the closing are read at the start and at the end.
+    expect(tokens, `${Math.round(tokens)} tokens`).toBeLessThanOrEqual(3_400);
   });
 
   /**
@@ -1809,27 +1948,27 @@ describe("the round table stays light", () => {
       const names = ["maya", "quentin", "omar", "chloe", "sam"];
       const personas = names.reduce((sum, name) => sum + persona(name).length, 0);
       const said = 150 + ROUNDS * VOICES * TURN + 3 * 120 + 700 + 150;
-      const guest = reference("guests").length + 400;
+      const guest = 400;
       const read =
         skillText("round-table").length +
-        reference("turns").length +
-        reference("cast").length +
-        reference("rooms").length +
-        reference("gestures").length;
+        reference("table").length +
+        reference("closing").length +
+        reference("rooms").length;
       const closing = 1_700 + 360;
       /** What the voiced table costs: everything is read and said once, by one mind. */
       const voiced = read + personas + guest + said + closing + 1_200;
       return { voiced, persona: personas / names.length };
     };
 
-    it("keeps the default mode, voiced, under 6 310 tokens", () => {
+    it("keeps the default mode, voiced, under 5 350 tokens", () => {
       const { voiced } = session();
-      expect(voiced / TOKEN, `${Math.round(voiced / TOKEN)} tokens`).toBeLessThanOrEqual(6_310);
+      expect(voiced / TOKEN, `${Math.round(voiced / TOKEN)} tokens`).toBeLessThanOrEqual(5_350);
     });
 
     it("pays an independent round only when it matters, a sub-agent per voice each turn on request", () => {
       const { voiced, persona: heard } = session();
-      const independence = reference("independence").length;
+      const table = reference("table");
+      const independence = table.length - table.indexOf("## Independent minds");
       // One round in four needs independent minds: three sub-agents that read the room so far.
       const whenItMatters = voiced + independence + VOICES * (heard + 2_500 + TURN);
       // Standing sub-agents: started once with the persona and the brief, then each turn they hear
@@ -1845,9 +1984,9 @@ describe("the round table stays light", () => {
       expect(
         whenItMatters / TOKEN,
         `${Math.round(whenItMatters / TOKEN)} tokens`,
-      ).toBeLessThanOrEqual(9_900);
+      ).toBeLessThanOrEqual(8_800);
       expect(eachTurn / TOKEN, `${Math.round(eachTurn / TOKEN)} tokens`).toBeLessThanOrEqual(
-        12_700,
+        11_600,
       );
     });
 
@@ -1879,7 +2018,7 @@ describe("the round table stays light", () => {
   });
 
   it("bounds the three views: five lines a view, and a one-line offer in `next`", () => {
-    const views = reference("three-views");
+    const views = reference("rooms");
     expect(views).toContain("at most five lines");
     // The offer `next` makes, as the engine builds it for the shipped team: one short line.
     const offer = tableOffer("12-3", new Set(["maya", "omar", "quentin", "noah"]));

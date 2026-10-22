@@ -61,12 +61,9 @@ describe("the pitch skill", () => {
       "assets/deck-template.md",
       "assets/design-template.md",
       "assets/narrative-template.md",
-      "references/deck-types.md",
       "references/deck.md",
       "references/design-implementation.md",
-      "references/design-methods.md",
-      "references/design-thinking.md",
-      "references/story-frameworks.md",
+      "references/design.md",
       "references/story.md",
     ]);
     expect((skill().frontmatter as SkillFrontmatter).metadata).toMatchObject({ agent: "julien" });
@@ -110,29 +107,28 @@ describe("the pitch skill", () => {
     }
   });
 
-  it("covers the exercises, the structures and the kinds of talk", () => {
-    const methods = annex("references/design-methods.md");
+  it("names the exercises, the structures and the kinds of talk, one line per group", () => {
+    const methods = annex("references/design.md").toLowerCase();
     for (const part of [
-      "Interviews",
-      "Empathy map",
-      "Journey map",
-      "Jobs to be done",
-      "How might we",
-      "Eight sketches",
-      "Role play",
-      "Storyboard",
-      "Task test",
-      "Service blueprint",
+      "interviews",
+      "empathy map",
+      "journey map",
+      "jobs to be done",
+      "how might we",
+      "eight sketches",
+      "role play",
+      "storyboard",
+      "task test",
+      "service blueprint",
     ]) {
       expect(methods, part).toContain(part);
     }
-    const frameworks = annex("references/story-frameworks.md");
-    expect(frameworks.match(/^- /gm)?.length).toBeGreaterThanOrEqual(24);
-    for (const part of ["Pitch", "Fundraising", "Data", "Origin", "Hook"]) {
+    const frameworks = annex("references/story.md").toLowerCase();
+    for (const part of ["pitch", "fundraising", "data", "origin", "hook"]) {
       expect(frameworks, part).toContain(part);
     }
-    const types = annex("references/deck-types.md");
-    for (const part of ["Investor deck", "Conference talk", "Video explainer", "Single visual"]) {
+    const types = annex("references/deck.md").toLowerCase();
+    for (const part of ["investor deck", "conference talk", "video explainer", "single visual"]) {
       expect(types, part).toContain(part);
     }
   });
@@ -187,7 +183,7 @@ describe("the pitch skill, whole courses", () => {
 
   it("ends design thinking with a plan to test, feedback to collect and a way into the product", () => {
     expect(flat(skill().body)).toContain("references/design-implementation.md");
-    expect(annex("references/design-thinking.md")).toContain("7. **Implementation.**");
+    expect(annex("references/design.md")).toContain("7. **Implementation**");
     const step = flat(annex("references/design-implementation.md"));
     for (const part of [
       "Test plan",

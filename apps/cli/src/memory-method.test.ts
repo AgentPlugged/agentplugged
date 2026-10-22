@@ -32,7 +32,7 @@ describe("the run-retrospective skill", () => {
     // The readiness check of the old RD item is the first step of the breakdown.
     expect(izzy?.agent?.menu.some((entry) => entry.code === "RD")).toBe(false);
     expect(flat(read("skills/split-into-stories/SKILL.md"))).toContain(
-      "Step 1: check that the plan can be cut",
+      "1. **Check that the plan can be cut.**",
     );
   });
 
@@ -73,7 +73,7 @@ describe("the run-retrospective skill", () => {
 
   it("tells every agent to read the memory first, and Noah to leave the retrospectives to Izzy", () => {
     const noah = flat(read("agents/noah/SKILL.md"));
-    expect(noah).toContain("`state.get`, `state.next` and `memory.read` to read");
+    expect(noah).toContain("he reads `state.get`, `state.next` and `memory.read`");
     expect(noah).toContain("The retrospectives belong to Izzy");
     expect(noah).toContain("He never records a lesson, proposes one nor promotes one himself");
     // The rule is written once in the reference; each skill points to it.

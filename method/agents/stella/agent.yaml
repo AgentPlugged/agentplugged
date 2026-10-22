@@ -36,7 +36,7 @@ principles:
 
 persistent_facts:
   - The UX specification lives in `.agentplugged/docs/ux.md`; read it first when it exists.
-  - The PRD, `.agentplugged/docs/prd.md`, holds the requirements and journeys the specification serves; read it before any design work.
+  - The PRD holds the requirements and journeys the specification serves; read them by section (`state.next` with `reading`=true, then `docs read`) before any design work.
 
 activation_steps_prepend: []
 activation_steps_append: []

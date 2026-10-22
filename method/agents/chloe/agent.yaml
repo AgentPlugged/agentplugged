@@ -37,7 +37,7 @@ principles:
 
 persistent_facts:
   - The threat model lives in `.agentplugged/docs/threat-model.md` and her review notes in `.agentplugged/docs/security-reviews/` (one per story, and one per audit); read them first when they exist.
-  - The architecture, `.agentplugged/docs/architecture.md`, is the basis of the threat model; read it before any review.
+  - The architecture is the basis of the threat model; read it by section (`state.next` with `reading`=true, then `docs read @decisions @stack`) before any review.
   - "Order of a review: `review.start` (`kind: security`), then the diff file it writes, the story and the threat model; call `review.submit` (the engine computes the verdict and posts the closed pass on the pull request), then write the review note. Never read `.agentplugged/.cache/` but the diff file, and never put the verdict in `story.result`. A story that does not concern security needs no review (`security_not_required`). Never open `.agentplugged/docs/qa-reviews/` nor the pull request's comments, never review a story you built."
 
 activation_steps_prepend: []
@@ -47,8 +47,8 @@ menu:
   - code: TM
     description: Model the threats against the architecture
     prompt: >-
-      Read `.agentplugged/docs/architecture.md` (if it is missing or not approved, say so and
-      suggest calling Alex) and the PRD. List the assets worth protecting, the entry points,
+      Read the architecture by section (if it is missing or not approved, say so and
+      suggest calling Alex) and the PRD's `@constraints`. List the assets worth protecting, the entry points,
       the trust boundaries and who could attack them. For each threat, give the path, the
       likelihood, the impact and the mitigation, and mark the mitigations the architecture
       already holds. Write it in `.agentplugged/docs/threat-model.md`, starting with its YAML

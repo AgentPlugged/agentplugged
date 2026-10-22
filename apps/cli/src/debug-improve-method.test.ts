@@ -28,14 +28,14 @@ const REFERENCES = {
 const TOKEN = 4;
 
 describe("the two skills stay short and add no tool", () => {
-  it("keeps each body to 5 600 characters and each reference to 2 600", () => {
-    expect(DIAGNOSE.length).toBeLessThanOrEqual(5_600);
-    expect(IMPROVE.length).toBeLessThanOrEqual(5_600);
+  it("keeps each body to 4 400 characters and each reference to 2 500", () => {
+    expect(DIAGNOSE.length).toBeLessThanOrEqual(4_400);
+    expect(IMPROVE.length).toBeLessThanOrEqual(4_400);
     for (const [skill, names] of Object.entries(REFERENCES)) {
       for (const name of names) {
         const path = `skills/${skill}/references/${name}.md`;
         expect(existsSync(join(methodDir, path)), path).toBe(true);
-        expect(read(path).length, path).toBeLessThanOrEqual(2_600);
+        expect(read(path).length, path).toBeLessThanOrEqual(2_500);
         expect(skill === "diagnose-bug" ? DIAGNOSE : IMPROVE, path).toContain(`${name}.md`);
       }
     }
@@ -61,9 +61,9 @@ describe("the two skills stay short and add no tool", () => {
       );
     const diagnose = DIAGNOSE.length + size("diagnose-bug");
     const improve = IMPROVE.length + size("improve-code");
-    // Measured 2 371 and 1 973 tokens.
-    expect(diagnose / TOKEN).toBeLessThanOrEqual(2_450);
-    expect(improve / TOKEN).toBeLessThanOrEqual(2_050);
+    // Measured about 2 070 and 1 680 tokens.
+    expect(diagnose / TOKEN).toBeLessThanOrEqual(2_150);
+    expect(improve / TOKEN).toBeLessThanOrEqual(1_750);
   });
 });
 
@@ -116,7 +116,7 @@ describe("the improvement proves behaviour unchanged with the engine", () => {
 
 describe("the quick lane hands a bug that is not trivial to the diagnosis", () => {
   it("names diagnose-bug in its triage, and Noah routes to it", () => {
-    const triage = read("skills/quick-lane/SKILL.md").split("## The limits")[0] ?? "";
+    const triage = read("skills/develop-story/references/quick-lane.md");
     expect(triage).toContain("diagnose-bug");
     expect(read("agents/noah/references/team.md")).toContain("`diagnose-bug`");
   });

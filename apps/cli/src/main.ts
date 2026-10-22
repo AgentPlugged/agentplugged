@@ -43,6 +43,7 @@ import {
   AgentPluggedError,
   AgentSession,
   ANTIGRAVITY_UNCHECKED_REASON,
+  type BricksFound,
   byOpening,
   type CheckpointState,
   type CiCheckResult,
@@ -54,6 +55,7 @@ import {
   type CostsFound,
   CURSOR_FLAVOR,
   callOf,
+  checkCallCommand,
   checkCreate,
   checkEngine,
   codexCallOf,
@@ -89,6 +91,10 @@ import {
   JournalBackup,
   type JournalSyncResult,
   type KeyResult,
+  KIMI_FLAVOR,
+  kimiCallOf,
+  kimiCallTool,
+  kimiSessionOf,
   METHOD_CONFIG_PATH,
   type MethodSource,
   type MigrateResult,
@@ -99,6 +105,7 @@ import {
   type PresenceAuthenticator,
   type ProfilePresetId,
   type ProfileResult,
+  type ProfileShown,
   type ProjectStateResult,
   type PublicationResult,
   questionToolHookIn,
@@ -113,6 +120,8 @@ import {
   resolveEngineCommand,
   resolveProfile,
   reviewNotInteractive,
+  type SectionsRead,
+  type SheetsWritten,
   type SpecGrowResult,
   type SpecPathResult,
   STATE_CACHE_PATH,
@@ -167,11 +176,15 @@ import { formatCiSetup, formatStoryCi } from "./ci-text.js";
 import { offerCodexTrust } from "./codex-trust-flow.js";
 import { deferredJson, formatDeferred } from "./deferred-text.js";
 import {
+  formatBricksFound,
   formatCostsResult,
   formatDeckDrawn,
   formatDocsProblems,
   formatDocsSummary,
+  formatProfileShown,
   formatResearchResult,
+  formatSectionsRead,
+  formatSheetsWritten,
   formatSpecResult,
 } from "./docs-text.js";
 import { machineStep, runDoctorCommand } from "./environment-flow.js";
@@ -195,6 +208,7 @@ import {
   readExportFile,
   writeExportFile,
 } from "./key-flow.js";
+import { kimiConfigPath, readKimiHooksState, runKimiHooks } from "./kimi-hooks.js";
 import { ENGINE_CHILD_ENV, SESSION_INSTANCE_ENV, SESSION_KEY_ENV } from "./launcher-env.js";
 import { linkHint } from "./link-hint.js";
 import { canDrawMenus, createMenu, GoBack } from "./menu.js";
@@ -599,6 +613,8 @@ async function runMcp(
         files,
         journal,
         projectRoot: environment.cwd,
+        // A `sync` the creator asks for in the chat says what their Kimi settings hold of the hooks.
+        kimiHooks: await readKimiHooksState(environment.env, environment.engineVersion),
         // `get_state` and `next` say when the journal cannot be saved.
         journalBackup: saving,
         tools: new NodeToolProbe({ env: environment.env }),
@@ -749,6 +765,7 @@ async function runHook(
   rest: readonly string[],
 ): Promise<number> {
   const [tool, event, ...extra] = rest;
+  if (tool === "kimi") return await runKimiHook(environment, t, [event ?? "", ...extra]);
   const pre = event === "pre-tool";
   if (
     (tool !== "antigravity" && tool !== "codex" && tool !== "cursor") ||
@@ -820,6 +837,120 @@ async function runHook(
     else answer({});
   } finally {
     journal.close();
+  }
+  return 0;
+}
+
+/**
+ * The nearest folder (from `cwd` up) that is a product served by Kimi: it holds the product's
+ * configuration and the policy `sync` wrote for Kimi. The hook lives in the user's settings, so it
+ * runs in every project Kimi opens; anywhere else it does nothing.
+ */
+function kimiProductRoot(cwd: string): string | undefined {
+  let folder = cwd;
+  for (let level = 0; level < 16; level++) {
+    if (
+      existsSync(join(folder, ".agentplugged", "method.yaml")) &&
+      existsSync(join(folder, ".kimi-code", "agentplugged-policy.json"))
+    ) {
+      return folder;
+    }
+    const parent = dirname(folder);
+    if (parent === folder) return undefined;
+    folder = parent;
+  }
+  return undefined;
+}
+
+/**
+ * `agentplugged hook kimi pre-tool`: the command of the `PreToolUse` hook that `kimi-hooks install`
+ * puts in the user's Kimi settings. Kimi sends the hook's input as JSON on standard input; the
+ * answer is Kimi's: nothing to let the call through, or a JSON denial on standard output. It applies
+ * the product's rules (the policy `sync` wrote in the project), holds the call while the team is
+ * paused, and records a read of outside content. A Kimi hook cannot ask, so a rule that asks is a
+ * denial that tells the agent to ask the creator in the chat. Outside a product served by Kimi it
+ * does nothing; where the engine cannot check a call of a product, the call is denied.
+ */
+async function runKimiHook(
+  environment: CliEnvironment,
+  t: Translate,
+  rest: readonly string[],
+): Promise<number> {
+  if (rest.length !== 1 || rest[0] !== "pre-tool") {
+    environment.stderr(formatError(t, invalidArguments(`hook: kimi ${rest.join(" ")}`.trim())));
+    return 1;
+  }
+  const deny = (reason: string) =>
+    environment.stdout(
+      `${JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason: reason,
+        },
+      })}\n`,
+    );
+  let served = false;
+  let journal: GitStateStore | undefined;
+  try {
+    const input: unknown = JSON.parse(await readAll(environment.stdin));
+    const given = (input as { cwd?: unknown } | null)?.cwd;
+    const cwd = typeof given === "string" && given.trim() !== "" ? given : environment.cwd;
+    const root = kimiProductRoot(cwd);
+    if (root === undefined) return 0;
+    served = true;
+    const call = kimiCallOf(input);
+    if (call === undefined) return 0;
+    const home = environment.env.USERPROFILE?.trim() || environment.env.HOME?.trim() || homedir();
+    const keys = keyStoreOf(environment.env);
+    journal = new GitStateStore({ cwd: root, keys, ...keyLockOf(environment) });
+    const conversation = kimiSessionOf(input);
+    const context = {
+      files: new NodeWorkspaceFiles(root),
+      journal,
+      tools: new NodeToolProbe({ env: environment.env }),
+      method: shippedMethodOrUnavailable(),
+      engineVersion: environment.engineVersion,
+      engineAny: true,
+      commandLine: "hook",
+      keys,
+      mainBranch: new GitMainBranchReader({ cwd: root }),
+      docsBase: new GitDocsBase({ cwd: root }),
+      chat: { project: root },
+      projectRoot: root,
+      actor: "agent" as const,
+      ...(environment.platform === undefined ? {} : { platform: environment.platform }),
+    };
+    const place = { root, home, resolve: canonicalPath(root, home) };
+    const decision = await guardToolCall(context, call, {
+      place,
+      conversation,
+      flavor: KIMI_FLAVOR,
+    });
+    if (decision.decision !== "allow") {
+      deny(
+        decision.decision === "ask"
+          ? `${decision.reason} This tool cannot ask: ask the creator in the chat first, and do not work around it.`
+          : decision.reason,
+      );
+      return 0;
+    }
+    const held = await checkCallCommand.run(context, {
+      tool: kimiCallTool(call),
+      cwd,
+      ...(conversation === undefined ? {} : { session: conversation }),
+    });
+    if (held.ok && Object.keys(held.value).length > 0) {
+      environment.stdout(`${JSON.stringify(held.value)}\n`);
+      return 0;
+    }
+    await recordToolRead(context, call, conversation);
+  } catch {
+    // Kimi lets a call through when its hook fails: a call of a product the engine could not
+    // check is refused here instead, as in the other tools.
+    if (served) deny(ANTIGRAVITY_UNCHECKED_REASON);
+  } finally {
+    journal?.close();
   }
   return 0;
 }
@@ -936,6 +1067,7 @@ const SYNC_GROUPS: readonly TargetGroup[] = [
   "codex",
   "antigravity",
   "cursor",
+  "kimi",
 ];
 
 function groupTitle(t: Translate, group: TargetGroup): string {
@@ -966,6 +1098,8 @@ export function formatSync(
   root: string,
   result: SyncResult,
   locale: Locale = "en",
+  /** Where the user's own Kimi settings are, named in the hooks' reminder. */
+  kimiConfig = "~/.kimi-code/config.toml",
 ): string {
   const labels = result.entries.map((entry) => t(SYNC_ACTION_KEYS[entry.action]));
   const width = Math.max(0, ...labels.map((label) => label.length));
@@ -1017,11 +1151,18 @@ export function formatSync(
   text += formatSyncRules(t, result.rules);
   if (result.codexTrustReminder) text += `\n${t("sync.codex_trust")}\n`;
   if (result.cursorHooksReminder) text += `\n${t("sync.cursor_hooks")}\n`;
+  if (result.kimiHooks !== undefined && result.kimiHooks !== "installed") {
+    text += `\n${t("sync.kimi_hooks", { path: kimiConfig })}\n`;
+  }
   return text;
 }
 
 /** What `sync` did when `init` ran it: a line, then what needs the creator's eye. */
-function formatSyncCompact(t: Translate, result: SyncResult): string {
+function formatSyncCompact(
+  t: Translate,
+  result: SyncResult,
+  kimiConfig = "~/.kimi-code/config.toml",
+): string {
   const written = result.entries.filter((entry) => entry.action !== "unchanged").length;
   const lines = [t("init.sync.done", { count: written })];
   for (const warning of result.warnings) {
@@ -1031,6 +1172,9 @@ function formatSyncCompact(t: Translate, result: SyncResult): string {
   }
   if (result.codexTrustReminder) lines.push("", t("sync.codex_trust"));
   if (result.cursorHooksReminder) lines.push("", t("sync.cursor_hooks"));
+  if (result.kimiHooks !== undefined && result.kimiHooks !== "installed") {
+    lines.push("", t("sync.kimi_hooks", { path: kimiConfig }));
+  }
   return `${lines.join("\n")}\n`;
 }
 
@@ -1934,6 +2078,8 @@ export async function main(rawEnvironment: CliEnvironment): Promise<number> {
   }
   // The hooks of Antigravity CLI's plugin.
   if (command === "hook") return await runHook(environment, t, rest);
+  // The one command that writes the user's own Kimi settings, on request.
+  if (command === "kimi-hooks") return await runKimiHooks(environment, t, rest);
   if (command === "mcp") {
     // The agents' server takes no argument and no option but --engine-any.
     const options = environment.argv.filter((arg) => arg.startsWith("-") && arg !== "--engine-any");
@@ -2474,11 +2620,23 @@ export async function main(rawEnvironment: CliEnvironment): Promise<number> {
       // the spec over to the full path.
       if (action === "slides" && extra.length === 0) {
         input = { action };
-      } else if (action === "path" || action === "research" || action === "costs") {
+      } else if (
+        action === "path" ||
+        action === "research" ||
+        action === "costs" ||
+        action === "sheet" ||
+        action === "read" ||
+        action === "profile" ||
+        action === "bricks"
+      ) {
         input = { action, words: extra };
       } else if ((action !== "check" && action !== "grow") || extra.length > 0) {
         const typed = ["docs", ...rest].join(" ");
-        reportError(invalidArguments(`${typed} (check, path, grow, research, slides, costs)`));
+        reportError(
+          invalidArguments(
+            `${typed} (check, path, grow, research, slides, costs, sheet, read, profile, bricks)`,
+          ),
+        );
         return failCode;
       } else {
         input = { action, ...(baseOption === undefined ? {} : { base: baseOption }) };
@@ -2615,9 +2773,11 @@ export async function main(rawEnvironment: CliEnvironment): Promise<number> {
       (storyCiCommand && waiveOption !== undefined);
     // `history` and `next` only read: their journal never reaches the keychain (none is needed).
     // `migrate --check` only reads too, and `docs check` the approved stories.
+    // `sync` reads the current phase there: the tools get the skills of that phase only.
     const reading =
       command === "history" ||
       command === "next" ||
+      command === "sync" ||
       command === "publication" ||
       command === "docs" ||
       command === "usage" ||
@@ -2665,6 +2825,10 @@ export async function main(rawEnvironment: CliEnvironment): Promise<number> {
       journal,
       // `sync` lists the folder of the stories' working copies for Codex.
       projectRoot: environment.cwd,
+      // `sync` says what the user's own Kimi settings hold of the product's hooks (read, never written).
+      ...(command === "sync" || command === "init"
+        ? { kimiHooks: await readKimiHooksState(environment.env, environment.engineVersion) }
+        : {}),
       journalSync: command === "journal" ? journal : undefined,
       tools: new NodeToolProbe({ env: environment.env }),
       ...(machine === undefined ? {} : { environment: machine }),
@@ -2692,6 +2856,8 @@ export async function main(rawEnvironment: CliEnvironment): Promise<number> {
       ...(command === "docs" || command === "review" || command === "publication"
         ? { docsBase: new GitDocsBase({ cwd: environment.cwd }) }
         : {}),
+      // `docs bricks` reads the code of the repository at its commit.
+      ...(command === "docs" ? { codeSource: new GitCodeSource({ cwd: environment.cwd }) } : {}),
       ...(exportTarget === undefined ? {} : { exportTarget }),
       // `next` looks for the knowledge base on the main branch too.
       ...(command === "sync" || command === "rules" || command === "next" || command === "review"
@@ -2777,6 +2943,9 @@ export async function main(rawEnvironment: CliEnvironment): Promise<number> {
       } else if (rest[0] === "seal") input = { action: "seal" };
       else input = { action: "endorse", ...(rest[1] === undefined ? {} : { device: rest[1] }) };
     }
+    // The creator's `next` (and the agents that read it as text) shows the passages the step's
+    // agent reads; through the MCP server only the agent doing the step asks for them.
+    if (command === "next") input = { reading: true };
     const result = await registry.run(command, context, input);
     if (!result.ok) {
       reportError(result.error);
@@ -2875,7 +3044,9 @@ export async function main(rawEnvironment: CliEnvironment): Promise<number> {
             {},
           );
           if (generated.ok) {
-            environment.stdout(`\n${formatSyncCompact(t, generated.value as SyncResult)}`);
+            environment.stdout(
+              `\n${formatSyncCompact(t, generated.value as SyncResult, kimiConfigPath(environment.env))}`,
+            );
             environment.stdout(await codexTrustNote(environment, t, prompts, files));
             synced = true;
           } else {
@@ -2925,7 +3096,15 @@ export async function main(rawEnvironment: CliEnvironment): Promise<number> {
         environment.stdout(formatProductKey(t, value, file));
       } else environment.stdout(formatKey(t, value));
     } else if (command === "sync") {
-      environment.stdout(formatSync(t, files.root, result.value as SyncResult, locale));
+      environment.stdout(
+        formatSync(
+          t,
+          files.root,
+          result.value as SyncResult,
+          locale,
+          kimiConfigPath(environment.env),
+        ),
+      );
       environment.stdout(await codexTrustNote(environment, t, prompts, files));
     } else if (command === "agent") {
       environment.stdout(formatAgentResult(t, result.value as AgentCommandResult));
@@ -2988,7 +3167,27 @@ export async function main(rawEnvironment: CliEnvironment): Promise<number> {
         | ResearchFound
         | ResearchPlanned
         | DeckDrawn
-        | CostsFound;
+        | CostsFound
+        | SheetsWritten
+        | SectionsRead
+        | ProfileShown
+        | BricksFound;
+      if ("profile" in answered) {
+        environment.stdout(formatProfileShown(answered));
+        return 0;
+      }
+      if ("bricks" in answered) {
+        environment.stdout(formatBricksFound(answered));
+        return 0;
+      }
+      if ("passages" in answered) {
+        environment.stdout(formatSectionsRead(answered));
+        return answered.not_found.length > 0 ? 1 : 0;
+      }
+      if ("sheets" in answered) {
+        environment.stdout(formatSheetsWritten(answered));
+        return answered.sheets.some((sheet) => sheet.too_long) ? 1 : 0;
+      }
       if ("page" in answered) {
         environment.stdout(formatDeckDrawn(answered));
         return 0;

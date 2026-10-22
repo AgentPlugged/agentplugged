@@ -94,6 +94,14 @@ export const ErrorCode = {
    */
   CHECKPOINT_NOT_OPEN: "CHECKPOINT_NOT_OPEN",
   /**
+   * `submit_result` `partial` would leave a decision of the creator waiting with no checkpoint open
+   * for them: findings of the story's review left unsorted, or open questions, while no checkpoint
+   * of the story (of the agent, without a story) is open. Nothing was written: open the decision
+   * (`open_checkpoint`), sort the findings, or end `blocked`. `details: { story, reason, untriaged }`,
+   * `reason` being `untriaged` or `waiting`.
+   */
+  DECISION_NOT_OPEN: "DECISION_NOT_OPEN",
+  /**
    * `review` or `key` was run without an interactive terminal (standard input and output both
    * terminals): only the creator answers a checkpoint or links a key, at the keyboard. Nothing
    * was written. `details: { command }`. Also `rules set` and `rules reset`.
@@ -285,6 +293,11 @@ export const ErrorCode = {
   STORY_DEPENDENCY_FORWARD: "STORY_DEPENDENCY_FORWARD",
   /** `docs check`: stories depend on each other in a loop. `details: { path, line, cycle }`. */
   STORY_DEPENDENCY_CYCLE: "STORY_DEPENDENCY_CYCLE",
+  /**
+   * `docs check`: a story sheet (a story with its section of excerpts) is longer than the
+   * ceiling: the story is too big, to be cut. `details: { path, line, story, lines, max }`.
+   */
+  STORY_SHEET_TOO_LONG: "STORY_SHEET_TOO_LONG",
   /**
    * `docs check`: the intent of a story differs from the one the creator approved in a `document`
    * checkpoint. `details: { path, line, story, checkpoint, reason, approved_path, blob }`

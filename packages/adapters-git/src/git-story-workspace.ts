@@ -25,6 +25,7 @@ import {
   type FilesCommitOutcome,
   type FilesCommitRequest,
   isPersonalLayerFile,
+  type PathsCommitRequest,
   SKILL_OVERRIDES_DIR,
   type StoryFileOnBranch,
   type StoryWorkspace,
@@ -655,6 +656,81 @@ export class GitStoryWorkspace implements StoryWorkspace {
           : added;
       if (committed.status !== 0) {
         await restore();
+        return {
+          ok: false,
+          reason: "failed",
+          message: lastLine(`${committed.stdout.toString("utf8")}\n${committed.stderr}`),
+        };
+      }
+      return { ok: true, commit: await head() };
+    } catch (error) {
+      return {
+        ok: false,
+        reason: "failed",
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  async commitPaths(request: PathsCommitRequest): Promise<FilesCommitOutcome> {
+    const { paths } = request;
+    if (paths.length === 0 || paths.some((path) => path.startsWith("-") || isAbsolute(path))) {
+      return { ok: false, reason: "failed", message: "no valid file to commit" };
+    }
+    try {
+      const worktrees = await this.#worktrees();
+      const main = worktrees[0]?.path ?? resolve(this.#cwd);
+      const inner = relative(main, resolve(this.#cwd));
+      let folder: string;
+      if (request.branch === undefined) {
+        // The main folder of the repository, and this workspace is in it (not a story's worktree).
+        if (worktrees[0] === undefined || inner.startsWith("..") || isAbsolute(inner)) {
+          return { ok: false, reason: "not_current", message: "main folder" };
+        }
+        folder = this.#cwd;
+      } else {
+        const holder = this.#holder(worktrees, request.branch);
+        if (holder === undefined) {
+          return { ok: false, reason: "not_current", message: request.branch };
+        }
+        folder = this.#same(holder.path, main) ? this.#cwd : join(holder.path, inner);
+      }
+      const run = (args: readonly string[]) => this.#in(folder, ["--literal-pathspecs", ...args]);
+      if (request.branch !== undefined) {
+        const current = await run(["symbolic-ref", "-q", "--short", "HEAD"]);
+        if (current.status !== 0 || current.stdout.toString("utf8").trim() !== request.branch) {
+          return { ok: false, reason: "not_current", message: request.branch };
+        }
+      }
+      const head = async () => (await run(["rev-parse", "HEAD"])).stdout.toString("utf8").trim();
+      // What differs from the branch at those paths: modified, deleted, new and not ignored.
+      const listed = await run([
+        "ls-files",
+        "-z",
+        "-m",
+        "-d",
+        "-o",
+        "--exclude-standard",
+        "--",
+        ...paths,
+      ]);
+      if (listed.status !== 0) {
+        return { ok: false, reason: "failed", message: lastLine(listed.stderr) };
+      }
+      const changed = [...new Set(listed.stdout.toString("utf8").split("\0").filter(Boolean))];
+      if (changed.length === 0) return { ok: true, commit: await head() };
+      const identity = await run(["config", "user.name"]);
+      const who =
+        identity.status === 0 && identity.stdout.toString("utf8").trim() !== ""
+          ? []
+          : ["-c", "user.name=AgentPlugged", "-c", "user.email=noreply@agentplugged.invalid"];
+      const added = await run(["add", "-A", "--", ...changed]);
+      const committed =
+        added.status === 0
+          ? await run([...who, "commit", "-q", "-m", request.message, "--only", "--", ...changed])
+          : added;
+      if (committed.status !== 0) {
+        await run(["reset", "-q", "HEAD", "--", ...changed]).catch(() => undefined);
         return {
           ok: false,
           reason: "failed",

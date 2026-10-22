@@ -238,6 +238,15 @@ describe("Claude Code launch plan", () => {
       nativePause: false,
       subAgents: true,
       liveInput: true,
+      namedSessions: true,
+      subAgentUsage: true,
+      reportsContext: true,
+      streamsText: true,
+      keepsWarm: true,
+      isolates: true,
+      enforcesLimits: true,
+      refusalsLive: true,
+      interrupts: true,
     });
   });
 
@@ -424,6 +433,66 @@ describe("Claude Code stream reading", () => {
     const events = read([answer, answer]);
     const usages = events.filter((event) => event.type === "usage");
     expect(usages.at(-1)).toMatchObject({ usage: { tokensIn: 5, tokensOut: 1 } });
+  });
+
+  it("reports how heavy the agent's own conversation was, never counting its sub-agents", () => {
+    const main = (id: string, input: number, cacheRead: number, cacheWrite: number) => ({
+      type: "assistant",
+      parent_tool_use_id: null,
+      message: {
+        id,
+        model: "claude-haiku-4-5-20251001",
+        content: [{ type: "text", text: "a" }],
+        usage: {
+          input_tokens: input,
+          cache_read_input_tokens: cacheRead,
+          cache_creation_input_tokens: cacheWrite,
+          output_tokens: 2,
+        },
+      },
+    });
+    const events = read([
+      main("m1", 3, 40_000, 20_000),
+      // A sub-agent's answer is far heavier: it is not the conversation's.
+      {
+        type: "assistant",
+        parent_tool_use_id: "toolu_1",
+        message: { id: "s1", model: "claude-opus-4-7", usage: { input_tokens: 150_000 } },
+      },
+      main("m2", 5, 60_000, 1_000),
+      {
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        modelUsage: {
+          "claude-opus-4-7": { contextWindow: 1_000_000 },
+          "claude-haiku-4-5-20251001": { contextWindow: 200_000 },
+        },
+      },
+    ]);
+    expect(events.at(-1)).toMatchObject({
+      type: "turn.completed",
+      context: { tokens: 61_005, window: 200_000 },
+    });
+  });
+
+  it("gives no window it cannot tie to the agent's model, and no context when nothing was read", () => {
+    const answer = {
+      type: "assistant",
+      message: { id: "m1", model: "claude-a", content: [], usage: { input_tokens: 10 } },
+    };
+    const two = read([
+      answer,
+      {
+        type: "result",
+        subtype: "success",
+        modelUsage: { "claude-b": { contextWindow: 1 }, "claude-c": { contextWindow: 2 } },
+      },
+    ]);
+    expect(two.at(-1)).toMatchObject({ context: { tokens: 10 } });
+    expect((two.at(-1) as { context: object }).context).not.toHaveProperty("window");
+    const none = read([{ type: "result", subtype: "success" }]);
+    expect(none.at(-1)).not.toHaveProperty("context");
   });
 
   it("tells a program signed in with a key from a subscription", () => {

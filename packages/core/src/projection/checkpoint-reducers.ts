@@ -79,6 +79,8 @@ import {
 import { reasonHolds } from "../checkpoints/settled-rules.js";
 import { mergeHold } from "../ci/ci-rules.js";
 import { JOURNEY_CATALOG } from "../journey/journey-catalog.js";
+import { type SkipState, skipKey } from "../journey/journey-rules.js";
+import { REVIEW_LOOP_OPTIONS } from "../review/review-rules.js";
 import { agentOf, dictionary, type StoryState, section, storyById } from "./agent-reducers.js";
 import { releaseExecutions } from "./creator-action-reducers.js";
 import { untrustedAnswer } from "./human-reducers.js";
@@ -267,6 +269,12 @@ export interface CheckpointState {
    * any decision. Absent or null otherwise.
    */
   web_failure?: WebAnswerFailure | null;
+  /**
+   * How many times in a row the machine could not carry out an answer held for this point for the
+   * same cause (same code and reason). It outlives the next held answer, which clears
+   * `web_failure`; a different cause starts it again. Absent when nothing failed.
+   */
+  web_failure_repeat?: { readonly key: string; readonly count: number; readonly at: string };
 }
 
 /** A held answer the machine could not carry out (`checkpoint.web_hold_failed`). */
@@ -726,7 +734,37 @@ export function applyResolution(
   if (checkpoint.risk === "high" && answer.assurance === "locale") {
     draft.warnings.push({ code: "locale_on_high_risk", checkpoint: checkpoint.id, id: event.id });
   }
+  acceptReviewAsIs(draft, checkpoint, resolution);
   return true;
+}
+
+/**
+ * The creator's choice, at the review loop's point, to merge the story as it is: its review is
+ * skipped for that story, as a skip of the step would, with the point as the proof. The remaining
+ * findings stay as they are; a later skip or resume of the step works as usual.
+ */
+function acceptReviewAsIs(
+  draft: ProjectionDraft,
+  checkpoint: CheckpointState,
+  resolution: CheckpointResolution,
+): void {
+  if (checkpoint.source !== "review_loop" || checkpoint.story === null) return;
+  if (resolution.decision !== "option_chosen" || resolution.option !== REVIEW_LOOP_OPTIONS.asIs) {
+    return;
+  }
+  const skips = section<SkipState>(draft, "skips");
+  const key = skipKey("story_review", checkpoint.story);
+  if (Object.hasOwn(skips, key)) return;
+  skips[key] = {
+    step: "story_review",
+    story: checkpoint.story,
+    reason: "remaining review findings accepted at the review loop",
+    by: resolution.by,
+    source: resolution.source,
+    at: resolution.at,
+    event: resolution.event,
+    checkpoint: checkpoint.id,
+  };
 }
 
 /**
@@ -1192,6 +1230,13 @@ export const CHECKPOINT_REDUCERS: Readonly<Record<string, Reducer>> = {
       device: payload.device,
       at: event.at,
       event: event.id,
+    };
+    const key = `${payload.code}:${payload.reason ?? ""}`;
+    const before = checkpoint.web_failure_repeat;
+    checkpoint.web_failure_repeat = {
+      key,
+      count: before?.key === key ? before.count + 1 : 1,
+      at: event.at,
     };
   },
   /**

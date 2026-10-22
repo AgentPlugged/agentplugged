@@ -625,19 +625,16 @@ describe("deviations", () => {
     });
   });
 
-  it("never lets the story's developer lift a deviation, even one it reported", async () => {
-    const { start, run, call } = await product();
+  it("never lets the story's developer report a deviation on it: only the creator could lift it", async () => {
+    const { start, call, journal } = await product();
     await start("1-1");
-    const own = await run("report_deviation", { ...DEVIATION, agent: "builder" });
-    const refused = await call("lift_deviation", {
-      agent: "builder",
-      deviation: own.deviation,
-      reason: "Fixed.",
+    const before = (await journal.list()).events.length;
+    const own = await call("report_deviation", { ...DEVIATION, agent: "builder" });
+    expect(errorOf(own)).toMatchObject({
+      code: ErrorCode.DEVIATION_NOT_REPORTABLE,
+      details: { story: "1-1", reason: "own_story" },
     });
-    expect(errorOf(refused)).toMatchObject({
-      code: ErrorCode.DEVIATION_NOT_ALLOWED,
-      details: { agent: "builder", reported_by: "builder" },
-    });
+    expect((await journal.list()).events.length).toBe(before);
   });
 
   it("keeps the status of a story in progress or blocked, and refuses a story done", async () => {

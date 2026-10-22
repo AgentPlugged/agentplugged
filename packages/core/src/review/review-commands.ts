@@ -41,6 +41,7 @@ import {
 import { checkpointPayload, truncate } from "../checkpoints/checkpoint-rules.js";
 import { branchHead } from "../ci/ci-check.js";
 import { ciGreen, storyCiStatus } from "../ci/ci-rules.js";
+import { ciPlan } from "../ci/ci-setup.js";
 import { type CommandContext, type CommandResult, defineCommand, fail, ok } from "../command.js";
 import { criteriaTrace, type StoryTrace } from "../criteria/criterion-trace.js";
 import { currentState } from "../deferred/deferred-commands.js";
@@ -90,6 +91,7 @@ import {
   validateLensReports,
 } from "./review-lenses.js";
 import {
+  changesAfter,
   currentPass,
   findFinding,
   isStoryDeveloper,
@@ -98,6 +100,7 @@ import {
   passComplete,
   passNumberFor,
   passOutcome,
+  REVIEW_LOOP_OPTIONS,
   type ReviewPass,
   refutedOf,
   reviewLoopReached,
@@ -284,6 +287,11 @@ export interface ReviewStart {
   readonly intent?: string;
   /** The commit messages the assertions pass tries, when there are any (a file to read). */
   readonly statements?: string;
+  /**
+   * The project's declared test command (the `test` script of its package, run the way its package
+   * manager runs scripts), to give to a reader who runs the tests. Absent when none is declared.
+   */
+  readonly test_command?: string;
   readonly pass: number;
   readonly commit: string;
   readonly base: string;
@@ -330,6 +338,23 @@ export interface ReviewStart {
     readonly line: number | null;
     readonly decision: string | null;
   }[];
+}
+
+/**
+ * The test command the project declares: its `test` script, as its package manager runs it. A
+ * reader runs that and nothing else to try the tests (a launcher such as `npx` is refused to
+ * agents), so it is told here instead of guessing.
+ */
+async function declaredTestCommand(context: CommandContext): Promise<string | undefined> {
+  try {
+    const plan = await ciPlan(context.files);
+    for (const step of plan.jobs.test) {
+      if ("run" in step && /^(?:pnpm|npm|yarn) run test$/.test(step.run)) return step.run;
+    }
+  } catch {
+    // A project the plan cannot read declares nothing the readers could be told.
+  }
+  return undefined;
 }
 
 /** The reviewer's own findings of the story's earlier passes, with the triage decision only. */
@@ -549,6 +574,7 @@ async function prepareStory(
   );
   const statements = messages === "" ? undefined : statementsPathOf(path);
   if (statements !== undefined) await context.files.writeText(statements, messages);
+  const testCommand = kind === "qa" ? await declaredTestCommand(context) : undefined;
   // The engine proved the duplicates and suspects the twins, with no token spent;
   // the form reader (the lone reader of a small change) is told, in few lines.
   const reuse =
@@ -584,6 +610,7 @@ async function prepareStory(
       readers: told,
       criteria: (text?.criteria ?? []).map((criterion) => truncate(criterion, 100)),
       ...(statements === undefined ? {} : { statements }),
+      ...(testCommand === undefined ? {} : { test_command: testCommand }),
       // What the guard before a write refused for this story, in one line.
       ...(guardLine === undefined ? {} : { guard: guardLine }),
       ...(followed === undefined
@@ -644,6 +671,7 @@ async function prepareFree(
   );
   const statements = statementsText === "" ? undefined : statementsPathOf(path);
   if (statements !== undefined) await context.files.writeText(statements, statementsText);
+  const testCommand = await declaredTestCommand(context);
   const meta: FreeMeta = { id, source: read.label, intent, files: changed };
   await context.files.writeText(`${dir}/meta.json`, JSON.stringify(meta));
   return {
@@ -668,6 +696,7 @@ async function prepareFree(
       readers,
       criteria: [truncate(intent, 100)],
       ...(statements === undefined ? {} : { statements }),
+      ...(testCommand === undefined ? {} : { test_command: testCommand }),
       previous: [],
     },
   };
@@ -690,7 +719,7 @@ export const startReviewCommand = defineCommand<ReviewStart>({
   name: "start_review",
   audience: "agent",
   description:
-    "Start your independent review of a story in review: `kind` is `qa` for the quality reviewer, `security` for the security reviewer; `story` is `<epic>-<story>`; `agent` your own id. The story must be started, in review, not done, with a green (or waived) CI on the head of its branch; you must be an active agent of the review's domain (quality, security), never the story's developer nor `main`. The engine writes the diff of the story's branch since its base to a file (`diff`, from the product's root) and gives the changed files, the story's file, its requirements, whether it concerns security (`security`: `required`, `reasons`: paths, words, reviewer, qa_flag), your own findings of the earlier passes with how the developer sorted them, and the `lenses` to run, each chosen by the engine from the change's risk with `why`, and the story's numbered `criteria`; `more` adds lenses the creator asked for. Read the diff file, the story and the documents it cites — never the other reviewer's notes or comments, never the author's reasoning — then call submit_review with the same `commit`. Refused with REVIEW_NOT_POSSIBLE (unknown_story, not_started, done, not_independent, not_reviewer, not_in_review, ci_not_green: read the CI first, head_moved: the branch moved since its CI was read, already_reviewed, same_reviewer, security_not_required: this story needs no security review, branch_missing, no_diff). Nothing is written in the journal. A free review of a change that belongs to no story: instead of `story`, give `free`: its `intent` in one sentence (the judge's only criterion) and a `source` (`uncommitted`, a range `<from>..<to>`, `branch:<name>` against the main branch, `pr:<number>`) or a pasted `diff`; only the quality review (`kind` qa), by an agent of the quality domain. The engine reads the diff itself and returns the same lenses and readers, with `commit` naming the diff read; refused with source_invalid (and why) or free_not_reviewer. Readers whose entry has `passes` run those short passes after their lenses, and `statements` is the file of the commit messages they try.",
+    "Start your independent review of a story in review: `kind` is `qa` for the quality reviewer, `security` for the security reviewer; `story` is `<epic>-<story>`; `agent` your own id. The story must be started, in review, not done, with a green (or waived) CI on the head of its branch; you must be an active agent of the review's domain (quality, security), never the story's developer nor `main`. The engine writes the diff of the story's branch since its base to a file (`diff`, from the product's root) and gives the changed files, the story's file, its requirements, whether it concerns security (`security`: `required`, `reasons`: paths, words, reviewer, qa_flag), your own findings of the earlier passes with how the developer sorted them, and the `lenses` to run, each chosen by the engine from the change's risk with `why`, and the story's numbered `criteria`; `more` adds lenses the creator asked for. Read the diff file, the story and the documents it cites — never the other reviewer's notes or comments, never the author's reasoning — then call submit_review with the same `commit`. Refused with REVIEW_NOT_POSSIBLE (unknown_story, not_started, done, not_independent, not_reviewer, not_in_review, ci_not_green: read the CI first, head_moved: the branch moved since its CI was read, already_reviewed, same_reviewer, security_not_required: this story needs no security review, branch_missing, no_diff). Nothing is written in the journal. A free review of a change that belongs to no story: instead of `story`, give `free`: its `intent` in one sentence (the judge's only criterion) and a `source` (`uncommitted`, a range `<from>..<to>`, `branch:<name>` against the main branch, `pr:<number>`) or a pasted `diff`; only the quality review (`kind` qa), by an agent of the quality domain. The engine reads the diff itself and returns the same lenses and readers, with `commit` naming the diff read; refused with source_invalid (and why) or free_not_reviewer. Readers whose entry has `passes` run those short passes after their lenses, and `statements` is the file of the commit messages they try. `test_command` is the project's declared test command: a reader who runs the tests runs that, never a launcher such as `npx`, and reads the changes with `git diff`, `git log` or `git show` from the product's folder (no `-C`).",
   inputSchema: StartReviewInputSchema,
   async run(context, input) {
     const parsed = StartReviewInputSchema.safeParse(input);
@@ -1022,10 +1051,24 @@ function loopCheckpoint(id: string, blocking: number) {
         120,
       ),
       summary: truncate(
-        `Story ${id} went through ${MAX_REVIEW_PASSES} review passes closed with a blocking finding (${blocking} blocking finding(s) in the last one). Approve to allow ${MAX_REVIEW_PASSES} more passes; refuse to keep the story out of review while you settle it with its developer.`,
+        `Story ${id} went through ${MAX_REVIEW_PASSES} review passes that each ended with changes to make (${blocking} blocking finding(s) in the last one). The reviewer and the developer do not agree. Approve to allow ${MAX_REVIEW_PASSES} more passes, merge it as it is with the remaining findings accepted, or refuse to keep the story out of review while you settle it with its developer.`,
         2000,
       ),
       blocks: [{ action: "story.review", story: id }],
+      options: [
+        {
+          id: REVIEW_LOOP_OPTIONS.more,
+          label: `${MAX_REVIEW_PASSES} more review passes`,
+          consequence: "The developer fixes again and the reviewer reviews the new commit.",
+        },
+        {
+          id: REVIEW_LOOP_OPTIONS.asIs,
+          label: "Merge as it is, remaining findings accepted",
+          consequence:
+            "The story's review is skipped for this story: its merge is proposed without another pass, the findings left stay as they are.",
+        },
+      ],
+      recommendation: REVIEW_LOOP_OPTIONS.more,
     }),
     source: "review_loop" as const,
   };
@@ -1037,7 +1080,7 @@ const storyOf = (input: { readonly story?: string | undefined }): string => inpu
 const recordReview = agentEventCommand<typeof SubmitReviewInputSchema, SubmitPrepared>({
   name: "submit_review",
   description:
-    "Submit your independent review of a story, after start_review: the same `kind` and `commit`, a `summary` of your review, and your `findings` (each: `severity` blocking, should_fix or minor; a one-line `title`; an optional `detail`; the `path` of the file as the diff names it and the `line` of its new side, when it is about a line). The engine computes the verdict (a blocking finding fails the review; one to fix gives pass with reservations; else pass), records the review, and the quality reviewer may ask for a security review (`security: true`). The judge's report also rules on each finding of the lenses (`judge.findings`: `<lens>#<rank>`, `confirmed` with its final severity, `refuted` with the place that proves it, `undecided`): a refuted finding is counted and never shown, an undecided one never blocks; a lens (`{lens, silent: true}`) or the judge (`{silent: true}`) that gave nothing is declared in its place, and the review then says it is possibly incomplete. Without a `story`, the `commit` start_review returned names a free review, recorded in the journal with no story. Once the pass has every review it needs (quality, and security when the story concerns it), it is closed: with a failed review, the story goes back to its developer, who sorts each finding (triage_review); without one, the engine opens the story's merge checkpoint. After 5 passes closed with a failed review, the engine opens a checkpoint for the creator. A closed pass is posted on the pull request by the engine, a comment on each finding's line (`published`: posted, skipped with the reason, or failed: call publish_review later). Never post or read comments on the pull request yourself. Refused with REVIEW_NOT_POSSIBLE like start_review, and head_moved when `commit` is not the head of the branch any more. With `lenses` (one report per lens `start_review` gave, the security review only the security lens) and `judge` (the fresh-context pass, quality only), leave `findings` empty: the engine refuses reports that are not whole (`report_invalid`, with what is missing), merges the same finding seen twice at its strictest severity, links each to its criterion, and computes the verdict. Returns the review's id (`review`: R-…), its verdict and its pass.",
+    "Submit your independent review of a story, after start_review: the same `kind` and `commit`, a `summary` of your review, and your `findings` (each: `severity` blocking, should_fix or minor; a one-line `title`; an optional `detail`; the `path` of the file as the diff names it and the `line` of its new side, when it is about a line). The engine computes the verdict (a blocking finding fails the review; one to fix gives pass with reservations; else pass), records the review, and the quality reviewer may ask for a security review (`security: true`). The judge's report also rules on each finding of the lenses (`judge.findings`: `<lens>#<rank>`, `confirmed` with its final severity, `refuted` with the place that proves it, `undecided`): a refuted finding is counted and never shown, an undecided one never blocks; a lens (`{lens, silent: true}`) or the judge (`{silent: true}`) that gave nothing is declared in its place, and the review then says it is possibly incomplete. Without a `story`, the `commit` start_review returned names a free review, recorded in the journal with no story. Once the pass has every review it needs (quality, and security when the story concerns it), it is closed: with a failed review, the story goes back to its developer, who sorts each finding (triage_review); without one, the engine opens the story's merge checkpoint. After 2 passes closed with a failed review, the engine stops the loop and opens a checkpoint for the creator: one question about the disagreement. A closed pass is posted on the pull request by the engine, a comment on each finding's line (`published`: posted, skipped with the reason, or failed: call publish_review later). Never post or read comments on the pull request yourself. Refused with REVIEW_NOT_POSSIBLE like start_review, and head_moved when `commit` is not the head of the branch any more. With `lenses` (one report per lens `start_review` gave, the security review only the security lens) and `judge` (the fresh-context pass, quality only), leave `findings` empty: the engine refuses reports that are not whole (`report_invalid`, with what is missing), merges the same finding seen twice at its strictest severity, links each to its criterion, and computes the verdict. Returns the review's id (`review`: R-…), its verdict and its pass.",
   inputSchema: SubmitReviewInputSchema,
   needsState: () => true,
   replanned: true,
@@ -1573,18 +1616,44 @@ export const submitReviewCommand = defineCommand<ReviewSubmitted | FreeReviewSub
 const triageReview = agentEventCommand({
   name: "triage_review",
   description:
-    "Sort the findings of your story's closed review passes: you are the story's developer. Each item names a `finding` (R-…-n, from get_review), its `decision` (`fix`: you fix it on the story's branch; `defer`: you recorded it first with defer_work, linked to the story, and give its `deferred` id D-…; `reject`: with its `reason`), and its `root_cause` in one line: findings of one cause carry the same words. Sort before you send the story back to review: the merge waits until every finding is sorted. Refused with REVIEW_NOT_POSSIBLE (not_developer, unknown_finding, pass_open: a pass not closed yet, already_triaged, deferred_unknown, done, not_started).",
+    "Sort the findings of your story's closed review passes: you are the story's developer. Each item names a `finding` (R-…-n, from get_review), its `decision` (`fix`: you fix it on the story's branch; `defer`: you recorded it first with defer_work, linked to the story, and give its `deferred` id D-…; `reject`: with its `reason`), and its `root_cause` in one line: findings of one cause carry the same words. Sort before you send the story back to review: the merge waits until every finding is sorted. A `fix` on a pass that approved the story sends it back to you (in progress): fix it, then send it to review again for a new pass, since the commit reviewed is no longer the one to merge. Refused with REVIEW_NOT_POSSIBLE (not_developer, unknown_finding, pass_open: a pass not closed yet, already_triaged, deferred_unknown, done, not_started).",
   inputSchema: TriageReviewInputSchema,
   needsState: () => true,
-  events: ({ story, items }) => ({
-    events: [
+  events: ({ story: id, items }, state) => {
+    const events: { type: string; story: string; payload: Record<string, unknown> }[] = [
       {
         type: REVIEW_EVENT_TYPES.triaged,
-        story,
+        story: id,
         payload: { items: items.map((item) => defined({ ...item })) },
       },
-    ],
-  }),
+    ];
+    // A fix on a pass that approved the story is a pass without agreement too: when it is the
+    // one that reaches the limit, the creator is asked, as after failed passes.
+    const projected = state ?? {};
+    const story = storyIn(projected, id);
+    const fixedPasses = new Set(
+      items
+        .filter((item) => item.decision === "fix")
+        .map((item) => findFinding(story, item.finding)?.pass)
+        .filter(
+          (pass): pass is ReviewPass =>
+            pass !== undefined && pass.outcome === "approved" && !changesAfter(pass),
+        ),
+    );
+    const checkpoints = Object.values(checkpointsOf(projected));
+    if (
+      story?.status === "in_review" &&
+      fixedPasses.size > 0 &&
+      reviewLoopReached(story, id, checkpoints, fixedPasses.size)
+    ) {
+      events.push({
+        type: CHECKPOINT_EVENT_TYPES.opened,
+        story: id,
+        payload: loopCheckpoint(id, 0),
+      });
+    }
+    return { events };
+  },
   check: ({ agent, story: id, items }, state) => {
     const story = storyIn(state, id);
     if (story?.started === undefined) return reviewNotPossible(id, "not_started");

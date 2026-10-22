@@ -223,7 +223,6 @@ describe("rename-agents: files", () => {
   it.each([
     [".agentplugged/agents/maya/SKILL.md", "maya"],
     [".agentplugged/skills/stella/SKILL.md", "stella"],
-    [".agentplugged/agents/quick-lane/SKILL.md", "quick-lane"],
   ])(
     "stops on an agent or a skill of the creator's named like the new team (%s)",
     async (path, id) => {

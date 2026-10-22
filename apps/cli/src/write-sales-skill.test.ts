@@ -158,7 +158,7 @@ describe("the sales skill", () => {
     expect(step(10)).toContain("equal to the blob of the file as it is now");
     // Without a validated positioning: Julien, or the creator when Julien is not active; a review stays possible.
     expect(step(2)).toContain("when Julien is not active, say so too");
-    expect(step(2)).toContain("A review (below) needs no validated positioning");
+    expect(step(2)).toContain("needs no validated positioning");
     expect(step(2)).toContain("Read the `sales.positioning_blob` of every deliverable that exists");
     // A positioning edited after a deliverable was written makes it stale.
     expect(step(10)).toContain("`positioning_blob`");
@@ -322,7 +322,7 @@ describe("Milo and Noah around the sales skill", () => {
   });
 
   it("has Noah propose Milo after the positioning, and Julien first when it is not validated", () => {
-    const noah = read("agents/noah/SKILL.md");
+    const noah = read("agents/noah/SKILL.md").replace(/\s+/g, " ");
     expect(noah).toContain("Noah proposes Milo");
     expect(noah).toContain("offers Julien and the positioning first");
     expect(noah).toContain("does not hand the work to Milo");

@@ -23,9 +23,9 @@ const ENGINE = "1.2.3";
 /** `product_id` init creates in these tests. */
 const PRODUCT_ID = "01JZ3333333333333333333333";
 
-/** Without any tool found, init targets the four tools: their fallbacks are in the constitution. */
+/** Without any tool found, init targets the five tools: their fallbacks are in the constitution. */
 const CONSTITUTION = withEngineCommand(
-  renderConstitution(fallbacksFor(["claude-code", "codex", "antigravity", "cursor"])),
+  renderConstitution(fallbacksFor(["claude-code", "codex", "antigravity", "cursor", "kimi"])),
   `npx -y agentplugged@${"1.2.3"}`,
 );
 
@@ -111,6 +111,7 @@ describe("init", () => {
       ".agentplugged/",
       ...METHOD_SUBDIRS.map((name) => `.agentplugged/${name}/`),
       ".agentplugged/.gitignore",
+      ".agentplugged/profile.md",
       ".agentplugged/agents/iris/",
       ".agentplugged/models.yaml",
       ".agentplugged/method.yaml",
@@ -132,7 +133,7 @@ ${SHIPPED_MODELS}`,
       /^# Generated.*\n\.cache\/\noverrides\/skills\/\*\.local\.yaml\n$/,
     );
     expect(files.files.get(".agentplugged/method.yaml")).toBe(
-      `format_version: 2\nengine_version: ${ENGINE}\nproduct_id: ${PRODUCT_ID}\ntools:\n  - claude-code\n  - codex\n  - antigravity\n  - cursor\n`,
+      `format_version: 2\nengine_version: ${ENGINE}\nproduct_id: ${PRODUCT_ID}\ntools:\n  - claude-code\n  - codex\n  - antigravity\n  - cursor\n  - kimi\n`,
     );
     const agents = files.files.get("AGENTS.md") ?? "";
     expect(agents.startsWith(`${GENERATED_HEADER}\n`)).toBe(true);
@@ -399,6 +400,7 @@ ${SHIPPED_MODELS}`,
       ["codex", false],
       ["antigravity", false],
       ["cursor", false],
+      ["kimi", false],
     ]);
     expect(files.files.has("AGENTS.md")).toBe(true);
 

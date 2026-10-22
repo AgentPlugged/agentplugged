@@ -76,12 +76,11 @@ describe("the design skills", () => {
 
   it("walks Alex through numbered steps, from the inputs to story.result", () => {
     const body = flat(skill(WRITE).body);
-    const steps = [...skill(WRITE).body.matchAll(/^## Step (\d) — /gm)].map((match) => match[1]);
+    const steps = [...skill(WRITE).body.matchAll(/^(\d)\. \*\*/gm)].map((match) => match[1]);
     expect(steps).toEqual(["1", "2", "3", "4", "5", "6", "7"]);
     for (const part of [
       "`state.get`",
-      "`.agentplugged/docs/prd.md`",
-      "`.agentplugged/docs/ux.md`",
+      "`docs read`",
       "`.agentplugged/docs/architecture.md`",
       "`assets/architecture-template.md`",
       "`references/self-check.md`",

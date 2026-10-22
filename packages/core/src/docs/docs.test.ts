@@ -513,7 +513,7 @@ describe("docs check", () => {
     expect(!option.ok && option.error.details.reason).toBe("--base --all");
     const action = await createCommandRegistry().run("docs", context(files), { action: "fix" });
     expect(!action.ok && action.error.details.reason).toBe(
-      "docs fix (check, path, grow, research, slides, costs)",
+      "docs fix (check, path, grow, research, slides, costs, sheet, read, profile, bricks)",
     );
   });
 

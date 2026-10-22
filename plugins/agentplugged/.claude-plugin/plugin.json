@@ -1,7 +1,7 @@
 {
   "name": "agentplugged",
   "displayName": "AgentPlugged",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "AgentPlugged installs in your project a complete method for building software with AI agents (roles, rules, checkpoints), using as few tokens as possible. This plugin is a thin wrapper: it declares the engine and offers to run `init`. / AgentPlugged installe dans ton projet une méthode complète pour construire un logiciel avec des agents IA (rôles, règles, points de validation), en consommant le moins de jetons possible. Ce plugin est une enveloppe mince : il déclare le moteur et propose de lancer `init`.",
   "author": {
     "name": "Innovel Studio SASU",

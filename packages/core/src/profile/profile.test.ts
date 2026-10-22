@@ -80,6 +80,7 @@ describe("profiles", () => {
     const profile = resolveProfile("maintenance");
     expect(inactiveAgents(profile)).toEqual([
       "alex",
+      "basile",
       "iris",
       "izzy",
       "jade",
@@ -160,6 +161,7 @@ describe("writeProfile", () => {
         "agents:",
         "  inactive:",
         "    - alex",
+        "    - basile",
         "    - iris",
         "    - izzy",
         "    - jade",

@@ -615,6 +615,32 @@ export function reviewDone(state: Readonly<Record<string, unknown>>, id: string)
   return storyReviewDone(story, undefined, isSkipped(state, "story_ci", id));
 }
 
+/** The reason a refused merge answer records when the branch moved past the commit reviewed. */
+export const HEAD_MOVED = "head_moved";
+
+/**
+ * True when the story's review is done on its last pass but the branch's `head` is another
+ * commit: what would be merged was never reviewed, and only a new pass opens the merge again.
+ */
+export function reviewedHeadMoved(
+  state: Readonly<Record<string, unknown>>,
+  id: string,
+  head: string | undefined,
+): boolean {
+  if (head === undefined) return false;
+  const stories = state.stories as Record<string, StoryState> | undefined;
+  const story = stories !== undefined && Object.hasOwn(stories, id) ? stories[id] : undefined;
+  const ciSkipped = isSkipped(state, "story_ci", id);
+  return storyReviewDone(story, undefined, ciSkipped) && !storyReviewDone(story, head, ciSkipped);
+}
+
+/**
+ * The choices of the review loop's point besides approving (more passes) and refusing (out of
+ * review): the same more passes, or merging the story as it is, the remaining findings accepted,
+ * which skips the story's review for that story as a skip of the step would.
+ */
+export const REVIEW_LOOP_OPTIONS = { more: "more_passes", asIs: "merge_as_is" } as const;
+
 /** True for the checkpoint the engine opens when a story's review loop reaches its limit. */
 export function isReviewLoopCheckpoint(checkpoint: CheckpointState, story: string): boolean {
   return checkpoint.story === story && checkpoint.source === "review_loop";
@@ -637,10 +663,21 @@ export function failedPassesSinceLoop(
   return (reviewOf(story)?.passes ?? []).filter(
     (pass) =>
       pass.complete &&
-      pass.outcome === "changes_requested" &&
+      changesAfter(pass) &&
       pass.completed_at !== null &&
       Date.parse(pass.completed_at) > from,
   ).length;
+}
+
+/**
+ * True when a closed pass ended without agreement: a failed review, or an approval with a finding
+ * its developer chose to fix (the code changes again, and another pass follows).
+ */
+export function changesAfter(pass: ReviewPass): boolean {
+  if (pass.outcome === "changes_requested") return true;
+  return (["qa", "security"] as const).some((kind) =>
+    (pass.reviews[kind]?.findings ?? []).some((finding) => finding.triage?.decision === "fix"),
+  );
 }
 
 /**

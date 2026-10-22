@@ -495,6 +495,17 @@ describe("rules: agents and upgrades", () => {
 describe("rules in each tool's permissions", () => {
   const defaults = DEFAULT_RULES;
 
+  it("Claude Code: allows by default the Git reads that change nothing, in both shells, and not `git -C`", () => {
+    const { allow, deny } = claudeRulePermissions(defaults);
+    for (const read of ["diff", "log", "show", "status"]) {
+      expect(allow).toContain(`Bash(git ${read}:*)`);
+      expect(allow).toContain(`PowerShell(git ${read}:*)`);
+    }
+    // A prefix rule starting `git -C` would allow every Git command given a folder, a push included.
+    expect(allow.some((rule) => rule.includes("git -C"))).toBe(false);
+    expect(deny.some((rule) => rule.includes("git diff"))).toBe(false);
+  });
+
   it("Claude Code: allow, ask and deny by action, the locked ones always denied", () => {
     const lists = claudeRulePermissions(defaults);
     expect(lists.allow).toEqual(

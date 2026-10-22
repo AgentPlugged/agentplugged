@@ -1,11 +1,15 @@
 import {
+  type BricksFound,
   type CostsFound,
   costsLines,
   type DeckDrawn,
   type DocsCheckResult,
+  type ProfileShown,
   type ResearchFound,
   type ResearchPlanned,
   researchLines,
+  type SectionsRead,
+  type SheetsWritten,
   type SpecGrowResult,
   type SpecPathResult,
 } from "@agentplugged/core";
@@ -110,7 +114,97 @@ export function formatDeckDrawn(result: DeckDrawn): string {
   ].join("\n")}\n`;
 }
 
+/**
+ * The answer of `docs sheet`: one line per story sheet (lines, excerpts, whether written), the
+ * citations no document holds, the sheets over the ceiling, and the stories to validate again.
+ */
+export function formatSheetsWritten(result: SheetsWritten): string {
+  const lines = result.sheets.map(
+    (sheet) =>
+      `${sheet.written ? "written" : "unchanged"}: ${sheet.path} (${sheet.lines} lines, ${sheet.excerpts} excerpts)`,
+  );
+  for (const sheet of result.sheets) {
+    if (sheet.unresolved.length > 0) {
+      lines.push(`not_found: ${sheet.story}: ${sheet.unresolved.join(", ")}`);
+    }
+    if (sheet.too_long) {
+      lines.push(`too_long: ${sheet.story}: over ${result.max_lines} lines, cut the story`);
+    }
+  }
+  if (result.revalidate.length > 0) {
+    lines.push(`validate_again: ${result.revalidate.join(", ")}`);
+  }
+  if (result.sheets.length === 0) lines.push("sheets: none");
+  return `${lines.join("\n")}\n`;
+}
+
 /** The answer of `docs costs`: estimates, said so, and the break-even point when asked. */
 export function formatCostsResult(result: CostsFound): string {
   return `${costsLines(result).join("\n")}\n`;
+}
+
+/**
+ * The answer of `docs read`: each passage under its identifier and document, the outline of a
+ * document named alone, the passages left out for want of room, and the selectors no document holds.
+ */
+export function formatSectionsRead(result: SectionsRead): string {
+  const lines: string[] = [];
+  for (const found of result.passages) {
+    lines.push(`## ${found.id} (${found.source})`, found.text);
+    if (found.more > 0) lines.push(`... ${found.more} more lines in ${found.source}`);
+  }
+  for (const outline of result.outlines) {
+    lines.push(`## outline of ${outline.source} (${outline.lines} lines)`);
+    for (const section of outline.sections) {
+      lines.push(`- ${section.selector} (${section.lines} lines): ${section.title}`);
+    }
+  }
+  if (result.omitted.length > 0) lines.push(`omitted: ${result.omitted.join(", ")}`);
+  if (result.not_found.length > 0) lines.push(`not_found: ${result.not_found.join(", ")}`);
+  if (lines.length === 0) lines.push("passages: none");
+  return `${lines.join("\n")}\n`;
+}
+
+/** The answer of `docs profile`: the file as written, and what was done to it. */
+export function formatProfileShown(result: ProfileShown): string {
+  const { path, state, lines } = result.profile;
+  const head =
+    state === "created" || state === "refreshed"
+      ? `profile ${state}: ${path}`
+      : state === "current"
+        ? `profile current: ${path}`
+        : state === "stale"
+          ? `profile stale (the root files say more): ${path}; "docs profile refresh" rewrites it`
+          : `no profile yet: "docs profile refresh" writes ${path}`;
+  return `${`${head}\n${lines.join("\n")}`.trimEnd()}\n`;
+}
+
+/** The answer of `docs bricks`: the bricks that answer the request, or the clear "nothing like it". */
+export function formatBricksFound(result: BricksFound): string {
+  const { bricks } = result;
+  if (bricks.declared !== undefined) {
+    return `single source declared: ${bricks.declared.concept} -> ${bricks.declared.owner}\n`;
+  }
+  const lines: string[] = [];
+  for (const source of bricks.sources) {
+    const rule = source.rule === "" ? "" : ` (${source.rule})`;
+    lines.push(
+      `single source "${source.concept}": ${source.owner}${rule} - use it, do not rewrite it`,
+    );
+  }
+  for (const hit of bricks.hits) {
+    lines.push(`${hit.kind} ${hit.sig} ${hit.path}:${hit.line}`);
+  }
+  if (bricks.unavailable !== undefined) {
+    lines.push(
+      `registry unavailable (${bricks.unavailable}): search the code with your own tools, then decide`,
+    );
+  } else if (bricks.hits.length === 0 && bricks.sources.length === 0) {
+    lines.push(
+      `nothing like "${bricks.query.join(" ")}" among ${bricks.searched?.total ?? 0} bricks (commit ${bricks.searched?.commit ?? "?"}): write it, it joins the registry once merged`,
+    );
+  } else if (bricks.searched !== undefined) {
+    lines.push(`(${bricks.searched.total} bricks searched, commit ${bricks.searched.commit})`);
+  }
+  return `${lines.join("\n")}\n`;
 }

@@ -1,29 +1,16 @@
-# Saved rooms
+# Saved rooms and three views
+A cast and a setting recalled by name: `.agentplugged/rooms/<id>.yaml` and `<id>.memory.md`
+(`name`, `setting`, `members`, up to 6 `guests` with `id`, `name`, `role`, `persona`, `memory:
+true|false`). Save on their ask or offer once. Recall: `chat.table` with
+`table: { room: "<id>" }` alone; `absent` members are not seated; the setting binds, the memory
+tints without being recited. Memory: 2 to 4 short lines in `table.memory` with the closing, only
+for a room that remembers. A guest joins a room only on their yes.
 
-A room is a cast and a setting the creator can call again by name. Files of the product, readable
-and editable by them: `.agentplugged/rooms/<id>.yaml` and `<id>.memory.md`. List the folder to show
-what exists.
-
-```yaml
-name: Launch board
-setting: Blunt board meeting; Quentin doubts everything, Maya defends the user.
-members: [maya, quentin]            # agents of the team
-guests:                             # optional, at most 6
-  - id: guest-investor
-    name: Ines
-    role: seed investor
-    persona: Dry, numbers first, hates vague promises.
-memory: true                        # remembers its sessions (default false)
-```
-
-- **Save** on the creator's ask, or offer once at the end of a table they liked: write the file
-  yourself (id: lowercase and dashes) and say its name. Ask whether it should remember.
-- **Recall**: `chat.table` with `table: { room: "<id>" }` alone. The answer is the cast checked
-  against the team (`absent`: gone, do not seat), the guests with their persona, the setting, and
-  the latest lines of memory. Start from them as if the room had never left: the setting binds how
-  the room behaves, the memory tints it (two agents who fell out start wary) without ever being
-  recited.
-- **Memory**: at the end, 2 to 4 short lines (how the agents stood, a turning point, what came out,
-  who joined), not the exchange itself. Send them as `table.memory` with the closing; the engine writes them to the file.
-  Only for a room that remembers; to forget, the creator edits or deletes the file.
-- **Keep a guest**: add it to `guests` of the file (persona included), if the creator said yes.
+## Three views of a sensitive story
+`state.next` carries `table` (`story` and three `agents`). Offer once in one line, never imposed,
+and record it whatever the answer: `chat.table` with `table: { story }` alone. Without a yes, stop.
+Then one view per agent, in a fresh context if you have sub-agents (story, criteria, diff summary
+only): `angle: product` (keeps the promise?), `delivery` (ships and is undone safely?), `quality`
+(tested, what breaks unseen?). Each gives at most five lines: a verdict (merge, change, hold) and
+reasons. List the disagreements, then your advice; the merge stays the creator's decision, you merge nothing. Close as `references/closing.md` with `table.story` and `synthesis.format:
+three_views`.

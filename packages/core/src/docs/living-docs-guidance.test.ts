@@ -4,7 +4,6 @@ import zoeAgent from "../../../../method/agents/zoe/agent.yaml?raw";
 import developStory from "../../../../method/skills/develop-story/SKILL.md?raw";
 import livingDocs from "../../../../method/skills/generate-knowledge-base/references/living-docs.md?raw";
 import zoeSkill from "../../../../method/skills/generate-knowledge-base/SKILL.md?raw";
-import quickLane from "../../../../method/skills/quick-lane/SKILL.md?raw";
 import { DEFAULT_RULES } from "../index.js";
 import { renderConstitution, renderConstitutionReference } from "../init/constitution.js";
 import { fallbacksFor } from "../sync/compatibility.js";
@@ -30,7 +29,7 @@ describe("the agents read the base first, the code when in doubt", () => {
   });
 
   it("the development skills carry the rule", () => {
-    for (const skill of [developStory, quickLane]) {
+    for (const skill of [developStory]) {
       expect(flat(skill)).toContain("`agentplugged:late`");
       expect(flat(skill)).toContain("assert nothing from that page");
     }

@@ -27,7 +27,15 @@ import { currentDeveloper } from "../agents/agent-aliases.js";
 import { type CiCheckResult, type CiWaiveResult, storyCi } from "../ci/ci-check.js";
 import { type CommandContext, defineCommand, fail, ok } from "../command.js";
 import { storyLockProblem } from "../deferred/deferred-rules.js";
+import { readDocumentFiles } from "../docs/docs-command.js";
 import { parseDocumentFile } from "../docs/parse-document.js";
+import { readSelectors } from "../docs/read-sections.js";
+import {
+  EXCERPT_MAX_LINES,
+  SHEET_MAX_LINES,
+  type StaleReason,
+  sheetStates,
+} from "../docs/story-sheet.js";
 import { AgentPluggedError, unavailable } from "../errors.js";
 import { fastTrackNotPossible } from "../fast-track/fast-track-commands.js";
 import { fastTrackHold } from "../fast-track/fast-track-rules.js";
@@ -39,6 +47,7 @@ import type { JournalListing, StateStore } from "../journal/state-store.js";
 import { isSkipped } from "../journey/journey-rules.js";
 import { STORY_BUILDERS } from "../phases/phases.js";
 import { methodNotInstalled } from "../profile/profile-command.js";
+import { type ProfileBrief, profileBrief } from "../project-profile/project-command.js";
 import type { StoryStarted, StoryState } from "../projection/agent-reducers.js";
 import type { CheckpointState } from "../projection/checkpoint-reducers.js";
 import { checkpointsOf } from "../projection/checkpoint-reducers.js";
@@ -87,6 +96,87 @@ export interface StoryStartResult {
   readonly event?: { readonly id: string; readonly type: string; readonly at: string };
   /** The commit hook; absent for a story without a branch of its own (nothing to check there). */
   readonly hook?: CommitHookInstall;
+  /** The story sheet, the one file the developer reads (absent when the story file is not read). */
+  readonly sheet?: StorySheetView;
+  /** The project in a few lines (stack, commands, single sources): nothing to rediscover. */
+  readonly profile?: ProfileBrief;
+}
+
+/** The story sheet as `start_story` gives it. */
+export interface StorySheetView {
+  /** The story file, from the folder holding `.agentplugged/` (the same in `workdir`). */
+  readonly path: string;
+  /** `sheet`: with its excerpts; `legacy`: the former format, read what it cites by section. */
+  readonly format: "sheet" | "legacy";
+  readonly lines: number;
+  /**
+   * The former format only: the passages the story cites, by section, so that no document is read
+   * whole.
+   */
+  readonly cited?: readonly {
+    readonly id: string;
+    readonly source: string;
+    readonly text: string;
+    readonly more: number;
+  }[];
+  /** Cited passages that changed since the sheet was written, with their text now. */
+  readonly stale?: readonly {
+    readonly id: string;
+    readonly reason: StaleReason;
+    readonly source?: string;
+    readonly current?: string;
+  }[];
+}
+
+/** A passage as shown: its first `EXCERPT_MAX_LINES` lines. */
+function shownPassage(text: string): string {
+  return text.split("\n").slice(0, EXCERPT_MAX_LINES).join("\n");
+}
+
+/** The sheet of story `id` in the working copy, against its documents. */
+export async function storySheetView(
+  files: CommandContext["files"],
+  id: string,
+): Promise<StorySheetView | undefined> {
+  const current = await readDocumentFiles(files, true);
+  const state = sheetStates(current).find((candidate) => candidate.story === id);
+  if (state === undefined) return undefined;
+  const cited =
+    state.format === "legacy"
+      ? readSelectors(current, [`@cited:${id}`, "@stack"], {
+          total: 150,
+          passage: EXCERPT_MAX_LINES,
+        }).passages
+      : [];
+  return {
+    ...(cited.length === 0
+      ? {}
+      : {
+          cited: cited.map(({ id: found, source, text, more }) => ({
+            id: found,
+            source,
+            text,
+            more,
+          })),
+        }),
+    path: state.path,
+    format: state.format,
+    lines: state.lines,
+    ...(state.stale.length === 0
+      ? {}
+      : {
+          stale: state.stale.map((excerpt) => ({
+            id: excerpt.id,
+            reason: excerpt.reason,
+            ...(excerpt.current === undefined
+              ? {}
+              : {
+                  source: excerpt.current.source,
+                  current: shownPassage(excerpt.current.text),
+                }),
+          })),
+        }),
+  };
 }
 
 /** `STORY_NOT_STARTABLE`: why the story cannot start; nothing created nor written. */
@@ -437,6 +527,17 @@ async function startStory(
   const validation = validationOf(documents, view.checkpoints, now).get(id);
   const refused = storyStartProblem({ id, story: document, validation, journal: view });
   if (refused !== undefined) return refused;
+  // A sheet over the ceiling is a story too big: it is cut before it starts (unless the creator
+  // skipped the story's contract).
+  if (view.skips?.contract !== true) {
+    const sheet = await storySheetView(context.files, id).catch(() => undefined);
+    if (sheet?.format === "sheet" && sheet.lines > SHEET_MAX_LINES) {
+      return notStartable(id, "invalid_story", {
+        path: sheet.path,
+        why: ErrorCode.STORY_SHEET_TOO_LONG,
+      });
+    }
+  }
   const ceiling = config.profile?.max_parallel_stories;
   const story = document as SprintStory;
   // The creator's workflow says where the stories land and whether each has a branch.
@@ -858,7 +959,7 @@ export const startStoryCommand = defineCommand<StoryStartResult>({
   name: "start_story",
   audience: "agent",
   description:
-    "Start a story before building it: `story` is `<epic>-<story>`, `agent` your own id (or `main`). Only the story's builder starts it: its owner in the sprint in force or an agent of the sprint's capacity (without a sprint, the story's owner). The engine checks that the story may start (validated at its current content on the main branch, in the sprint in force if any, every dependency done, not started yet), creates its branch (`feat/<id>-<slug>`) from the branch the creator's workflow lands stories on (`git` in `next`) and a Git worktree of its own, records `story.started`, moves the story to in_progress and installs the commit hook. It returns `worktree` and `workdir`: work only in `workdir`. With no branch per story (`story_branch: false`), nothing is created: `workdir` is the main working folder, no hook, no pull request. Calling it again resumes a story you started here, nothing recorded twice. Refused with STORY_NOT_STARTABLE, nothing created, and a `reason` (parallel_limit: the ceiling of stories built at once is reached; started_by_other: a story never has two developers; not_on_main: the approved story is not on the main branch yet; not_recorded: created but not recorded, run it again; the others say what is missing). With `fast_track` (`summary`: the change in one sentence; `declared`: `single_reading`, `reversible` and `no_public_interface`, each true) the story starts in the fast track, for a small change only (the constitution gives the limits), entered here and nowhere else (FAST_TRACK_NOT_POSSIBLE for a story already started). The engine reads your branch's changes at every pull request and CI read and sends the story back to the full lane, with a checkpoint for the creator, when they stop fitting; you leave it yourself with `leave_fast_track`. Every commit on the story's branch cites the story id and at least one of its requirements (`feat(2-3): … (EF-12)`), or the hook refuses it. It never opens a pull request nor merges.",
+    "Start a story before building it: `story` is `<epic>-<story>`, `agent` your own id (or `main`). Only the story's builder starts it: its owner in the sprint in force or an agent of the sprint's capacity (without a sprint, the story's owner). The engine checks that the story may start (validated at its current content on the main branch, in the sprint in force if any, every dependency done, not started yet), creates its branch (`feat/<id>-<slug>`) from the branch the creator's workflow lands stories on (`git` in `next`) and a Git worktree of its own, records `story.started`, moves the story to in_progress and installs the commit hook. It returns `worktree` and `workdir`: work only in `workdir`. With no branch per story (`story_branch: false`), nothing is created: `workdir` is the main working folder, no hook, no pull request. Calling it again resumes a story you started here, nothing recorded twice. Refused with STORY_NOT_STARTABLE, nothing created, and a `reason` (parallel_limit: the ceiling of stories built at once is reached; started_by_other: a story never has two developers; not_on_main: the approved story is not on the main branch yet; not_recorded: created but not recorded, run it again; the others say what is missing). With `fast_track` (`summary`: the change in one sentence; `declared`: `single_reading`, `reversible` and `no_public_interface`, each true) the story starts in the fast track, for a small change only (the constitution gives the limits), entered here and nowhere else (FAST_TRACK_NOT_POSSIBLE for a story already started). The engine reads your branch's changes at every pull request and CI read and sends the story back to the full lane, with a checkpoint for the creator, when they stop fitting; you leave it yourself with `leave_fast_track`. It returns `sheet`, the one file to read: `path`, `format` (`legacy`: no excerpts, `cited` holds the passages it cites, read nothing else), `stale`: cited passages changed since, with their text now. Every commit on the story's branch cites the story id and at least one of its requirements (`feat(2-3): … (EF-12)`), or the hook refuses it. It never opens a pull request nor merges.",
   inputSchema: StartStoryFastTrackInputSchema,
   async run(context, input) {
     const parsed = StartStoryFastTrackInputSchema.safeParse(input);
@@ -866,7 +967,15 @@ export const startStoryCommand = defineCommand<StoryStartResult>({
     const { agent, story, fast_track } = parsed.data;
     try {
       const result = await startStory(context, story, { kind: "agent", agent }, fast_track);
-      return result instanceof AgentPluggedError ? fail(result) : ok(result);
+      if (result instanceof AgentPluggedError) return fail(result);
+      // The sheet to read; never a reason for the start to fail.
+      const sheet = await storySheetView(context.files, story).catch(() => undefined);
+      const profile = await profileBrief(context);
+      return ok({
+        ...result,
+        ...(sheet === undefined ? {} : { sheet }),
+        ...(profile === undefined ? {} : { profile }),
+      });
     } catch (error) {
       if (error instanceof AgentPluggedError) return fail(error);
       throw error;

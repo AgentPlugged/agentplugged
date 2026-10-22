@@ -19,13 +19,14 @@ still be called directly by its id in your AI tool (`/iris` in Claude Code, for 
 Noah is turned off with `npx agentplugged agent disable noah`: the constitution then loses his
 section, and the main session reports as `main`.
 
-The eighteen agents of the team, by domain:
+The nineteen agents of the team, by domain:
 
 | Id | Agent | Domain | Phase | Model tier | Deliverables |
 | --- | --- | --- | --- | --- | --- |
 | `iris` | Iris, Product Analyst | product | framing | reasoning | `docs/brief.md`, research notes in `docs/research/` |
 | `maya` | Maya, Product Manager | product | planning | reasoning | `docs/prd.md` |
 | `izzy` | Izzy, Scrum Master | product | build | fast | `epics/`, `stories/`, and the sprints, in the journal |
+| `basile` | Basile, Devil's Advocate | product | planning | reasoning | `docs/contests/` (only when the creator asks for a trace) |
 | `stella` | Stella, Product UX Designer | ux | planning | multimodal | `.agentplugged/docs/ux.md` (visual identity and behaviour) |
 | `alex` | Alex, Architect | architecture | design | reasoning | `docs/architecture.md` |
 | `sam` | Sam, Backend Developer | code (`backend`) | build | code | the code and tests of a story, in its branch, and its pull request |
@@ -75,7 +76,7 @@ Each story is built by one instance of a developer, the pair (developer, story),
 a story another developer started is refused (`started_by_other`).
 
 Small changes take the quick lane, a mode of the developer the story goes to, carried by the
-story and described in the shared `quick-lane` skill: there is no dedicated agent. A change fits
+story and described in the reference `quick-lane.md` of the `develop-story` skill: there is no dedicated agent. A change fits
 it only with one story, no public interface changed, no data migration, no dependency added,
 fewer than 5 files touched (test files included, a renamed file counts twice). A quick change
 always has a story, if only one line long — when none exists, the developer asks the creator to
@@ -168,7 +169,7 @@ the pull request, one comment per finding on its line, with the forge's tool the
 in (`review.publish` posts again a pass the forge did not take). A pass with a blocking finding
 sends the story back to its developer, who sorts each finding with `review.triage` (fix, defer
 with an item of deferred work, or reject with its reason) and its root cause; a pass without one
-opens the story's merge checkpoint, shown to the creator once every finding is sorted. After 5
+opens the story's merge checkpoint, shown to the creator once every finding is sorted. After 2
 passes closed without agreement, a checkpoint asks the creator whether to go on. `state.get` shows
 only the counts of a review; `review.get` gives the developer the findings, and each reviewer its
 own. A deviation reported on a story with a pull request is posted there as a comment too.
@@ -201,7 +202,7 @@ checkpoints in that order; the engine refuses a merge out of it before the forge
 (`MERGE_FAILED`: `out_of_order`, `dependency_unmerged`, `dependency_cycle`). No tool takes an
 order: it changes with the dependencies or the sprint, which the creator validates, or when the
 creator sends a story back for changes (it leaves the queue). Izzy reads the queue with
-`state.merge_order` (the `order-merges` skill) and tells the creator in words; she never merges nor
+`state.merge_order` (the reference `merge-order.md` of the `chain-stories` skill) and tells the creator in words; she never merges nor
 reorders.
 
 A conflict with the main branch is read by the engine itself (Git, nothing written) and qualified
@@ -332,6 +333,41 @@ creator approves it, the intent of each story it lists is frozen: `docs check` f
 cannot verify (a blob Git does not hold, a journal it cannot read, a story this branch never had)
 is a warning, never a failure.
 
+Each story is also its **sheet**, the one file its developer reads: besides the four sections it
+says the screen (`## Screen`: the mock-up page and its sketch), the tests expected
+(`## Tests expected`) and what to reuse (`## Reuse`). `npx agentplugged docs sheet [<story>…]`
+(no story: every story not merged) writes its `## Excerpts` section from the documents: each
+passage the story cites (its `requirements`, every `EF-n`, `ENF-n`, `PU-n`, `MS-n`, `AD-n` or
+`UX-n` it mentions, a section named as `` `ux.md#calculator` ``, and the architecture's stack and
+conventions) quoted with its identifier, its document and a fingerprint. A sheet longer than 300
+lines fails `docs check` (`STORY_SHEET_TOO_LONG`): the story is too big, to be cut. When a cited
+passage changes, `docs check` warns (`sheet_stale`) and `state.next` lists the sheet in
+`stale_sheets`: Izzy writes it again, and a validated story is validated again. `story.start`
+gives the developer the sheet (`sheet`: its path, its format, and each stale passage with its text
+now). Stories without excerpts (the former format) keep working: `docs check` proposes the
+conversion once for all of them (`sheet_legacy`), never forces it.
+
+No other agent reads a whole document either. `npx agentplugged docs read <selector…>` gives the text of
+the passages asked for (an identifier such as `EF-3` or `AD-2`, a section such as `prd.md#glossary`, a
+group: `@requirements`, `@constraints`, `@journeys`, `@decisions`, `@stack`, `@screens`,
+`@cited:<story>`); a document named alone gives its outline, never its text. `state.next` with `reading: true`
+(asked only by the agent that does the step, never by Noah) hands the agent of a step (Izzy, Alex, Stella,
+Tess, Chloé, Omar, Quentin) `reading`: the passages that agent needs, within 80 lines, with the `docs read`
+command for the rest. For a story in the former format, `story.start` gives
+`sheet.cited`, the passages it cites.
+
+No developer rediscovers the project either. `init` writes `.agentplugged/profile.md` from the product's own
+files, in any language: the stack, the commands (each with the file that defines it), the folders, the
+conventions and a few pieces of advice, each with its reason, in 60 lines at most.
+`npx agentplugged docs profile` says whether it is current, `docs profile refresh` rewrites it and keeps the
+`Single sources`, `Acceptance` and `Notes` sections. `docs profile accept <local|staging> [how]` records where the acceptance run happens. `story.start` hands the developer `profile`: the same in a few lines,
+read from the root files at that moment. `npx agentplugged docs bricks <words>` answers « does this already
+exist? »: the functions and types the code declares whose names carry the words (or « nothing like it », with
+the number of bricks searched), read from Git at the current commit and kept in the engine's cache until the
+commit moves. `docs bricks own <concept> <path> [rule]` declares a single source: the one place that holds
+a concept. A story that adds a function carrying that concept elsewhere gets a finding the reviewer cannot
+drop and the developer rejects only with a reason.
+
 Izzy then plans sprints with the `plan-sprint` skill: a goal, validated stories that are not done,
 in an order where each dependency is done or comes first, and the capacity (the developer agents
 and the humans who build them). She records the sprint with the `plan.sprint` MCP tool, which adds
@@ -383,15 +419,17 @@ calls another agent.
 | `split-into-stories` | Izzy (`BS`) | build | `.agentplugged/epics/epic-<n>.md` and `.agentplugged/stories/<epic>-<story>.md` from their templates, then a `document` checkpoint per epic |
 | `plan-sprint` | Izzy (`SP`) | build | no file: the sprint (goal, stories in order, budget, capacity) recorded with `plan.sprint`, with the checkpoint the creator approves |
 | `run-retrospective` | Izzy (`RT`) | build | no file: the lessons and actions of a finished epic or sprint, proposed with `memory.retrospective` and recorded with `memory.record` once the creator approves them (the memory of the product, encrypted, read by every agent with `memory.read`); a lesson promoted, one checkpoint each, to the memory shared by the creator's products on their machine (`memory.promote_propose`, `memory.promote`) |
+| `run-acceptance` | Quentin | delivery | `.agentplugged/docs/acceptance.md`: the real journeys replayed on the creator's machine or on staging (the place is in the profile, decided with the creator, never imposed), the screens against the mockups, accessibility and speed, each result with its proof or `unknown`; a `document` point the creator answers « Recette passée ? » in one gesture, after which `state.next` hands the release to Omar |
+| `review-after-launch` | Iris | launch | `.agentplugged/docs/after-launch.md`, a week after a release or a publication: measures (usage, errors, cost) with their sources, a short look back written by one agent, the feedback grouped and turned into tickets for Izzy (`plan.defer`, `owner: izzy`), then a `document` point « Ce qu'on fait ensuite » |
 | `improve-session` | Lou (`IS`) | any | no file: where a costly session or story spent its tokens (`npx agentplugged usage`, read from the measures the engine already took, never from the conversation), with the origin of each figure, and up to three proposed changes (a skill loaded again and again, a file read again, a tool that keeps failing), none applied alone: one gesture of the creator each |
-| `order-merges` | Izzy (`OM`) | build | no file: the order of the merges, read with `state.merge_order` and put in words for the creator (the engine computes it from the dependency graph, the sprint in force and the opening of the merge checkpoints, and refuses a merge out of order) |
+| `chain-stories` | Noah; Izzy (`OM`) for the merge order | build | no file: the stories chained up to each point that is the creator's, and the order of the merges, read with `state.merge_order` and put in words for the creator (the engine computes it from the dependency graph, the sprint in force and the opening of the merge checkpoints, and refuses a merge out of order) |
 | `resolve-merge-conflict` | the developers | build | no file: the conflict with the main branch qualified with `story.merge_conflict`, then resolved on the story's own branch by merging the main branch into it, and the story sent to review again |
 | `setup-ci` | Omar (`CI`) | build | `.github/workflows/ci.yml` or `.gitlab-ci.yml` (lint, tests, build, dependency audit) from its templates, never over an existing CI, pushed in a branch of its own for the creator to merge, and described in the runbook |
 | `generate-knowledge-base` | Zoé (`KB`) | build (run in any phase) | the knowledge base: `.agentplugged/docs/index.md`, `vision.md`, `conventions.md`, `guides/`, `reference/`, `release-notes/`, from the method's documents or from the repository, then a `document` checkpoint to review it |
 | `review-story` | Quentin (`RV`), Chloé (`SR`) | build | the independent review of a story's pull request, recorded with `review.submit` (the engine computes the verdict and posts the closed pass on the pull request), and the reviewer's note in `docs/qa-reviews/` or `docs/security-reviews/` |
 | `check-requirements` | Quentin (`DR`) | build | no file: each deviation of a story from the requirements it cites, recorded with `story.deviation` (shown on the story, its pull request and the requirement), then lifted with `story.lift_deviation` once the fix is verified |
 | `develop-story` | Sam, Ethan, Hugo, Lina, Jade (`MK`) | build | the code and the tests of one story, in its branch and working copy, from the story and the documents it cites; a `decision` checkpoint per ambiguity; a result that moves the story to review |
-| `quick-lane` | Sam, Ethan, Hugo, Lina, Jade (`QL`) | build | a small change and its test, in the story's branch and its own working copy, then its pull request; the engine reads the changes against the limits of the quick lane, and a checkpoint explains the way back to the full lane |
+| `develop-story` quick lane | Sam, Ethan, Hugo, Lina, Jade (`QL`) | build | a small change and its test, in the story's branch and its own working copy, then its pull request; the engine reads the changes against the limits of the quick lane, and a checkpoint explains the way back to the full lane |
 | `diagnose-bug` | the developers | build | a bug's cause found with hypotheses (3 to 5, a confidence each, the evidence of each) that the engine keeps in the journal and refuses to see again once ruled out, a test seen red first, a minimal fix after the cause is confirmed, three failed fixes ending in a point for the creator, and no temporary probe left (the engine refuses the review while a line carries the marker `agentplugged:debug`); then the usual review and merge |
 | `improve-code` | the developers | build | a cleanup, performance, security or architecture improvement of the code a finding (audit, duplicates, review of the tests, review) names, on one axis, in small steps, with the project's commands run by the engine before the first change and after the last to show behaviour unchanged; then the independent review and the merge |
 | `api-e2e-tests` | the developers | build | the product's test framework (from its validated stack: `npx agentplugged tests setup` proposes the one command that runs a criterion's tests in `.agentplugged/proofs.yaml`, the creator accepts it once, the installation goes through the validation of installations) and the API and end-to-end tests of a feature, from its criteria and journeys, named by criterion and seen red then green by the engine |
@@ -415,7 +453,7 @@ When `init` creates `.agentplugged/method.yaml` in a folder that already holds t
 writes `origin: existing`. Holding the product means an entry at the root other than: `.git`,
 `.gitignore`, `.gitattributes`, `.gitmodules`, `.gitkeep`, `.github`, `.agentplugged`,
 `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `.claude`, `.agents`, `.codex`, `.cursor`,
-`.cursorrules`, `.cursorignore`, `.gemini`, `.mcp.json`, `.windsurf`, `.windsurfrules`,
+`.cursorrules`, `.cursorignore`, `.gemini`, `.kimi-code`, `.mcp.json`, `.windsurf`, `.windsurfrules`,
 `.aider*`, `.continue`, `.editorconfig`, `.vscode`, `.vs`, `.idea`, `.fleet`, `.zed`,
 `.devcontainer`, `.DS_Store`, `Thumbs.db`, `desktop.ini`, `README*`, `LICENSE*`, `LICENCE*`,
 `COPYING*` (names compared without case) — nor what installing agentplugged alone leaves: a
@@ -724,7 +762,7 @@ agents:
 
 - `--tier default` removes `model_tier`: the agent goes back to its own tier (2, then 3).
 - `--tool none` removes the preferred tool.
-- The preferred tool (`claude-code`, `codex`, `antigravity` or `cursor`) is only shown: at the end
+- The preferred tool (`claude-code`, `codex`, `antigravity`, `cursor` or `kimi`) is only shown: at the end
   of the agent's description ("Preferred tool: Codex.") and in the summary of `sync`. It never
   limits generation: the agent is generated for every tool listed in `tools`. A preferred tool
   missing from `tools` is reported by `sync`.
@@ -747,7 +785,7 @@ models:
       effort: none
 ```
 
-- Tools: `claude-code`, `codex`, `antigravity`, `cursor`.
+- Tools: `claude-code`, `codex`, `antigravity`, `cursor` (and `kimi`, which takes no model: its agents use the model of the session).
 - `effort` exists for Claude Code (`low`, `medium`, `high`, `xhigh`, `max`) and Codex (`minimal`,
   `low`, `medium`, `high`, `xhigh`, `max`, `ultra`). `effort: none` removes the effort of the
   table: no effort line is written.

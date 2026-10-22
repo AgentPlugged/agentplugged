@@ -566,10 +566,7 @@ describe("no lesson without the creator", () => {
     ]) {
       expect(constitution.replace(/\s+/g, " ")).toContain(text.replace(/\s+/g, " "));
     }
-    const noah = renderConstitutionReference([], undefined, { tools: ["claude-code"] });
-    expect(noah.replace(/\s+/g, " ")).toContain(
-      "the retrospectives (lessons and actions, then their promotion to the common memory) belong to Izzy",
-    );
+    // Noah's own part (retrospectives are Izzy's) is in his role, checked with the method.
     // A session that read outside proposes lessons like any other.
     expect(constitution).not.toContain("untrusted_session");
   });

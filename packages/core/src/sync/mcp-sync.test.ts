@@ -240,6 +240,14 @@ describe("sync: the agentplugged MCP server", () => {
     expect(json(files, ".mcp.json").mcpServers.agentplugged.command).toBe("npx");
   });
 
+  it("allows the default engine command the agents are given, in both shells", async () => {
+    const files = await installed();
+    await sync(files, "linux");
+    const allow = json(files, ".claude/settings.json").permissions.allow as string[];
+    expect(allow).toContain("Bash(npx -y agentplugged@1.0.0:*)");
+    expect(allow).toContain("PowerShell(npx -y agentplugged@1.0.0:*)");
+  });
+
   it("declares the creator's own launch of method.yaml everywhere", async () => {
     const files = await installed();
     const launch = ["node", "/work/agentplugged/apps/cli/dist/bin.js", "mcp"];
@@ -259,6 +267,10 @@ describe("sync: the agentplugged MCP server", () => {
     expect(files.files.get(".codex/config.toml")).toContain(
       '\ncommand = "node"\nargs = ["/work/agentplugged/apps/cli/dist/bin.js", "mcp"]\n',
     );
+    // The command the agents are given (`node <path>`) is the one their rules allow, for both shells.
+    const allow = json(files, ".claude/settings.json").permissions.allow as string[];
+    expect(allow).toContain("Bash(node /work/agentplugged/apps/cli/dist/bin.js:*)");
+    expect(allow).toContain("PowerShell(node /work/agentplugged/apps/cli/dist/bin.js:*)");
     // Its own entry, recognised again by the manifest: nothing changes on the next run.
     const again = await sync(files, "win32");
     expect(again.warnings).toEqual([{ kind: "local_engine", path: CONFIG }]);

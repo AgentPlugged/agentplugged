@@ -157,7 +157,7 @@ describe("every agent says « tu »", () => {
   });
 
   it("Noah and Stella state it in their definition", () => {
-    expect(read("agents/noah/SKILL.md")).toContain("he says « tu » to the creator, always");
+    expect(flat(read("agents/noah/SKILL.md"))).toContain("he says « tu » to the creator, always");
     expect(read("agents/stella/SKILL.md")).toContain("she says « tu » to the creator, always");
   });
 });
@@ -181,14 +181,14 @@ describe("a question of choice waits for its open point, and « ok » chooses", 
 
   it("Noah records « ok » as the recommended option or an approval, and no longer refuses it", () => {
     const noah = read("agents/noah/SKILL.md");
-    expect(noah).toContain("to a question that carried his recommendation chooses it");
-    expect(noah).toContain("`option_chosen` with the recommendation's id");
-    expect(noah).toContain(
+    expect(flat(noah)).toContain("to a question that carried his recommendation chooses it");
+    expect(flat(noah)).toContain("`option_chosen`, the recommendation's id");
+    expect(flat(noah)).toContain(
       'On a point without options (a document, the end of a phase), "ok" is `approved`',
     );
-    expect(noah).toContain("a hesitation, a refusal or a question");
+    expect(flat(noah)).toContain("a hesitation, a refusal or a question");
     expect(flat(noah)).toContain("One answer validates a point, whatever its type or its risk");
-    expect(noah).toContain("He cannot open a checkpoint himself");
+    expect(flat(noah)).toContain("he cannot open one");
     expect(noah).not.toContain("never picks his own recommendation for them");
   });
 

@@ -1,5 +1,5 @@
 import { fromUtf8 } from "@agentplugged/crypto";
-import type { StoryHeader } from "@agentplugged/protocol";
+import { ErrorCode, type StoryHeader } from "@agentplugged/protocol";
 import { checkDocuments } from "../docs/check-docs.js";
 import type { DocumentFile } from "../docs/docs-base.js";
 import { DOCUMENT_PATHS, isDocumentPath, knownOwners } from "../docs/docs-command.js";
@@ -60,6 +60,8 @@ export async function readSprintStories(files: WorkspaceFiles): Promise<Map<stri
   const faults = new Map<string, Set<string>>();
   const problems = checkDocuments({ current, owners: await knownOwners(files) });
   for (const problem of problems) {
+    // A sheet too long is refused when the story starts, never on a story already merged.
+    if (problem.code === ErrorCode.STORY_SHEET_TOO_LONG) continue;
     for (const id of storiesOfProblem(problem.details, byPath)) {
       const codes = faults.get(id) ?? new Set<string>();
       codes.add(problem.code);

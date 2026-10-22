@@ -99,10 +99,10 @@ describe("sync to the four tools", () => {
   it("generates every tool's files, the shared skill once, and reports the fallbacks", async () => {
     const files = await installed();
     expect(files.files.get(CONFIG)).toContain(
-      "tools:\n  - claude-code\n  - codex\n  - antigravity\n  - cursor\n",
+      "tools:\n  - claude-code\n  - codex\n  - antigravity\n  - cursor\n  - kimi\n",
     );
     const result = await sync(files);
-    expect(result.tools).toEqual(["claude-code", "codex", "antigravity", "cursor"]);
+    expect(result.tools).toEqual(["claude-code", "codex", "antigravity", "cursor", "kimi"]);
     expect(result.warnings).toEqual([]);
 
     const created = result.entries.filter((entry) => entry.action === "created");
@@ -140,6 +140,11 @@ describe("sync to the four tools", () => {
         ".agents/plugins/agentplugged/policy.json",
         ".agents/plugins/agentplugged/hooks/agentplugged-antigravity.mjs",
         ".cursor/mcp.json",
+        // Kimi Code CLI's sub-agent and project MCP file (its skills are the shared ones).
+        ".kimi-code/agents/iris.md",
+        ".kimi-code/mcp.json",
+        // The rules the hook of the user's Kimi settings reads here.
+        ".kimi-code/agentplugged-policy.json",
       ].sort(),
     );
     // The shared skill is written once, and is the same as Claude Code's.
@@ -175,6 +180,18 @@ describe("sync to the four tools", () => {
       "cursor.decisions",
       "cursor.usage",
       "cursor.budget",
+      // Kimi Code CLI has hooks only in the user's own settings, which `sync` never writes.
+      "kimi.instructions",
+      "kimi.permissions",
+      "kimi.model",
+      "kimi.rules",
+      "kimi.untrusted",
+      "kimi.chat_proof",
+      "kimi.isolation",
+      "kimi.decisions",
+      "kimi.installs",
+      "kimi.usage",
+      "kimi.budget",
     ]);
     for (const fallback of result.fallbacks) {
       expect(files.reference()).toContain(

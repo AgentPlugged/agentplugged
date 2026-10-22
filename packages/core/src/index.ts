@@ -413,6 +413,7 @@ export {
   pitchKindOf,
 } from "./docs/pitch-documents.js";
 export { prfaqDocumentChecks } from "./docs/prfaq-documents.js";
+export type { SectionsRead } from "./docs/read-command.js";
 export {
   type ResearchFound,
   type ResearchHit,
@@ -432,6 +433,7 @@ export {
   SEQUENCES_DIR,
   salesDocumentChecks,
 } from "./docs/sales-documents.js";
+export type { SheetsWritten, SheetWritten } from "./docs/sheet-command.js";
 export {
   type ApprovedStory,
   checkIntents,
@@ -440,6 +442,13 @@ export {
   intentOf,
   storyOrder,
 } from "./docs/story-rules.js";
+export {
+  fingerprintOf as sheetFingerprintOf,
+  SHEET_MAX_LINES,
+  type SheetState,
+  type StaleExcerpt,
+  sheetStates,
+} from "./docs/story-sheet.js";
 export {
   STRATEGY_DIR,
   strategyDocumentChecks,
@@ -892,6 +901,7 @@ export {
   profileCommand,
   readProfile,
 } from "./profile/profile-command.js";
+export type { BricksFound, ProfileBrief, ProfileShown } from "./project-profile/project-command.js";
 export {
   AGENT_REDUCERS,
   type AgentState,
@@ -1028,6 +1038,23 @@ export {
   cursorDenyRules,
   denyRules,
 } from "./sync/permissions.js";
+export {
+  PHASE_SKILL_BASE,
+  type SkillPhase,
+  skillPhaseKey,
+  skillsOfPhase,
+} from "./sync/phase-skills.js";
+export {
+  RUN_COMPATIBILITY,
+  RUN_MECHANISMS,
+  RUN_TOOLS,
+  type RunCell,
+  type RunFallback,
+  type RunMechanism,
+  type RunTool,
+  runFallbackId,
+  runFallbacksFor,
+} from "./sync/run-compatibility.js";
 export {
   activeDefinitions,
   type PreferredTool,
@@ -2007,6 +2034,7 @@ export type {
   CommitHookInstall,
   FilesCommitOutcome,
   FilesCommitRequest,
+  PathsCommitRequest,
   StoryFileOnBranch,
   StoryWorkspace,
   StoryWorkspaceCreation,
@@ -2028,6 +2056,19 @@ export {
   codexTrustSupported,
   planCodexTrust,
 } from "./sync/codex-trust.js";
+export {
+  KIMI_HOOK_TIMEOUT,
+  KIMI_HOOKS_BEGIN,
+  KIMI_HOOKS_END,
+  type KimiHooksEdit,
+  type KimiHooksRefusal,
+  type KimiHooksState,
+  kimiHookCommand,
+  kimiHooksBlock,
+  kimiHooksState,
+  withKimiHooks,
+  withoutKimiHooks,
+} from "./sync/kimi-hooks.js";
 export {
   type CodexRuleSettings,
   CURSOR_ENGINE_MCP_RULE,
@@ -2174,6 +2215,13 @@ export {
   type ResolvedInstallSettings,
   resolveInstallSettings,
 } from "./trust/install-settings.js";
+export {
+  KIMI_FLAVOR,
+  KIMI_POLICY_PATH,
+  kimiCallOf,
+  kimiCallTool,
+  kimiSessionOf,
+} from "./trust/kimi-guard.js";
 export { plannedDependencies } from "./trust/planned-dependencies.js";
 export {
   AgentSession,

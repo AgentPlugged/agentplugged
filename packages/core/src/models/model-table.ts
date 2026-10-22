@@ -32,8 +32,19 @@ function modelTableInvalid(path: string, field: string, reason: string): AgentPl
 /** Parses and validates a model table; the error names the file and the field. */
 export function parseModelTable(path: string, text: string): ModelTable | AgentPluggedError {
   const schema = ModelTableSchema as SafeParser<ModelTable>;
-  return parseYaml(path, normalizeText(text), schema, modelTableInvalid);
+  const table = parseYaml(path, normalizeText(text), schema, modelTableInvalid);
+  if (table instanceof AgentPluggedError) return table;
+  // A table copied before Kimi was supported has no `kimi` entry: its agents keep the session's model.
+  return table.kimi === undefined ? { ...table, kimi: KIMI_TIERS } : table;
 }
+
+/** Kimi's agent files take no model: every tier keeps the session's model. */
+const KIMI_TIERS: Readonly<Record<ModelTier, ModelChoice>> = {
+  reasoning: { model: INHERIT_MODEL },
+  code: { model: INHERIT_MODEL },
+  fast: { model: INHERIT_MODEL },
+  multimodal: { model: INHERIT_MODEL },
+};
 
 /**
  * The shipped table, as text and validated. Read by `init` (to copy it) and by `sync` when the
@@ -85,7 +96,15 @@ export function effectiveTable(table: ModelTable, overrides: ModelOverrides = {}
     const tiers = {} as Record<ModelTier, ModelChoice>;
     for (const tier of MODEL_TIERS) {
       const base = table[client][tier];
-      const own = overrides[client]?.[tier] as { model?: string; effort?: string } | undefined;
+      // Kimi takes no model per agent: it is not in the `models` section.
+      const own = (
+        overrides as Readonly<
+          Record<
+            string,
+            Partial<Record<ModelTier, { model?: string; effort?: string }>> | undefined
+          >
+        >
+      )[client]?.[tier];
       const model = own?.model ?? base.model;
       // `effort: none` in method.yaml removes the table's effort.
       const chosen = own?.effort ?? base.effort;
@@ -102,8 +121,11 @@ export function isInherit(choice: ModelChoice): boolean {
   return choice.model === INHERIT_MODEL;
 }
 
-/** Codex and Cursor keep the session's model by default: that is not a degraded case. */
-const INHERIT_BY_DESIGN: readonly ModelClientId[] = ["codex", "cursor"];
+/**
+ * Codex and Cursor keep the session's model by default, and Kimi's agent files have no model field
+ * at all: that is not a degraded case of the model table.
+ */
+const INHERIT_BY_DESIGN: readonly ModelClientId[] = ["codex", "cursor", "kimi"];
 
 /**
  * Clients for which at least one tier keeps the model of the session: a "model" fallback, except

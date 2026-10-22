@@ -84,12 +84,31 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
   ) {
     throw new RunRequestInvalid("liveInput: this tool cannot take messages while it runs");
   }
+  // Kept open while it waits: only a live run, for a tool that can stay open without a message.
+  const keepWarmMs = request.keepWarmMs;
+  if (keepWarmMs !== undefined) {
+    if (!live || translator.capabilities.keepsWarm !== true) {
+      throw new RunRequestInvalid("keepWarmMs: this run cannot be kept open while it waits");
+    }
+    if (!Number.isFinite(keepWarmMs) || keepWarmMs <= 0) {
+      throw new RunRequestInvalid("keepWarmMs: not a positive duration");
+    }
+  }
+  const warm = keepWarmMs !== undefined;
   // The rules of a launch that are too many for a command line travel in a file of the launch.
   let settingsFile: RunSettingsFile | undefined;
   let settingsFailed = false;
   if (plan.settings !== undefined) {
     try {
       settingsFile = writeRunSettings(plan.settings);
+    } catch {
+      settingsFailed = true;
+    }
+  }
+  let agentFile: RunSettingsFile | undefined;
+  if (plan.agentFile !== undefined) {
+    try {
+      agentFile = writeRunSettings(plan.agentFile.text, undefined, "md");
     } catch {
       settingsFailed = true;
     }
@@ -107,6 +126,7 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
   let stopRequested = false;
   let timedOut = false;
   let spawnFailure: string | undefined;
+  let exitCause: string | undefined;
   let exitCode: number | null = null;
   let exited = false;
   let finished = false;
@@ -161,9 +181,15 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
 
   let closeInputWhenIdle: (ok: boolean) => void = () => {};
   let idleTimer: NodeJS.Timeout | undefined;
+  // A warm run that waits for its next message: its duration limit is paused meanwhile.
+  let waiting = false;
+  let wakeUp: () => void = () => {};
+  let pauseDuration: () => void = () => {};
+  let resumeDuration: () => void = () => {};
   const feed = (line: string): void => {
-    // Any activity of the tool means it is not idle after all.
-    if (idleTimer !== undefined) {
+    // Any activity of the tool means it is not idle after all. A line that carries no activity
+    // (a limit notice, a status) does not wake a program that waits for its next message.
+    if (idleTimer !== undefined && !waiting) {
       clearTimeout(idleTimer);
       idleTimer = undefined;
     }
@@ -176,6 +202,15 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
     }
     try {
       for (const event of reader.line(value)) {
+        // The tool works again by itself (not on a message written here): it is no longer waiting.
+        if (
+          waiting &&
+          (event.type === "message" ||
+            event.type === "message.delta" ||
+            event.type === "tool.started")
+        ) {
+          wakeUp();
+        }
         emit(event);
         // The input stays open for further messages until the tool has answered all it was given
         // and runs nothing in the background: from then on nothing can come, the program may end.
@@ -202,7 +237,7 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
     // No turn ever ended: an exit code of 0 is not a success.
     return {
       outcome: "failed",
-      failure: exitCode === 0 ? "no_result" : `exit_${exitCode ?? "signal"}`,
+      failure: exitCode === 0 ? "no_result" : (exitCause ?? `exit_${exitCode ?? "signal"}`),
     };
   };
 
@@ -210,6 +245,7 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
     if (finished) return;
     finished = true;
     settingsFile?.remove();
+    agentFile?.remove();
     if (idleTimer !== undefined) clearTimeout(idleTimer);
     if (timer !== undefined) clearTimeout(timer);
     if (drainTimer !== undefined) clearTimeout(drainTimer);
@@ -220,6 +256,7 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
       ...(session === undefined ? {} : { session }),
       ...(turn?.text === undefined ? {} : { text: turn.text }),
       ...(usage === undefined ? {} : { usage }),
+      ...(turn?.context === undefined ? {} : { context: turn.context }),
       ...(turn?.costUsd === undefined ? {} : { costUsd: turn.costUsd }),
       ...(billing === undefined ? {} : { billing }),
       denied,
@@ -235,15 +272,23 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
     if (settingsFailed)
       throw Object.assign(new Error("settings"), { code: "settings_not_written" });
     const settingsArgs = settingsFile === undefined ? [] : ["--settings", settingsFile.path];
-    child = spawn(launcher.file, [...launcher.prefixArgs, ...plan.args, ...settingsArgs], {
-      cwd: request.cwd,
-      env: options.env as NodeJS.ProcessEnv,
-      stdio: ["pipe", "pipe", "pipe"],
-      windowsHide: true,
-      windowsVerbatimArguments: launcher.verbatim === true,
-      shell: false,
-      detached: !windows,
-    });
+    const agentArgs =
+      agentFile === undefined || plan.agentFile === undefined
+        ? []
+        : [plan.agentFile.flag, agentFile.path];
+    child = spawn(
+      launcher.file,
+      [...launcher.prefixArgs, ...plan.args, ...settingsArgs, ...agentArgs],
+      {
+        cwd: request.cwd,
+        env: { ...options.env, ...plan.env } as NodeJS.ProcessEnv,
+        stdio: ["pipe", "pipe", "pipe"],
+        windowsHide: true,
+        windowsVerbatimArguments: launcher.verbatim === true,
+        shell: false,
+        detached: !windows,
+      },
+    );
   } catch (error) {
     spawnFailure = error instanceof Error && "code" in error ? String(error.code) : "spawn_failed";
     emit({ type: "error", code: "not_started", message: "the program could not be started" });
@@ -277,6 +322,13 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
       inputOpen = false;
       child.stdin?.end();
     };
+    wakeUp = () => {
+      if (!waiting) return;
+      waiting = false;
+      if (idleTimer !== undefined) clearTimeout(idleTimer);
+      idleTimer = undefined;
+      resumeDuration();
+    };
     closeInputWhenIdle = (ok) => {
       if (!inputOpen) return;
       if (idleTimer !== undefined) clearTimeout(idleTimer);
@@ -284,11 +336,30 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
       // A turn that failed ends the run whatever is still pending: nothing would wake it again.
       if (!ok) return closeInput();
       if (reader.idle?.() !== true) return;
-      if (answers >= inputs) return closeInput();
+      if (answers >= inputs) {
+        if (!warm) return closeInput();
+        // Everything is answered: the program waits for the next message, for a while.
+        waiting = true;
+        pauseDuration();
+        emit({
+          type: "idle",
+          ok,
+          ...(session === undefined ? {} : { session }),
+          ...(turn?.context === undefined ? {} : { context: turn.context }),
+          ...(turn?.costUsd === undefined ? {} : { costUsd: turn.costUsd }),
+        });
+        idleTimer = setTimeout(closeInput, keepWarmMs ?? 0);
+        return;
+      }
       // Messages the tool took together get one answer: if nothing starts soon after an answer
       // that leaves nothing in the background, the input is closed anyway (see `feed`).
       idleTimer = setTimeout(closeInput, IDLE_GRACE_MS);
     };
+  } else if (plan.input === "framed" && frame !== undefined) {
+    // One framed line, then the end of the input: the program ends its session after this turn.
+    child.stdin?.end(`${frame(request.prompt)}\n`);
+  } else if (plan.input === "none") {
+    child.stdin?.end();
   } else {
     child.stdin?.end(request.prompt);
   }
@@ -300,12 +371,18 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
     child.stderr?.destroy();
     for (const line of splitter.end()) feed(line);
     if (turn === undefined && !stopRequested && !timedOut && spawnFailure === undefined) {
-      if (exitCode !== 0 && stderr.trim() !== "") {
-        emit({
-          type: "error",
-          code: "exit_without_result",
-          message: "the program ended without a result",
-        });
+      if (exitCode !== 0) {
+        // A tool that tells its failures on its error output only is read for the cause there; the
+        // text itself never travels.
+        exitCause = translator.exitFailure?.(stderr, exitCode);
+        if (exitCause === "usage_limit") emit({ type: "limit", status: "exceeded" });
+        if (exitCause !== undefined || stderr.trim() !== "") {
+          emit({
+            type: "error",
+            code: exitCause ?? "exit_without_result",
+            message: "the program ended without a result",
+          });
+        }
       }
     }
     finish();
@@ -353,11 +430,32 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
     }
   };
 
-  timer = setTimeout(() => {
-    if (finished || exited) return;
-    timedOut = true;
-    void stopNow();
-  }, request.maxDurationMs ?? DEFAULT_MAX_DURATION_MS);
+  // The duration limit counts the time the program works. A warm program that waits for its next
+  // message pauses it, and takes up what is left when it works again.
+  let budgetLeft = request.maxDurationMs ?? DEFAULT_MAX_DURATION_MS;
+  let workedSince = clock();
+  const armDuration = (): void => {
+    timer = setTimeout(
+      () => {
+        if (finished || exited) return;
+        timedOut = true;
+        void stopNow();
+      },
+      Math.max(0, budgetLeft),
+    );
+  };
+  pauseDuration = () => {
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    timer = undefined;
+    budgetLeft -= clock() - workedSince;
+  };
+  resumeDuration = () => {
+    if (finished || exited || timer !== undefined) return;
+    workedSince = clock();
+    armDuration();
+  };
+  armDuration();
 
   let stopping: Promise<void> | undefined;
   return {
@@ -389,6 +487,22 @@ export function startToolRun(options: StartToolRunOptions): ToolRun {
         return false;
       }
       inputs += 1;
+      // A program that waited works again: its waiting time ends, its duration limit goes on.
+      wakeUp();
+      return true;
+    },
+    interrupt() {
+      const stdin = child.stdin;
+      const interruptFrame = translator.interruptFrame;
+      if (!live || interruptFrame === undefined || !inputOpen || exited || finished) return false;
+      if (stopRequested || stdin === null || stdin === undefined || !stdin.writable) return false;
+      // A program that waits for its next message has no turn to end: the request is already met.
+      if (waiting) return true;
+      try {
+        stdin.write(`${interruptFrame()}\n`);
+      } catch {
+        return false;
+      }
       return true;
     },
     done,

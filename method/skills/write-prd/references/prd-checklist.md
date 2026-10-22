@@ -1,68 +1,39 @@
 # PRD checklist
 
-Run every check before showing the PRD to the creator. Fix what fails; when a fix needs the
-creator, ask them, one question at a time, or open a `decision` checkpoint.
+Run before showing the PRD. Fix what fails; what needs the creator is one question or a
+`decision` checkpoint.
 
 ## Header and identifiers
 
-- The header is the first thing in the file and holds `id: prd`, `kind: prd`, `owner: maya` and
-  `links`, which names the brief.
-- No `status`, `state`, `cost`, `spent`, `budget_spent` or `progress` key.
-- Each identifier is defined once, at the start of its line, list item, heading or first table
-  cell; every other occurrence is a mention.
-- No identifier was renumbered, reused or deleted: a dropped one stays in place, marked
-  `(retirée)` or `(retired)` first after its separator.
-- No `AD-n` is defined: architecture decisions belong to Alex.
-- No `<…>` placeholder and no unused sample identifier is left from the template.
-- `npx agentplugged docs check` reports no problem.
+- Header first: `id: prd`, `kind: prd`, `owner: maya`, `links` naming the brief; no `status`,
+  `cost`, `progress`.
+- Each identifier defined once, at the start of its line; none renumbered, reused or deleted
+  (retired ones stay, marked); no `AD-n` defined; no `<…>` placeholder or unused sample id.
+- `npx agentplugged docs check` reports nothing.
 
-## Traceability
+## Traceability and quality
 
-- Every requirement serves a need stated in the brief.
-- Every journey (`PU-n`) is served by at least one functional requirement, and every functional
-  requirement names the journey it serves (or why none applies).
-- Every success metric (`MS-n`) names the requirements it validates; at least one is a
-  counter-metric.
-
-## Quality of each requirement
-
-- One sentence, one capability, an actor and a condition; no "and" hiding a second requirement.
-- Testable: a reviewer can say pass or fail without asking the author.
-- No vague word left without a measure ("fast", "simple", "secure", "intuitive", "many").
-- A capability, not a solution: no framework, database, screen layout or API shape.
-- Each `ENF-n` has a threshold and a way to measure it.
-
-## Decisions and open points
-
-- Every ambiguity whose readings lead to different results has a `decision` checkpoint.
-- Every resolved checkpoint is recorded in "Decisions" and applied to the requirements; no
-  `[open: G-…]` mark remains for a resolved one.
-- Each `[open: G-…]` mark sits at the end of its sentence, never at the start of a line nor
-  before an identifier.
-- Every `[assumption]` mark is listed under "Assumptions".
-- Open questions name who answers them.
+- Every requirement serves a need of the brief; every `PU-n` is served by an `EF-n`, and each
+  `EF-n` names its journey.
+- One sentence, one testable capability, no hidden "and", no vague word without a measure, no
+  solution (framework, screen layout, API shape). Each `ENF-n` has a threshold and a measure;
+  each `MS-n` names what it validates, one is a counter-metric.
+- Every ambiguity has its `decision`; resolved ones are applied and leave no `[open: G-…]`;
+  every `[assumption]` is listed; open questions name who answers.
 
 ## Judgment of the whole
 
-The checks above say the PRD is well built; these say whether it is worth building from. Answer
-as a stranger reading it cold, with the passage: holds, thin or broken. A personal tool is not
-judged like a public launch. For an independent verdict, ask a sub-agent for the method
-`judgment` (skill `critique-deliverable`): its findings follow the closed form of
-`review.critique`, thin and broken only.
+Answer as a stranger, with the passage: holds, thin or broken (a personal tool is not judged
+like a public launch). For an independent verdict, a sub-agent runs `judgment` (skill
+`critique-deliverable`), thin and broken only.
 
-- **Thesis.** Can you say, from the text alone, what this product bets on and who it is for? If
-  the same text would suit another product, the thesis is missing.
-- **Theater.** What is written for form's sake: a persona no requirement serves, a glossary
-  term never used, a target nobody can observe, a list of qualities that fits any product?
-- **Trade-offs.** Does it say what the product gives up, and why? A PRD that sacrifices nothing
-  has not chosen.
-- **Form fit.** Do the length and the sections suit this product (tool, game, service,
-  regulated product)? A section that does not apply is a line or gone; one it needs is there.
+- **Thesis.** What the product bets on and for whom, from the text alone.
+- **Theater.** What is there for form's sake: a persona nothing serves, an unused term, a target
+  nobody can observe.
+- **Trade-offs.** What it gives up, and why.
+- **Form fit.** Length and sections suit this product.
 
 ## Scope and form
 
-- The first release is the narrowest that proves the value; what waits says why.
-- Out of scope is explicit.
-- The glossary terms are used exactly, without synonyms.
-- The length follows the stakes, with no padding; no guidance comment and no
-  "Generated by agentplugged" line is left.
+- The first release is the narrowest that proves the value; out of scope is explicit.
+- Terms used exactly; length follows the stakes; no guidance comment nor generated line left.

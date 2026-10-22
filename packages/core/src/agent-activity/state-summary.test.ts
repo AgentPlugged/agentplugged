@@ -227,6 +227,9 @@ describe("get_state answers a summary by default", () => {
       status: "working",
       task: "building the sign-in form of the story 2-1 with the tests first",
     });
+    // The questions of the results wait for the creator on points of their own.
+    for (let n = 1; n <= 25; n++)
+      await recorded("open_checkpoint", decision(n, `2-${(n % 8) + 1}`));
     for (let n = 1; n <= 8; n++) {
       await recorded("report_progress", {
         agent: "iris",
@@ -244,8 +247,6 @@ describe("get_state answers a summary by default", () => {
         conflicts: [],
       });
     }
-    for (let n = 1; n <= 25; n++)
-      await recorded("open_checkpoint", decision(n, `2-${(n % 8) + 1}`));
 
     const result = await call("get_state", {});
     if (!result.ok) throw new Error("get_state failed");

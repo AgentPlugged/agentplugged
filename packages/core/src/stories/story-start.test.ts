@@ -385,6 +385,10 @@ describe("start_story and story start", () => {
       workdir: "/repos/shop.worktrees/1-3",
       hook: { status: "installed" },
     });
+    // The sheet to read alone: here a story of the former format, which keeps working.
+    expect(value.sheet).toMatchObject({ format: "legacy" });
+    expect(value.sheet?.path).toMatch(/^\.agentplugged\/stories\/1-3/);
+    expect(value.sheet?.stale).toBeUndefined();
     // The hook checks the requirements of the approved version.
     expect(workspace.hookFiles.at(-1)?.story).toEqual({ id: "1-3", requirements: ["EF-1"] });
     expect(journal.events.at(-1)).toMatchObject({
@@ -573,6 +577,12 @@ describe("start_story and story start", () => {
     expect(reasonOf(await call("start_story", { agent: "sam", story: "1-6" }))).toBe(
       "invalid_story",
     );
+    // A sheet over the ceiling, validated as it is: a story too big, cut before it starts.
+    const tooLong = `${storyFile("1-5", "sam")}\n## Excerpts\n\n${"- line\n".repeat(300)}`;
+    await validate([["1-5-long", tooLong]]);
+    expect(errorOf(await call("start_story", { agent: "sam", story: "1-5" }))).toMatchObject({
+      details: { reason: "invalid_story", why: "STORY_SHEET_TOO_LONG" },
+    });
     files.seedBytes(path("1-7-binary"), new Uint8Array([0xff, 0xfe, 0x00]));
     expect(reasonOf(await call("start_story", { agent: "sam", story: "1-7" }))).toBe("unreadable");
     // Validated again, but the main branch still holds the older approval.

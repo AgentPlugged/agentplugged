@@ -13,8 +13,7 @@ a symptom, and says where it would show:
 - A confidence from 1 to 10 says how likely it is given what you have seen so far (the symptom,
   the recent changes, the logs), not how easy it is to check. Two hypotheses at the same level
   are tested in the order that costs less.
-- Ask "why" up to five times from the symptom to get from an effect to a cause: "the total is
-  wrong" is an effect; "the cache outlives the refund" is a cause.
+- Ask "why" up to five times to get from an effect to a cause.
 - A hypothesis is a sentence another reader could contradict. "Something with the cache" is not.
 
 ## Test one, then say what you saw

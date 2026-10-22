@@ -456,7 +456,10 @@ export type LoopVerdict =
 export type LoopStepInput = Pick<
   NextStep,
   "step" | "you" | "agent" | "story" | "checkpoint" | "stop" | "waiting" | "independent"
-> & { readonly decisions?: readonly Pick<DecisionItem, "id">[] };
+> & {
+  readonly decisions?: readonly Pick<DecisionItem, "id">[];
+  readonly change_method?: NextStep["change_method"];
+};
 
 /**
  * What comes next. The creator's step, a point the agents may not decide, a step outside the
@@ -502,6 +505,10 @@ export function loopVerdict(
   }
   if (!LOOP_STEPS.has(next.step)) {
     return { verdict: "stop", reason: "outside", subject: next.step, waiting };
+  }
+  // Two identical failures: the loop never runs the same step a third time, Noah changes method.
+  if (next.change_method !== undefined && next.story !== null) {
+    return { verdict: "stop", reason: "attempts", subject: next.story, waiting };
   }
   if (next.story !== null) {
     const attempts = attemptsOf(next.story);

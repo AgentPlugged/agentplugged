@@ -1,5 +1,8 @@
 import type { ReviewFinding } from "@agentplugged/protocol";
 import type { CommandContext } from "../command.js";
+import { type SourceClash, sourceClashes } from "../project-profile/bricks.js";
+import type { SingleSource } from "../project-profile/profile-file.js";
+import { singleSourcesOf } from "../project-profile/project-command.js";
 import type { DiffFile } from "../review/review-rules.js";
 import { isCodePath, isReadableCode, MAX_FILE_BYTES } from "./code-files.js";
 import {
@@ -34,6 +37,8 @@ export interface CodeSource {
 export interface ReuseReport {
   readonly duplicates: readonly Duplicate[];
   readonly twins: readonly Twin[];
+  /** Functions added outside the one owner of a concept the team declared (a single source). */
+  readonly clashes?: readonly SourceClash[];
   /** The time ran out: the duplicates are those found so far (an empty list proves nothing). */
   readonly partial: boolean;
   /** Files read and time taken, for the engine's own accounts. */
@@ -58,6 +63,7 @@ export function analyzeReuse(
   files: readonly DiffFile[],
   tree: readonly SourceFile[],
   options: DetectOptions = {},
+  sources: readonly SingleSource[] = [],
 ): ReuseReport {
   const clock = options.clock ?? Date.now;
   const started = clock();
@@ -69,6 +75,7 @@ export function analyzeReuse(
   return {
     duplicates: detection.duplicates,
     twins,
+    ...(sources.length === 0 ? {} : { clashes: sourceClashes(readable, added, sources) }),
     partial: detection.partial,
     files: detection.files,
     ms: Math.max(0, clock() - started),
@@ -102,7 +109,8 @@ export async function reuseOf(
     );
     if (tree === undefined) return undefined;
     const left = budget - (clock() - started);
-    return analyzeReuse(diffFiles, tree, { ...options, maxMs: Math.max(1_000, left) });
+    const sources = await singleSourcesOf(context);
+    return analyzeReuse(diffFiles, tree, { ...options, maxMs: Math.max(1_000, left) }, sources);
   } catch {
     return undefined;
   }
@@ -148,6 +156,14 @@ export function reuseLines(report: ReuseReport | undefined): string[] {
   if (report.twins.length > SHOWN_TWINS) {
     lines.push(`+${report.twins.length - SHOWN_TWINS} more twins?`);
   }
+  for (const clash of (report.clashes ?? []).slice(0, SHOWN_TWINS)) {
+    lines.push(
+      `single source: ${clash.name} ${cut(clash.path, 45)}:${clash.line} but "${clash.concept}" lives in ${clash.owner}`.slice(
+        0,
+        LINE_MAX,
+      ),
+    );
+  }
   if (report.partial) lines.push("partial: time ran out, an empty list proves nothing");
   return lines;
 }
@@ -162,7 +178,22 @@ export const MAX_ENGINE_FINDINGS = 10;
  */
 export function duplicateFindings(report: ReuseReport | undefined): ReviewFinding[] {
   if (report === undefined) return [];
-  return report.duplicates.slice(0, MAX_ENGINE_FINDINGS).map(
+  const clashes = (report.clashes ?? []).map(
+    (clash): ReviewFinding => ({
+      severity: "should_fix",
+      title:
+        `Second home for "${clash.concept}": ${clash.name} in ${cut(clash.path, 55)}:${clash.line} (it lives in ${clash.owner})`.slice(
+          0,
+          200,
+        ),
+      detail: `The team declared ${clash.owner} the single source of "${clash.concept}"; this function carries the concept in its name and lives elsewhere.`,
+      path: clash.path,
+      line: clash.line,
+      lens: "structure",
+      recommendation: `Use or extend ${clash.owner}; if this is another concept, say why`,
+    }),
+  );
+  const duplicates = report.duplicates.slice(0, MAX_ENGINE_FINDINGS).map(
     (duplicate): ReviewFinding => ({
       severity: "should_fix",
       title:
@@ -177,6 +208,7 @@ export function duplicateFindings(report: ReuseReport | undefined): ReviewFindin
       recommendation: "Reuse the existing code, or extract it where both can call it",
     }),
   );
+  return [...clashes, ...duplicates].slice(0, MAX_ENGINE_FINDINGS);
 }
 
 /** What the journal keeps of a merged story's weight. */
@@ -203,6 +235,16 @@ export function isReuseReport(value: unknown): value is ReuseReport {
   };
   return (
     typeof report.partial === "boolean" &&
+    (report.clashes === undefined ||
+      (Array.isArray(report.clashes) &&
+        report.clashes.every(
+          (entry: Record<string, unknown>) =>
+            typeof entry?.name === "string" &&
+            typeof entry?.path === "string" &&
+            Number.isInteger(entry?.line) &&
+            typeof entry?.concept === "string" &&
+            typeof entry?.owner === "string",
+        ))) &&
     Array.isArray(report.duplicates) &&
     report.duplicates.every(
       (entry: Record<string, unknown>) =>

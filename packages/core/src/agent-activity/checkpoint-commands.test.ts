@@ -241,7 +241,11 @@ describe("blocking", () => {
     expect(refused.ok ? undefined : refused.error.toPayload()).toEqual({
       code: ErrorCode.CHECKPOINT_OPEN,
       message_key: "error.checkpoint_open",
-      details: { checkpoint: opened.checkpoint, action: "story.review" },
+      details: {
+        checkpoint: opened.checkpoint,
+        action: "story.review",
+        do: expect.stringContaining("state.next"),
+      },
     });
     expect(journal.events).toHaveLength(before);
   });
@@ -485,7 +489,7 @@ describe("report_measures and the verdict", () => {
     expect(unknown.ok ? undefined : unknown.error.toPayload()).toEqual({
       code: ErrorCode.CHECKPOINT_NOT_FOUND,
       message_key: "error.checkpoint_not_found",
-      details: { checkpoint: "G-0000000000" },
+      details: { checkpoint: "G-0000000000", do: expect.stringContaining("state.next") },
     });
     const plain = await recorded("open_checkpoint", DECISION);
     const measured = await recorded("open_checkpoint", MEASURED);

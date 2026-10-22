@@ -12,6 +12,7 @@ import {
 } from "@agentplugged/protocol";
 import type { CriterionRecord } from "../criteria/criterion-rules.js";
 import type { AttemptRecord } from "../loop/loop-rules.js";
+import { nextStall, progressMark, type StallRecord } from "../loop/repeat-rules.js";
 import { type ArchitectureReview, parseReviewLine } from "../phases/design-review.js";
 import type { QaRecord } from "../qa/qa-rules.js";
 import type { StoryReview } from "../review/review-rules.js";
@@ -185,6 +186,11 @@ export interface StoryState {
    * `story.merge_refreshed`).
    */
   merge_refresh?: StoryMergeRefresh;
+  /**
+   * The same agent handing the story back (partial or blocked) without moving it, counted from its
+   * results; gone at its complete result. Absent until the first.
+   */
+  stall?: StallRecord;
 }
 
 /** A conflict with the main branch, as its developer qualified it. */
@@ -660,6 +666,11 @@ export const AGENT_REDUCERS: Readonly<Record<string, Reducer>> = {
       agent.architecture_reviews = reviews;
     }
     const story = storyOf(draft, event);
-    if (story !== undefined) story.results[id] = entry;
+    if (story !== undefined) {
+      story.results[id] = entry;
+      const stall = nextStall(story.stall, id, payload.status, progressMark(story), event.at);
+      if (stall === undefined) delete story.stall;
+      else story.stall = stall;
+    }
   },
 };

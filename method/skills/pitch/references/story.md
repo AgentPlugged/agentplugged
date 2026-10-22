@@ -1,22 +1,17 @@
 # The story of the product
 
-1. **Context.** Purpose (users, partners, investors, press, team), one audience per story, what they
-   should remember, constraints (length, tone, medium). The documents answer most of it.
-2. **Structure.** From `story-frameworks.md`, recommend one: "for <purpose> and <audience>, <structure>,
-   because <reason>". The creator may take another.
-3. **Elements.** Questions, not writing: the hero, the tension (without a struggle there is no story), the
-   concrete detail, what changes, the true core. Start from the positioning when validated, never copy it:
-   a claim here needs its own source.
-4. **Emotional arc.** The feeling at the start, at the turn, at the end; the peaks and the low points; the
-   stake that makes it matter.
-5. **Opening.** A surprising fact, an urgent question, a recognisable moment, a promised payoff; offer two.
-6. **Draft**, in the mode the creator chose (150 to 300 words).
-7. **Versions.** Short (one to three sentences: a post, a subject line), medium (a paragraph or two), full.
-   Only the channels they name.
-8. **Use.** Best channels, adaptations for each audience, tone, a visual if useful, how to test it on a
-   few people.
-9. **Polish.** What is strongest, what is weak, the one action asked, other audiences to write for.
+Steps: context (one audience, what they should remember); structure
+(recommend one, "for <purpose> and <audience>, <structure>, because <reason>"; the creator may take
+another); elements as questions, not writing (hero, tension, concrete detail, what changes); the
+emotional arc; two openings to offer; a draft of 150 to 300 words in the mode the creator chose;
+versions only for the channels they name; use; polish. Start from the
+positioning when validated, never copy it: a claim here needs its own source.
+
+Structures by purpose: transformation (hero's path, spine, customer journey,
+obstacle overcome, personal arc); strategic (brand, vision, origin, positioning, culture);
+persuasive (pitch, sales, change, fundraising, cause); analytical (data, case, research, insight,
+making-of); emotional (hook, conflict, empathy, human interest, candid).
 
 Then **Proof** (claim, status `verified`, `stated` or `untrusted`, source) and **Ask** (one thing).
-Check: a figure without source is `[to verify]`; a customer quote that is not real is `[imagined]`; a promise
-the product cannot keep is cut; `docs check` reports nothing.
+Check: a figure without source is `[to verify]`; a customer quote that is not real is `[imagined]`;
+a promise the product cannot keep is cut; `docs check` reports nothing.

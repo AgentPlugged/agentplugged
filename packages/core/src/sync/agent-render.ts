@@ -51,6 +51,11 @@ export interface ResolvedAgent {
    * persona of an agent with `compact_persona` says only these.
    */
   readonly customized?: ReadonlySet<string>;
+  /**
+   * The skills `sync` leaves out of the tools in the current phase: a menu row that calls one
+   * sends to its definition in `.agentplugged/skills/` instead.
+   */
+  readonly uninstalledSkills?: ReadonlySet<string>;
 }
 
 /** The domains of the agents that hand deliverables to the creator to publish. */
@@ -236,8 +241,13 @@ export function renderAgentBody(resolved: ResolvedAgent): string {
     menu.push("No menu items: answer the creator's requests directly.");
   } else {
     const rows = agent.menu.map((item, i) => {
+      // A skill of another phase is not installed in the tools: its definition is read instead.
       const action =
-        item.skill !== undefined ? `Skill \`${item.skill}\`` : `Prompt: ${item.prompt ?? ""}`;
+        item.skill === undefined
+          ? `Prompt: ${item.prompt ?? ""}`
+          : resolved.uninstalledSkills?.has(item.skill) === true
+            ? `Read and follow \`.agentplugged/skills/${item.skill}/SKILL.md\` (skill \`${item.skill}\`)`
+            : `Skill \`${item.skill}\``;
       return `| ${i + 1} | ${cell(item.code)} | ${cell(item.description)} | ${cell(action)} |`;
     });
     menu.push(

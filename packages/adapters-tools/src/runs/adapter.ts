@@ -1,6 +1,14 @@
 import { claudeCodeTranslator } from "./claude-code.js";
-import type { Launcher, RunRequest, ToolAdapter, ToolRun, ToolTranslator } from "./contract.js";
+import type {
+  Launcher,
+  RunRequest,
+  RunToolId,
+  ToolAdapter,
+  ToolRun,
+  ToolTranslator,
+} from "./contract.js";
 import { startToolRun } from "./process-core.js";
+import { TRANSLATORS } from "./translators.js";
 
 export interface ToolAdapterOptions {
   readonly translator: ToolTranslator;
@@ -37,4 +45,12 @@ export function createClaudeCodeAdapter(
   options: Omit<ToolAdapterOptions, "translator">,
 ): ToolAdapter {
   return createToolAdapter({ ...options, translator: claudeCodeTranslator });
+}
+
+/** The adapter of any tool the bridge can start: only its translator differs. */
+export function createAdapterFor(
+  tool: RunToolId,
+  options: Omit<ToolAdapterOptions, "translator">,
+): ToolAdapter {
+  return createToolAdapter({ ...options, translator: TRANSLATORS[tool] });
 }

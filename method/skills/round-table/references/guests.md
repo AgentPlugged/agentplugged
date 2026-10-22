@@ -1,17 +1,17 @@
-# Guests
+# Guests and independent minds
 
-A guest is a voice outside the team. Its id is `guest-<slug>` (`guest-gdpr-lawyer`), never an agent's.
-Introduce it as a guest, with its role in a line; it speaks like an agent but is composed, not read.
+## Guests
+A guest is outside the team: id `guest-<slug>`, never an agent's, introduced as a guest with its
+role. Compose it from the subject (role, manner, concerns); the creator may refuse or reshape it.
+- Regulated fields (law, health, finance): a **lead to check**, not advice; say so when it speaks
+  and in the synthesis; record `field: law|health|finance`.
+- A group of customers: 3 to 5 voices from the personas of `ux.md` (read that section only, `docs read ux.md`),
+  `.agentplugged/docs/research/*.md` or a file the creator names; with no data, mark them imagined.
+- Offer to keep a guest in a saved room only at the end, never without a yes.
 
-- **On the fly.** When the talk needs a specialist the team lacks (a data-protection lawyer, an SEO
-  expert, an investor), compose one from the subject: role, a manner of speaking, what it cares
-  about. The creator may refuse or reshape it. Look up anything recent instead of assuming.
-- **Regulated fields** (law, health, finance): what a guest says there is a **lead to check**, not
-  advice; say so when it speaks and in the synthesis. Record it with `field: law|health|finance`.
-- **A group of customers.** Compose 3 to 5 voices from the product's own data: the personas of
-  `.agentplugged/docs/ux.md`, the user voices of `.agentplugged/docs/research/*.md`, or a file the
-  creator names. In two lines, name the segments kept and the reason. With no data, say so and mark
-  the voices as imagined. They speak as users, in their words, and say what they would do, not what
-  they would want.
-- **Keep one** that pleased the creator: at the end, offer to add it to a saved room
-  (`references/rooms.md`). Never keep one without their yes.
+## Independent minds
+Default **voiced**: you play every voice in one message. Only when the round's value is views that
+do not contaminate each other (judging a plan, a request to go deep): one sub-agent per voice,
+named by its agent id, for that round; "each turn" only on request. A voice keeps its sub-agent
+all session, is briefed once and sent the whole room each turn, asked for the form (one to three
+sentences), not its reasoning, and waited for in the foreground each turn. Release them at the end. No sub-agents: back to voiced, unsaid.

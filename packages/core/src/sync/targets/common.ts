@@ -19,6 +19,7 @@ import type { MethodSource } from "../../method/method-source.js";
 import { isInherit } from "../../models/model-table.js";
 import { type ResolvedAgent, renderAgentBody } from "../agent-render.js";
 import type { ExtensionMcpServer, McpServerLaunch } from "../mcp.js";
+import { type SkillPhase, skillsOfPhase } from "../phase-skills.js";
 import type { CodexRuleSettings } from "../rule-permissions.js";
 
 /** Who a generated file is for: one tool, or several (`shared`). */
@@ -64,6 +65,8 @@ export interface RenderInput {
    * `sync` appends to its `SKILL.md`, by skill name. A skill without one is rendered as it is.
    */
   readonly skillSections?: ReadonlyMap<string, string>;
+  /** The current phase: only its skills get a folder. Absent, every skill does. */
+  readonly skillPhase?: SkillPhase;
 }
 
 /** The model of an agent's tier for one client. */
@@ -94,7 +97,14 @@ export const SKILL_ROOTS = [".claude/skills", ".agents/skills"] as const;
  * Folders and files `sync` may generate, delete and protect. A manifest entry outside them is
  * never deleted.
  */
-export const GENERATED_ROOTS = [".claude", ".agents", ".codex", ".gemini", ".cursor"] as const;
+export const GENERATED_ROOTS = [
+  ".claude",
+  ".agents",
+  ".codex",
+  ".gemini",
+  ".cursor",
+  ".kimi-code",
+] as const;
 export const GENERATED_ROOT_FILES = ["CLAUDE.md", "GEMINI.md"] as const;
 
 export function isGeneratedPath(path: string): boolean {
@@ -138,7 +148,7 @@ export function renderAgentSkill(resolved: ResolvedAgent): string {
 /** A Markdown sub-agent: the given frontmatter, the header, then the agent's body. */
 export function renderMarkdownAgent(
   resolved: ResolvedAgent,
-  frontmatter: Readonly<Record<string, string>>,
+  frontmatter: Readonly<Record<string, string | readonly string[]>>,
 ): string {
   const yaml = stringify({ ...frontmatter }, { lineWidth: 0 });
   return `---\n${yaml}---\n${GENERATED_HEADER}\n${renderAgentBody(resolved)}`;
@@ -195,14 +205,14 @@ export async function renderSkillFolder(
   return targets;
 }
 
-/** Skill folders of every definition under `root`. */
+/** Skill folders of every agent, and of the skills of the current phase, under `root`. */
 export async function renderSkillFolders(
   input: RenderInput,
   root: string,
   group: TargetGroup,
 ): Promise<Target[]> {
   const targets: Target[] = [];
-  for (const definition of input.definitions) {
+  for (const definition of skillsOfPhase(input.definitions, input.skillPhase)) {
     targets.push(...(await renderSkillFolder(input, definition, root, group)));
   }
   return targets;

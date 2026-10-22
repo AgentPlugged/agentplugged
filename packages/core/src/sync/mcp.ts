@@ -26,6 +26,12 @@ export const GEMINI_SETTINGS_PATH = ".gemini/settings.json";
 /** Cursor's project MCP servers (`mcpServers`), read by the editor and the Cursor CLI. */
 export const CURSOR_MCP_PATH = ".cursor/mcp.json";
 
+/**
+ * Kimi Code CLI's project MCP servers (`mcpServers`, a stdio server being an entry with `command`),
+ * read beside the user's own `~/.kimi-code/mcp.json`; the project entry wins on a name clash.
+ */
+export const KIMI_MCP_PATH = ".kimi-code/mcp.json";
+
 /** A JSON file that declares MCP servers under `mcpServers`, and the tool that reads it. */
 export interface McpJsonFile {
   readonly path: string;
@@ -69,6 +75,15 @@ export const MCP_JSON_FILES: readonly McpJsonFile[] = [
     tool: "cursor",
     group: "cursor",
     typed: true,
+    existingOnly: false,
+  },
+  {
+    path: KIMI_MCP_PATH,
+    client: "kimi",
+    tool: "kimi",
+    group: "kimi",
+    // Kimi tells a stdio server by its `command`; no `type` field is documented.
+    typed: false,
     existingOnly: false,
   },
 ];

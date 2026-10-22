@@ -1,125 +1,63 @@
 ---
 name: security-review-architecture
-description: Review the architecture for security before the creator approves it and write the opinion attached to the end of the design phase. Run by Chloé.
+description: Review the architecture for security before the creator approves it; write the opinion attached to the end of design. Run by Chloé.
 metadata:
   agent: chloe
   phase: design
 ---
 # Review the architecture for security
 
-The creator approves the architecture at the end of the design phase. Chloé's opinion travels
-with it: the end of the design phase cites her review among its documents, and the engine
-refuses to open it without the review (`SECURITY_REVIEW_MISSING`) while Chloé is active. The
-review finds the weaknesses that are cheap to fix on paper and costly once built.
+## Overview
 
-This skill belongs to Chloé. Run it as Chloé, with `agent: chloe` in every MCP call. Work in the
-creator's language; keep identifiers (`AD-n`, `EF-n`) as they are.
+- **Step:** design, as Chloé (`agent: chloe` in every MCP call). Her opinion travels with the
+  architecture: while she is active the engine refuses the end of design without it
+  (`SECURITY_REVIEW_MISSING`).
+- **Produces:** `.agentplugged/docs/security-reviews/architecture.md` from
+  `assets/architecture-review-template.md`, and nothing else.
+- **Reads:** the architecture by section (`docs read @decisions @stack`, then its outline); of the
+  PRD, the `ENF-n` (`docs read @constraints`); of the UX, the sign-in flows; the threat model
+  (`.agentplugged/docs/threat-model.md`) when it exists.
+- **Validation point:** none of her own: Alex opens the end of design with this review attached.
+- **Short path** (`full_path` in `journey.skipped`): the spec stands for the architecture; read
+  `references/spec-review.md`.
 
-- **Inputs:** `.agentplugged/docs/architecture.md`, `.agentplugged/docs/prd.md`,
-  `.agentplugged/docs/ux.md`, and `.agentplugged/docs/threat-model.md` when it exists.
-- **Output:** `.agentplugged/docs/security-reviews/architecture.md`, and nothing else.
-- **Annex**, in this skill's folder (also under
-  `.agentplugged/skills/security-review-architecture/`): `assets/architecture-review-template.md`.
+## Steps
 
-Follow the steps in order. Each ends with what it must have produced. On the short path
-(`full_path` in `journey.skipped`) the spec stands for the architecture: steps 1 to 4 as
-`references/spec-review.md` says, then step 5.
-
-## Step 1 — Check the phase and read the inputs
-
-1. Call `agent.status` (`working`, task "security review of the architecture").
-2. Call `state.get`. The current phase (`phase.current`) must be `design`. If it is not, say
-   which phase is current and stop.
-3. Read `.agentplugged/docs/architecture.md`. When it is missing, say that Alex writes it
-   first, and stop.
-4. Read the PRD for what must be protected: the security, privacy and compliance requirements
-   (`ENF-n` above all), the users and their roles, the data handled. Read the UX specification
-   for the sign-in flows and what each screen shows. Read the threat model when it exists.
-5. Never open `.agentplugged/docs/qa-reviews/`: your review stays your own.
-
-**Produces:** the requirements and the data the review protects.
-
-## Step 2 — Map what an attacker sees
-
-From the architecture's units and dependency diagram, list:
-
-- the **assets** worth protecting (accounts, personal data, payments, secrets, availability);
-- the **entry points** (interfaces, forms, files, webhooks, messages, admin tools, CI);
-- the **trust boundaries**, where data crosses from less trusted to more trusted;
-- the **actors** who could attack them (anonymous user, signed-in user, another tenant, a
-  compromised dependency, an insider).
-
-**Produces:** a short map, written in the review's first section.
-
-## Step 3 — Review each decision and each dimension
-
-Read every active decision (`AD-n`), then check the dimensions the decisions may have missed:
-
-- authentication: how users and services prove who they are; sessions, tokens, recovery;
-- authorisation: who may do what, and where it is enforced (never only in the interface);
-- data at rest and in transit: encryption, keys and who holds them, retention, deletion;
-- secrets: where they live, who reads them, how they rotate; never in the code or a log;
-- input crossing a trust boundary: validated where it enters, encoded where it leaves;
-- dependencies and supply chain: maturity, maintenance, every version still `to verify`;
-- logging and privacy: what is recorded, never a secret nor more personal data than needed;
-- isolation: tenants, environments, least access for services and CI;
-- abuse and availability: rate limits, quotas, costly operations open to anyone.
-
-For each weakness, write a finding: its severity (`critical`, `high`, `medium`, `low`), the
-decision it concerns (`AD-n`) or "missing decision", the concrete path an attacker would take,
-and the fix you recommend to Alex. A worry without a path to harm is a note, not a finding.
-
-**Produces:** the findings, ranked by severity, and the notes.
-
-## Step 4 — Write the review
-
-1. Write `.agentplugged/docs/security-reviews/architecture.md` from
-   `assets/architecture-review-template.md`. Drop the "Generated by agentplugged" comment line
-   if your copy carries one, and the template's guidance comments.
-2. Header: `id: architecture-security-review`, `kind: note`, `owner: chloe` (the engine checks
-   it), and in `links` the `id` of the architecture, of the PRD, and of the threat model when it
-   exists.
-3. End with the verdict: **no blocking finding**, or **blocking findings** (to fix before the
-   creator approves the architecture), and one sentence the creator can read on the checkpoint.
-4. Never copy a secret, a token or a personal record into the review.
-5. Run `npx agentplugged docs check`, and fix what it reports.
-6. Commit the review, and only it, on the branch the architecture is committed on, the main
-   branch (`git add` that one file, then `git commit`, signed with the name and the email the
-   creator gave: constitution, "Talking with the creator", step 5; `git branch --show-current`
-   must name that branch, else ask the creator to check it out). The engine refuses a document in no commit
-   (`DOCUMENT_NOT_COMMITTED`): a `git hash-object -w` blob of an untracked file never suffices.
-7. Keep the two ids Git gives once both files are committed:
-   `git rev-parse HEAD:.agentplugged/docs/security-reviews/architecture.md` (the review) and
-   `git rev-parse HEAD:.agentplugged/docs/architecture.md` (the architecture you reviewed). When
-   the architecture is not committed, or the working copy differs from the commit, say that Alex
-   commits it first and stop: you never edit nor commit it yourself. If it changed while you
-   worked, review the new version first.
-
-**Produces:** the review, committed, with its verdict, and the two object ids.
-
-## Step 5 — Hand over
-
-1. Call `story.result` **without a story**, `complete`. The summary's **first line** is the
-   line the engine reads, exactly in this form, on one line:
+1. **Start.** `agent.status` (`working`); `state.get`: `phase.current` must be `design`, else say
+   which and stop. No architecture: Alex writes it first, stop. Never open
+   `.agentplugged/docs/qa-reviews/`: your review stays your own.
+2. **Map.** Assets, entry points, trust boundaries, actors, in the review's first section.
+3. **Review.** Every active `AD-n`, then the dimensions the decisions missed: authentication,
+   authorisation (never only in the interface), data at rest and in transit, secrets, input at
+   trust boundaries, dependencies and supply chain, logging and privacy, isolation, abuse and
+   availability. A finding has a severity (`critical`, `high`, `medium`, `low`), the decision it
+   concerns (`AD-n` or "missing decision"), the path an attacker would take, and the fix
+   recommended to Alex. A worry without a path to harm is a note.
+4. **Write.** From the template; drop the "Generated by agentplugged" line. Header
+   `id: architecture-security-review`, `kind: note`, `owner: chloe`, `links` to the architecture,
+   the PRD and the threat model if any. End with the verdict (**no blocking finding** or
+   **blocking findings**, to fix before approval) and one sentence for the checkpoint. Never copy a
+   secret or a personal record.
+5. **Review gate.** `npx agentplugged docs check` until clean.
+6. **Commit.** The review only, on the branch the architecture is committed on
+   (`git branch --show-current`), signed with the creator's name and email (constitution,
+   "Talking with the creator", step 5). A document in no commit is refused
+   (`DOCUMENT_NOT_COMMITTED`). Keep `git rev-parse HEAD:.agentplugged/docs/security-reviews/architecture.md`
+   and `git rev-parse HEAD:.agentplugged/docs/architecture.md`. Architecture not committed or
+   changed in the working copy: Alex commits it first, stop; you never edit nor commit it.
+7. **Report.** `story.result` **without a story**, `complete`; the **first line** of the summary,
+   exactly, on one line (the engine reads it):
 
    ```text
    Architecture security review: verdict=<no-blocking|blocking> findings=<n> blocking=<n> review=<review id> architecture=<architecture id>
    ```
 
-   `findings` counts every finding, `blocking` those that block; `verdict=blocking` exactly when
-   `blocking` is above 0. The ids are the two of step 4. The next lines say the findings by
-   severity in plain words. Add your assumptions, the open questions and the conflicts.
-   Without this result, the end of the design phase cannot open; a result without that first
-   line (an audit, the threat model) never counts as the review, and the creator sees the
-   verdict on the checkpoint's card.
-2. Call `agent.status` (`idle`).
-3. Hand back to Noah with what comes next, for him to propose it; the creator decides (without
-   Noah, tell the creator). You never call another agent:
-   - Alex acts on the findings: changing the architecture belongs to him alone;
-   - when the architecture changes, the creator calls you again: update this same review and
-     submit again; a review of an older version is refused at the end of the phase;
-   - then Alex opens the end of the design phase, with the architecture and this review
-     attached, for the creator, as technical lead, to approve.
+   `blocking` counts the findings that block; `verdict=blocking` exactly when it is above 0; the
+   ids are the two of step 6. Then the findings by severity, assumptions, questions, conflicts.
+   A result without that first line (an audit, the threat model) never counts as the review.
+   `agent.status` `idle`. Hand back to Noah, never call another agent: Alex acts on the findings;
+   if the architecture changes, the creator calls you again to update this review (an older one is
+   refused); then Alex opens the end of design with both attached.
 
 ## Never
 

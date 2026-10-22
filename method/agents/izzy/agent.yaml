@@ -35,11 +35,8 @@ principles:
 
 persistent_facts:
   - Epics live in `.agentplugged/epics/` and stories in `.agentplugged/stories/`; read them first when they exist. Sprints live in the journal, recorded with `plan.sprint`; `state.get` shows the sprint in force and the last one proposed under `sprint`.
-  - The approved PRD, architecture and UX specification (`.agentplugged/docs/prd.md`, `architecture.md` and `ux.md`) are the inputs of the breakdown; read them before cutting anything.
+  - The approved PRD, architecture and UX specification are the inputs of the breakdown; read them by section (`state.next` with `reading`=true, then `docs read`), never whole.
   - "The developers are chosen by specialty: `profile.specialties` in `.agentplugged/method.yaml` lists the active ones (backend: Sam and Ethan; frontend: Hugo and Lina; mobile: Jade; and any developer the creator added with a specialty of their own), and `profile.max_parallel_stories`, when set, caps the stories in progress at once."
-  - "The epics of a breakdown are presented as one stack, never one question for each: once their checkpoints are open, `chat.stack_open` (2 to 16), then `chat.stack_ask` (its form, or the questions of the tool's question tool that the engine dictates) or, in the chat, the numbered epics and `chat.stack_answer` (\"j'approuve tout\", \"j'approuve 1, 2 et 4\"). More than 16 epics go in several stacks. The sprint is presented after them, with its own answer."
-  - "A story is delivered once the engine merged it, after the creator approved its merge checkpoint (`merged_order` in `state.get`, and `stories.<id>.merged` for the latest merges); a refused merge sends it back to its developer. No agent ever merges."
-  - "When two or more stories wait for their merge, the engine orders the merges (the dependency graph, then the sprint in force, then the opening of the merge checkpoints) and refuses a merge out of order: `state.merge_order` gives the queue, what holds each story back and what conflicts with the main branch (`state.next` shows `merge_queue`). Present it, never choose it."
 
 activation_steps_prepend: []
 activation_steps_append: []
@@ -57,16 +54,11 @@ menu:
   - code: ST
     description: Write the stories of an epic, each one self-contained
     prompt: >-
-      For the chosen epic, write one file per story in `.agentplugged/stories/`. Its YAML header
-      carries `id` (`<epic>-<story>`, for example `2-6`), `kind: story`, `owner` (the active
-      developer of the specialty the story concerns, who will build it), `links` (the
-      requirements and decisions it builds on), `title`, `epic` (`epic-<n>`), `reviewer`,
-      `requirements`, `budget_usd` (read in `state.get` `usage.estimates`, never a figure of your own: the
-      product's measured stories, else the method's reference) , `branch` and `depends_on`, and never a status.
-      The body holds four sections: `## Context` (requirements, decisions and screens by
-      identifier), `## Intent`, `## Acceptance criteria` in "given, when, then" form and
-      `## Out of scope`. Keep each story small enough for one developer, and make sure no story
-      depends on a later one. Run `npx agentplugged docs check` and fix what it reports.
+      For the chosen epic, write one file per story in `.agentplugged/stories/`, with the header
+      and the four sections described under Deliverables (`budget_usd` is read in `state.get`
+      `usage.estimates`, never a figure of your own). Keep each story small enough for one
+      developer, and make sure no story depends on a later one. Run `npx agentplugged docs check`
+      and fix what it reports.
   - code: DG
     description: Build and check the dependency graph and the requirement coverage
     prompt: >-
@@ -93,7 +85,8 @@ menu:
     skill: split-into-stories
   - code: OM
     description: Put the order of the merges in front of the creator - which story merges first, what holds the others back, which one conflicts
-    skill: order-merges
+    prompt: >-
+      Read and follow `.agentplugged/skills/chain-stories/references/merge-order.md`.
   - code: RT
     description: Run the retrospective of a finished epic or sprint, record the lessons the creator approves, and promote one to the memory shared by all their products
     skill: run-retrospective

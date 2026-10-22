@@ -6,6 +6,7 @@ import {
   EVENT_TYPE_REGISTRY,
   formatRunNote,
   GetStateInputSchema,
+  NextInputSchema,
   parseRunNote,
   RESULT_ITEM_MAX,
   RESULT_ITEMS_MAX,
@@ -92,6 +93,19 @@ describe("agent activity", () => {
     expect(AgentResultSchema.safeParse({ ...RESULT, summary: "z".repeat(3000) }).success).toBe(
       true,
     );
+  });
+
+  it("spares a refused call: a result without its lists, and a next that names its agent", () => {
+    const bare = SubmitResultInputSchema.safeParse({
+      agent: "iris",
+      status: "complete",
+      summary: "Done.",
+    });
+    expect(bare.success).toBe(true);
+    expect(bare.data).toMatchObject({ assumptions: [], open_questions: [], conflicts: [] });
+    expect(NextInputSchema.safeParse({ agent: "sam" }).success).toBe(true);
+    expect(NextInputSchema.safeParse({ agent: "sam", reading: true }).success).toBe(true);
+    expect(NextInputSchema.safeParse({ other: 1 }).success).toBe(false);
   });
 
   it("refuses an actor or kind given in the input (strict schemas)", () => {

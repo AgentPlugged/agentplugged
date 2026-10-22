@@ -508,7 +508,8 @@ describe("migrate", () => {
     expect(agent.code).toBe(ErrorCode.UNKNOWN_COMMAND);
     const badCheck = errorOf(await run("migrate", { check: "yes" }));
     expect(badCheck.code).toBe(ErrorCode.INVALID_ARGUMENTS);
-    expect(files.writes).toEqual([]);
+    // Nothing of the product is written (the engine's memory of refusals is not the product's).
+    expect(files.writes.filter((path) => !path.endsWith("refusals.json"))).toEqual([]);
     expect(journal.events).toEqual([]);
   });
 

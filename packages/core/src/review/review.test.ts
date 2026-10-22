@@ -806,6 +806,72 @@ describe("independent review", () => {
     expect(await next()).toMatchObject({ step: "review_triage", agent: "sam" });
   });
 
+  it("sends a story back to its developer when a finding of an approved pass is to be fixed", async () => {
+    const { run, toReview, review, next, projection } = await product({ warden: false });
+    await toReview();
+    const passed = resultValue<{ review: string; outcome: string }>(
+      await review("quentin", "qa", [minor, { ...minor, title: "Rounding", line: 41 }]),
+    );
+    expect(passed.outcome).toBe("approved");
+    expect(await next()).toMatchObject({ step: "review_triage", agent: "sam" });
+    // One finding rejected: nothing changes on the branch, the story stays in review.
+    await run("triage_review", {
+      agent: "sam",
+      story: "1-1",
+      items: [
+        { finding: `${passed.review}-2`, decision: "reject", root_cause: "Style", reason: "Kept." },
+      ],
+    });
+    const story = async () =>
+      ((await projection()).stories as Record<string, { status: string }>)["1-1"];
+    expect((await story())?.status).toBe("in_review");
+    // One to fix: the code changes after the review, so the reviewed commit is no longer the one
+    // to merge. The story goes back to its developer, then to a new pass, never to a merge that
+    // the engine would refuse on the moved head.
+    await run("triage_review", {
+      agent: "sam",
+      story: "1-1",
+      items: [{ finding: `${passed.review}-1`, decision: "fix", root_cause: "Naming" }],
+    });
+    expect((await story())?.status).toBe("in_progress");
+    expect(await next()).toMatchObject({ step: "build", agent: "sam", story: "1-1" });
+    await toReview(HEAD2);
+    expect(await next()).toMatchObject({
+      step: "review",
+      agent: "quentin",
+      review: { pass: 2, qa: "pending" },
+    });
+  });
+
+  it("asks the creator after 2 approved passes whose findings were each sent back to be fixed", async () => {
+    const { run, toReview, review, projection, diff } = await product({ warden: false });
+    const loops = async () =>
+      Object.values((await projection()).checkpoints as Record<string, CheckpointState>).filter(
+        (checkpoint) => checkpoint.source === "review_loop",
+      );
+    for (const [pass, commit] of [
+      [1, HEAD],
+      [2, HEAD2],
+    ] as const) {
+      diff.diffs.set(commit, PLAIN_DIFF);
+      await toReview(commit);
+      const passed = resultValue<{ review: string; outcome: string }>(
+        await review("quentin", "qa", [minor]),
+      );
+      expect(passed.outcome).toBe("approved");
+      await run("triage_review", {
+        agent: "sam",
+        story: "1-1",
+        items: [{ finding: `${passed.review}-1`, decision: "fix", root_cause: "Naming" }],
+      });
+      expect(await loops()).toHaveLength(pass === 1 ? 0 : 1);
+    }
+    expect((await loops())[0]).toMatchObject({
+      status: "open",
+      blocks: [{ action: "story.review", story: "1-1" }],
+    });
+  });
+
   it("needs no security review without a security reviewer, and says so", async () => {
     const { toReview, review, diff } = await product({ warden: false });
     diff.diffs.set(HEAD, DEPENDENCY_DIFF);
@@ -817,9 +883,9 @@ describe("independent review", () => {
     });
   });
 
-  it("asks the creator after 5 passes closed without agreement", async () => {
+  it("asks the creator after 2 passes closed without agreement", async () => {
     const { toReview, review, run, projection, call } = await product();
-    for (let pass = 1; pass <= 5; pass += 1) {
+    for (let pass = 1; pass <= 2; pass += 1) {
       await toReview();
       const failed = resultValue<{ review: string; checkpoint?: string }>(
         await review("quentin", "qa", [blocking]),
@@ -829,7 +895,7 @@ describe("independent review", () => {
         story: "1-1",
         items: [{ finding: `${failed.review}-1`, decision: "fix", root_cause: "Untested edge" }],
       });
-      if (pass < 5) expect(failed.checkpoint).toBeUndefined();
+      if (pass < 2) expect(failed.checkpoint).toBeUndefined();
       else expect(failed.checkpoint).toMatch(/^G-/);
     }
     const loop = Object.values(
@@ -1020,10 +1086,10 @@ describe("independent review", () => {
     expect(own.root_causes).toEqual([]);
   });
 
-  it("allows 5 more passes once the creator approves the loop's checkpoint", async () => {
+  it("allows 2 more passes once the creator approves the loop's checkpoint", async () => {
     const { toReview, review, run, call, answer } = await product();
     let loop: string | undefined;
-    for (let pass = 1; pass <= 5; pass += 1) {
+    for (let pass = 1; pass <= 2; pass += 1) {
       await toReview();
       const failed = resultValue<{ review: string; checkpoint?: string }>(
         await review("quentin", "qa", [blocking]),
@@ -1038,6 +1104,55 @@ describe("independent review", () => {
     expect((await answer(loop)).ok).toBe(true);
     const back = await call("update_story", { agent: "sam", story: "1-1", status: "in_review" });
     expect(back.ok).toBe(true);
+  });
+
+  it("lets the creator merge as it is at the loop's checkpoint, the remaining findings accepted", async () => {
+    const { toReview, review, run, call, registry, human, projection, next } = await product();
+    let loop: string | undefined;
+    for (let pass = 1; pass <= 2; pass += 1) {
+      await toReview();
+      const failed = resultValue<{ review: string; checkpoint?: string }>(
+        await review("quentin", "qa", [blocking]),
+      );
+      // The last pass's finding is left unsorted: the creator's choice accepts it as it is.
+      if (pass < 2) {
+        await run("triage_review", {
+          agent: "sam",
+          story: "1-1",
+          items: [{ finding: `${failed.review}-1`, decision: "fix", root_cause: "Untested edge" }],
+        });
+      }
+      loop = failed.checkpoint;
+    }
+    const point = ((await projection()).checkpoints as Record<string, CheckpointState>)[
+      loop as string
+    ];
+    expect(point?.options?.map((option) => option.id)).toEqual(["more_passes", "merge_as_is"]);
+    expect(point?.recommendation).toBe("more_passes");
+    const chosen = await registry.run("review", human, {
+      action: "resolve",
+      checkpoint: loop,
+      decision: "option_chosen",
+      option: "merge_as_is",
+    });
+    expect(chosen.ok).toBe(true);
+    const skips = (await projection()).skips as Record<
+      string,
+      { step: string; checkpoint: string }
+    >;
+    expect(skips["story_review@1-1"]).toMatchObject({ step: "story_review", checkpoint: loop });
+    // The finding left unsorted no longer holds the story: no triage step, no silent partial.
+    expect((await next()).step).not.toBe("review_triage");
+    const partial = await call("submit_result", {
+      agent: "sam",
+      story: "1-1",
+      status: "partial",
+      summary: "Merged as it is on the creator's choice.",
+      assumptions: [],
+      open_questions: [],
+      conflicts: [],
+    });
+    expect(partial.ok).toBe(true);
   });
 
   it("holds an agent's own story checkpoint for good, and checks the branch's head", async () => {
@@ -1951,6 +2066,25 @@ describe("the writes the guard refused are shown in the review", () => {
 });
 
 describe("the review in lenses", () => {
+  it("gives the readers the project's declared test command, and none when it declares none", async () => {
+    const { call, toReview, files } = await product();
+    await toReview();
+    const without = resultValue<{ test_command?: string }>(
+      await call("start_review", { agent: "quentin", story: "1-1", kind: "qa" }),
+    );
+    expect(without).not.toHaveProperty("test_command");
+    files.seed(
+      "package.json",
+      JSON.stringify({ packageManager: "pnpm@9.0.0", scripts: { test: "vitest run" } }),
+    );
+    files.seed("pnpm-lock.yaml", "lockfileVersion: '9.0'\n");
+    const declared = resultValue<{ test_command?: string }>(
+      await call("start_review", { agent: "quentin", story: "1-1", kind: "qa" }),
+    );
+    // The script as the package manager runs it, never a launcher such as `npx vitest`.
+    expect(declared.test_command).toBe("pnpm run test");
+  });
+
   it("gives the lenses the engine chose from the change, and why, and the numbered criteria", async () => {
     const { call, toReview, diff, files } = await product();
     await toReview();
@@ -2003,10 +2137,10 @@ describe("the review in lenses", () => {
       }),
     );
     expect(asked.lenses.map((entry) => entry.lens)).toEqual(["verification_gaps", "relevance"]);
-    // Not small any more, not sensitive: two readers, then the judge in a fresh context.
+    // Not sensitive: one reader, who also checks the criteria.
     expect(
       (more as unknown as { readers: Array<{ reader: string }> }).readers.map((r) => r.reader),
-    ).toEqual(["depth", "form", "judge"]);
+    ).toEqual(["whole"]);
     // A sensitive change: every lens, the security one being the security reviewer's.
     diff.diffs.set(HEAD, DEPENDENCY_DIFF);
     const sensitive = resultValue<{ lenses: Array<{ lens: string }> }>(
@@ -2509,7 +2643,12 @@ describe("the engine proves the duplicates of the added code", () => {
       agent: "sam",
       story: "1-1",
       items: [
-        { finding: `${passed.review}-1`, decision: "fix", root_cause: "Copied the report code" },
+        {
+          finding: `${passed.review}-1`,
+          decision: "reject",
+          root_cause: "Copied the report code",
+          reason: "The copy is the report's own format, kept on purpose.",
+        },
       ],
     });
     const approved = await answer(passed.checkpoint);
@@ -3401,7 +3540,12 @@ describe("the reader of verification gaps runs short passes", () => {
         (reader) => (reader.passes === undefined ? [] : [reader.reader]),
       );
     expect(carrier([code("src/a.ts", 30)])).toEqual(["whole"]);
-    expect(carrier([code("src/a.ts", 200)])).toEqual(["depth"]);
+    expect(carrier([code("src/a.ts", 200)])).toEqual(["whole"]);
+    expect(
+      planReaders("qa", chooseLenses([code("src/a.ts", 200)], []), true, ["removals"]).flatMap(
+        (reader) => (reader.passes === undefined ? [] : [reader.reader]),
+      ),
+    ).toEqual(["depth"]);
     // The security reader carries no pass.
     expect(
       planReaders("security", chooseLenses([code("src/auth/a.ts", 30)], ["paths"]), false, [
@@ -3414,6 +3558,7 @@ describe("the reader of verification gaps runs short passes", () => {
 describe("the merge of a story approved from the web view", () => {
   const WEB_ORDER = "01J9ZQ4V8E3M5N7P9R1S3T5V80";
   const OTHER_ORDER = "01J9ZQ4V8E3M5N7P9R1S3T5V81";
+  const THIRD_ORDER = "01J9ZQ4V8E3M5N7P9R1S3T5V82";
   const WEB_DEVICE = "browser:abcdefghijklmnop";
 
   /** A story reviewed on a green CI, its merge checkpoint open, and the machine's side of the web. */
@@ -3546,6 +3691,75 @@ describe("the merge of a story approved from the web view", () => {
     expect((await checkpoint()).web_failure ?? null).toBeNull();
     expect(await carry(windowOf(second) + 500)).toMatchObject({ decided: 1, failed: 0 });
     expect((await story()).merged).toMatchObject({ source: "web" });
+  });
+
+  it("counts the merges refused for the same cause, and starts again on another cause", async () => {
+    const { answer, carry, forge, checkpoint, next } = await reviewed();
+    forge.mergeRefusal = { reason: "not_mergeable", message: "conflicts" };
+    const first = await answer({ decision: "approved" }, Date.now());
+    if (!first.ok) throw new Error("not written");
+    await carry(windowOf(first) + 500);
+    expect((await checkpoint()).web_failure_repeat).toMatchObject({ count: 1 });
+    // One refusal: the failure is shown beside the point, no change of method yet.
+    const once = await next();
+    expect(once.waiting[0]?.failure).toMatchObject({ reason: "not_mergeable" });
+    expect(once.change_method).toBeUndefined();
+    const second = await answer({ decision: "approved" }, windowOf(first) + 1_000, OTHER_ORDER);
+    if (!second.ok) throw new Error("not written");
+    await carry(windowOf(second) + 500);
+    const twice = await checkpoint();
+    // The answer cleared the failure, the count of identical refusals stayed.
+    expect(twice.web_failure).toMatchObject({ reason: "not_mergeable" });
+    expect(twice.web_failure_repeat).toMatchObject({
+      key: "MERGE_FAILED:not_mergeable",
+      count: 2,
+    });
+    // The same refusal twice: `next` stops the same try, on the creator's merge point too.
+    expect(await next()).toMatchObject({
+      step: "validation",
+      change_method: { cause: "merge", times: 2, what: "MERGE_FAILED:not_mergeable" },
+    });
+    forge.mergeRefusal = { reason: "failed", message: "x" };
+    const third = await answer({ decision: "approved" }, windowOf(second) + 1_000, THIRD_ORDER);
+    if (!third.ok) throw new Error("not written");
+    await carry(windowOf(third) + 500);
+    expect((await checkpoint()).web_failure_repeat).toMatchObject({ count: 1 });
+  });
+
+  it("says the branch moved past the commit reviewed, and asks for a new pass instead of the same merge", async () => {
+    const { answer, carry, forge, workspace, checkpoint, story, next, green, review, diff } =
+      await reviewed();
+    // A commit lands on the story's branch after its review was approved.
+    workspace.head(HEAD2);
+    forge.head = HEAD2;
+    const first = await answer({ decision: "approved" }, Date.now());
+    if (!first.ok) throw new Error("not written");
+    expect(await carry(windowOf(first) + 500)).toMatchObject({ decided: 0, failed: 1 });
+    expect(forge.merges).toEqual([]);
+    expect((await checkpoint()).web_failure).toMatchObject({
+      code: "MERGE_NOT_READY",
+      reason: "head_moved",
+    });
+    // Never the same merge again: a new pass, and the refusal said beside the point.
+    const step = await next();
+    expect(step).toMatchObject({
+      step: "review",
+      agent: "quentin",
+      review: { pass: 2, qa: "pending", reviewers: ["quentin"] },
+    });
+    const pointId = (await checkpoint()).id;
+    expect(step.waiting.find((entry) => entry.id === pointId)).toMatchObject({
+      failure: { code: "MERGE_NOT_READY", reason: "head_moved" },
+    });
+    // The new pass approves the new head: the merge goes through.
+    diff.diffs.set(HEAD2, PLAIN_DIFF);
+    await green(HEAD2);
+    expect(errorOf(await review("quentin", "qa"))).toBeUndefined();
+    expect((await next()).step).toBe("validation");
+    const second = await answer({ decision: "approved" }, windowOf(first) + 1_000, OTHER_ORDER);
+    if (!second.ok) throw new Error("not written");
+    expect(await carry(windowOf(second) + 500)).toMatchObject({ decided: 1, failed: 0 });
+    expect((await story()).merged).toMatchObject({ commit: HEAD2 });
   });
 
   it("records a merge the creator already did at the forge without merging again", async () => {

@@ -46,4 +46,11 @@ export const TOOL_CATALOG: readonly ToolSpec[] = [
     editorCommand: "cursor",
     driveFiles: ["AGENTS.md", ".cursor/"],
   },
+  {
+    id: "kimi",
+    name: "Kimi Code CLI",
+    // `kimi` is also the command of the archived Python Kimi CLI: both are recognised as Kimi.
+    commands: ["kimi"],
+    driveFiles: ["AGENTS.md", ".kimi-code/"],
+  },
 ];

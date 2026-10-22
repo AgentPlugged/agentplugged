@@ -289,7 +289,7 @@ describe("agentplugged mcp", () => {
     expect(refused.isError).toBe(true);
     expect(refused.structuredContent).toEqual({
       code: "CHECKPOINT_OPEN",
-      details: { action: "story.review" },
+      details: { action: "story.review", do: expect.stringContaining("state.next") },
       message: expect.stringContaining(id),
     });
 

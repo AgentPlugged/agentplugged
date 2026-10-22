@@ -1,6 +1,8 @@
+import { utf8 } from "@agentplugged/crypto";
 import { CREATOR_OWNER, ErrorCode, REQUIREMENT_ID_PATTERN } from "@agentplugged/protocol";
 import { reasonDetails } from "../errors.js";
 import { METHOD_DIR } from "../init/layout.js";
+import { isBlobOf } from "../phases/design-review.js";
 import type { CheckpointState } from "../projection/checkpoint-reducers.js";
 import { specScopeProblems } from "../spec/spec-checks.js";
 import { decisionFieldProblems } from "./architecture-decisions.js";
@@ -29,7 +31,8 @@ import { pitchDocumentChecks } from "./pitch-documents.js";
 import { prfaqDocumentChecks } from "./prfaq-documents.js";
 import { researchReportChecks } from "./research-documents.js";
 import { salesDocumentChecks } from "./sales-documents.js";
-import { type ApprovedStory, breakdownProblems } from "./story-rules.js";
+import { type ApprovedStory, breakdownProblems, storiesOf } from "./story-rules.js";
+import { sheetChecks, sheetStates } from "./story-sheet.js";
 import { strategyDocumentChecks } from "./strategy-documents.js";
 import { uxDocumentChecks } from "./ux-documents.js";
 
@@ -440,6 +443,14 @@ export function checkDocumentsDetailed(input: CheckDocumentsInput): DocumentsChe
           ),
           ...staleStoryWarnings(staleKnowledgeStories(pages, validations.merges ?? [])),
         ];
+  // The story sheets: too long is a problem, behind the documents or in the former format a
+  // warning; a merged story is never told again.
+  const sheets = sheetChecks(
+    sheetStates(input.current),
+    new Set((validations?.merges ?? []).map((merged) => merged.story)),
+    approvedStoryIds(documents, input.current, input.approvals ?? []),
+  );
+  problems.push(...sheets.problems);
   if (input.base !== undefined) {
     problems.push(...baseProblems(current, byId(parseAll(input.base)), input.baseRef ?? "HEAD"));
   }
@@ -455,9 +466,28 @@ export function checkDocumentsDetailed(input: CheckDocumentsInput): DocumentsChe
       ...research.warnings,
       ...ux.warnings,
       ...brand.warnings,
+      ...sheets.warnings,
     ],
     compared: breakdown.compared,
   };
+}
+
+/**
+ * The stories a `document` checkpoint approved, by id: the id its blob holds, else the story at
+ * that path in the working copy, else the id its file name starts with.
+ */
+function approvedStoryIds(
+  documents: readonly ParsedDocument[],
+  files: readonly DocumentFile[],
+  approvals: readonly ApprovedStory[],
+): Set<string> {
+  const texts = new Map(files.map((file) => [file.path, file.text]));
+  const ids = new Set<string>();
+  for (const [id, document] of storiesOf(documents)) {
+    const bytes = utf8(texts.get(document.path) ?? "");
+    if (approvals.some((approval) => isBlobOf(approval.blob.toLowerCase(), bytes))) ids.add(id);
+  }
+  return ids;
 }
 
 function sortProblems(problems: DocsProblem[]): DocsProblem[] {

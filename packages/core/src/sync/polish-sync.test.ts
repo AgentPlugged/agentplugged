@@ -219,14 +219,12 @@ describe("the constitution's rules for the conversation", () => {
 
   it("tells Noah to wait while the work is out, and to offer a fresh conversation per phase", () => {
     const flat = withNoah.replace(/\s+/g, " ");
+    // His rules (waiting, one conversation per phase) are in his role; the constitution keeps what
+    // depends on the tool: how a fresh conversation starts.
     expect(flat).toContain(
-      "Declare your status `waiting` with `agent.status` while the work is out",
+      "a fresh conversation is `/clear` in Claude Code, a new session in the other tools",
     );
-    expect(flat).toContain("`working` again as soon as the hand comes back to you");
-    expect(flat).toContain("One conversation per phase");
-    expect(flat).toContain("`/clear` in Claude Code, a new session in the other tools");
-    expect(flat).toContain("Let's pick up");
-    expect(flat).toContain("never in a sub-agent: a sub-agent cannot talk with the creator");
-    expect(withoutNoah).not.toContain("One conversation per phase");
+    expect(flat).toContain("`agent.delegate` before you launch anything");
+    expect(withoutNoah).not.toContain("a fresh conversation is `/clear`");
   });
 });

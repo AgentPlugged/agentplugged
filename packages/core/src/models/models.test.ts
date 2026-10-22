@@ -35,6 +35,7 @@ const CODEX = ".codex/agents/iris.toml";
 const ANTIGRAVITY = ".agents/agents/iris.md";
 const GEMINI = ".gemini/agents/iris.md";
 const CURSOR = ".cursor/agents/iris.md";
+const KIMI = ".kimi-code/agents/iris.md";
 
 async function installed(): Promise<MemoryFiles> {
   const files = new MemoryFiles();
@@ -77,6 +78,8 @@ function codexModel(files: MemoryFiles): string[] {
 const DESCRIPTION = "description: Product analyst who frames a new product.";
 /** The tools of the engine Claude Code's sub-agent for Iris is not given. */
 const DENIED = "disallowedTools: mcp__agentplugged__review, mcp__agentplugged__measure\n";
+const KIMI_DENIED =
+  "disallowedTools:\n  - mcp__agentplugged__review\n  - mcp__agentplugged__measure\n";
 
 describe("the shipped model table", () => {
   it("is valid and holds the values verified on 2026-10-02", () => {
@@ -191,7 +194,11 @@ describe("sync: model of each agent", () => {
     // Nothing is written for the retired Gemini CLI.
     expect(files.files.has(GEMINI)).toBe(false);
 
-    expect(result.fallbacks.filter((f) => f.capability === "model")).toEqual([]);
+    // Kimi's agent files take no model: its cell is always a fallback, whatever the table says.
+    expect(frontmatter(files, KIMI)).toBe(`name: iris\n${DESCRIPTION}\n${KIMI_DENIED}`);
+    expect(result.fallbacks.filter((f) => f.capability === "model").map((f) => f.client)).toEqual([
+      "kimi",
+    ]);
     expect(result.preferredTools).toEqual([]);
   });
 
@@ -260,6 +267,7 @@ describe("sync: model of each agent", () => {
     );
     expect(result.fallbacks.filter((f) => f.capability === "model").map((f) => f.client)).toEqual([
       "claude-code",
+      "kimi",
     ]);
     const constitution = files.reference();
     expect(constitution).toContain(`- Claude Code, model: ${MODEL_INHERIT_REASON}`);
@@ -275,7 +283,9 @@ describe("sync: model of each agent", () => {
       .join("");
     files.seed(CONFIG, `${text(files, CONFIG)}models:\n  gemini-cli:\n${tiers}`);
     const result = await sync(files);
-    expect(result.fallbacks.some((f) => f.capability === "model")).toBe(false);
+    expect(result.fallbacks.filter((f) => f.capability === "model").map((f) => f.client)).toEqual([
+      "kimi",
+    ]);
     expect(result.warnings).toContainEqual({ kind: "gemini_legacy", path: ".gemini" });
     expect(files.files.has(GEMINI)).toBe(false);
     expect(files.reference()).not.toContain("Gemini CLI, model: ");
@@ -558,3 +568,38 @@ function parseIris() {
     menu: [],
   };
 }
+
+describe("Kimi in the model table", () => {
+  it("keeps the model of the session for every tier, in the shipped table and in an older copy", () => {
+    const inherit = {
+      reasoning: { model: "inherit" },
+      code: { model: "inherit" },
+      fast: { model: "inherit" },
+      multimodal: { model: "inherit" },
+    };
+    const shipped = parseModelTable("models.yaml", SHIPPED_MODELS);
+    if (shipped instanceof Error) throw shipped;
+    expect(shipped.kimi).toEqual(inherit);
+    // A copy taken before Kimi was supported has no `kimi` entry: it still reads, as `inherit`.
+    const before = SHIPPED_MODELS.slice(0, SHIPPED_MODELS.indexOf("\n# Kimi"));
+    const older = parseModelTable("models.yaml", before);
+    if (older instanceof Error) throw older;
+    expect(older.kimi).toEqual(inherit);
+  });
+
+  it("syncs a product whose own table copy predates Kimi", async () => {
+    const files = await installed();
+    files.seed(MODELS_PATH, SHIPPED_MODELS.slice(0, SHIPPED_MODELS.indexOf("\n# Kimi")));
+    const result = await sync(files);
+    expect(result.tools).toContain("kimi");
+    expect(text(files, KIMI)).not.toMatch(/^model:/m);
+  });
+
+  it("refuses a model asked for Kimi in method.yaml: its agent files take none", async () => {
+    const files = await installed();
+    files.seed(CONFIG, `${text(files, CONFIG)}models:\n  kimi:\n    code:\n      model: kimi-k2\n`);
+    const result = await syncCommand.run(context(files), {});
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("METHOD_CONFIG_INVALID");
+  });
+});

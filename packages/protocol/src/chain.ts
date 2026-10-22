@@ -79,6 +79,63 @@ export const ChainControlParamsSchema = z.strictObject({
 });
 export type ChainControlParams = z.infer<typeof ChainControlParamsSchema>;
 
+/** The pages a message can be written from. */
+export const NOAH_VIEW_PAGES = [
+  "portfolio",
+  "portfolio_costs",
+  "overview",
+  "gates",
+  "agents",
+  "salle",
+  "sprint",
+  "code",
+  "docs",
+  "costs",
+  "profile",
+  "autonomy",
+  "machines",
+  "settings",
+  "briefing",
+  "other",
+] as const;
+
+/** What a page can single out: a story, a document, a requirement, a retrospective, a point, an agent, a pull request. */
+export const NOAH_VIEW_ITEM_KINDS = [
+  "story",
+  "document",
+  "requirement",
+  "retrospective",
+  "point",
+  "agent",
+  "pull_request",
+] as const;
+
+/** The longest identifier and title of what a page singles out, in characters. */
+export const NOAH_VIEW_ID_MAX = 160;
+export const NOAH_VIEW_TITLE_MAX = 120;
+
+/**
+ * What the creator has in front of them when they write to Noah: the kind of page and, when the
+ * page singles one out, what it is (its identifier and title). Never the content of the page:
+ * Noah reads what he needs himself through the engine. The product is the one the order names.
+ */
+export const NoahViewSchema = z.strictObject({
+  page: z.enum(NOAH_VIEW_PAGES),
+  /** The part of the page, when it has several (the tab of the documents). */
+  section: z
+    .string()
+    .regex(/^[a-z][a-z_-]{0,39}$/u)
+    .optional(),
+  item: z
+    .strictObject({
+      kind: z.enum(NOAH_VIEW_ITEM_KINDS),
+      id: z.string().min(1).max(NOAH_VIEW_ID_MAX),
+      title: z.string().min(1).max(NOAH_VIEW_TITLE_MAX).optional(),
+    })
+    .optional(),
+});
+export type NoahView = z.infer<typeof NoahViewSchema>;
+
 /**
  * `noah.say` parameters: one message of the creator to Noah, typed or dictated. The text is passed
  * to Noah as it is. `input` says how Noah's answer will reach the creator, not how the message was
@@ -94,6 +151,8 @@ export const NoahSayParamsSchema = z.strictObject({
     .max(CHAIN_INSTRUCTION_MAX_CHARS)
     .refine((value) => value.trim().length > 0, { message: "the message is empty" }),
   input: z.enum(["text", "voice"]).optional(),
+  /** The page the creator was looking at, so that "summarize this" needs no name; absent if they took it off. */
+  view: NoahViewSchema.optional(),
 });
 export type NoahSayParams = z.infer<typeof NoahSayParamsSchema>;
 

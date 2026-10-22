@@ -54,8 +54,18 @@ const skill = () => skills.get("ideation") as Definition;
 const flat = (text: string) => text.replace(/\s+/g, " ");
 const read = (path: string) => readFileSync(join(methodDir, path), "utf8").replace(/\r\n/g, "\n");
 const annex = (path: string) => read(`skills/ideation/${path}`);
-const library = (category: string) => annex(`references/techniques-${category}.md`);
-const techniquesOf = (text: string) => text.split("\n").filter((line) => line.startsWith("- "));
+/** The line of a category in the one file of techniques, and the techniques it names. */
+const library = (category: string) =>
+  annex("references/techniques.md")
+    .split("\n")
+    .filter((line) => line.startsWith(`- \`${category}\``))
+    .join("\n");
+const techniquesOf = (text: string) =>
+  text
+    .replace(/^- `[a-z]+`[^:]*: /, "")
+    .split(";")
+    .map((name) => name.trim().replace(/\.$/, ""))
+    .filter(Boolean);
 
 /** The template filled as the skill asks: placeholders replaced, guidance comments removed. */
 const filled = (replacements: Record<string, string> = {}) => {
@@ -72,12 +82,10 @@ describe("the ideation skill", () => {
     expect([...skill().annexes].sort()).toEqual(
       [
         "assets/session-template.md",
-        "references/choose.md",
         "references/close.md",
         "references/converge.md",
-        "references/gestures.md",
         "references/stances.md",
-        ...CATEGORIES.map((category) => `references/techniques-${category}.md`),
+        "references/techniques.md",
       ].sort(),
     );
     expect((skill().frontmatter as SkillFrontmatter).metadata).toMatchObject({
@@ -90,35 +98,30 @@ describe("the ideation skill", () => {
 
   it("sends the detail to files read when needed, each short", () => {
     const body = skill().body;
-    for (const file of ["stances", "choose", "converge", "close"]) {
+    for (const file of ["stances", "techniques", "converge", "close"]) {
       expect(body, file).toContain(`references/${file}.md`);
     }
-    expect(body).toContain("references/techniques-<category>.md");
     for (const file of readdirSync(join(methodDir, "skills/ideation/references"))) {
       expect(annex(`references/${file}`).length, file).toBeLessThanOrEqual(1_800);
     }
   });
 
-  it("holds the library: about fifty techniques in eight categories, one line each, read by category", () => {
+  it("holds the library: about fifty techniques in eight categories, a name each, read by category", () => {
     let total = 0;
     for (const category of CATEGORIES) {
-      const lines = techniquesOf(library(category));
-      expect(lines.length, category).toBeGreaterThanOrEqual(5);
-      for (const line of lines) {
-        // A name, its principle, and when to use it: one line each.
-        expect(line, line).toMatch(/^- [^:]{3,40}: .{20,}[.?] Use .{8,}\.$/);
-        expect(line.length, line).toBeLessThanOrEqual(260);
-      }
-      total += lines.length;
+      const names = techniquesOf(library(category));
+      expect(names.length, category).toBeGreaterThanOrEqual(5);
+      for (const name of names) expect(name.length, name).toBeLessThanOrEqual(60);
+      total += names.length;
     }
     expect(total).toBeGreaterThanOrEqual(50);
     expect(total).toBeLessThanOrEqual(70);
-    // Only the file of a category is read; no file carries the whole library.
+    // Only the lines of a category are read; the skill says so.
     const text = flat(skill().body);
-    expect(text).toContain("read only the file of the category you draw from");
+    expect(text).toContain("read only the lines of the category you draw from");
     expect(text).toContain("never all of them");
     for (const category of CATEGORIES) {
-      expect(flat(annex("references/choose.md")), category).toContain(`\`${category}\``);
+      expect(flat(annex("references/techniques.md")), category).toContain(`\`${category}\``);
     }
   });
 
@@ -153,7 +156,7 @@ describe("the ideation skill", () => {
 
 describe("the choice of techniques, the stance and the session", () => {
   it("offers the four ways to choose: named, recommended with a reason, drawn, chained, and invented", () => {
-    const choose = flat(annex("references/choose.md"));
+    const choose = flat(annex("references/techniques.md"));
     for (const part of [
       "They name it",
       "Recommended",
@@ -178,7 +181,7 @@ describe("the choice of techniques, the stance and the session", () => {
       "You bring no idea of your own",
       "offer a single seed",
       "`[creator]` or `[lou]`",
-      "if you have given more than they have lately",
+      "If you have given more than they have lately",
       "ten ideas, each marked `[lou]`",
       "write their idea word for word",
       "the engine allows one per technique",
@@ -199,7 +202,7 @@ describe("the choice of techniques, the stance and the session", () => {
       "**Resume**",
       "read it whole, once",
       "past fifty ideas",
-      "switch after five to ten exchanges",
+      "switch technique after five to ten exchanges",
       "one question per message, no list of choices while ideas flow",
     ]) {
       expect(text.toLowerCase(), part).toContain(part.toLowerCase());
@@ -274,7 +277,7 @@ describe("the convergence and the gestures", () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(close).toContain("three at least");
     expect(close).toContain("the strange, the stray and the forgotten ones");
-    const gestures = flat(annex("references/gestures.md"));
+    const gestures = close;
     for (const part of [
       "**hypothesis**",
       "**story**",

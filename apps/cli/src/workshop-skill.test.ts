@@ -53,7 +53,7 @@ describe("the skill and its place in the team", () => {
     );
     expect(definition.text.length).toBeLessThanOrEqual(3_600);
     const files = readdirSync(join(methodDir, "skills/workshop/references")).sort();
-    expect(files).toEqual(["analyze.md", "create.md", "customize.md", "evaluate.md", "rules.md"]);
+    expect(files).toEqual(["create.md", "customize.md", "evaluate.md", "rules.md"]);
     for (const file of files) expect(definition.text, file).toContain(`references/${file}`);
     for (const file of files) {
       expect(read(`skills/workshop/references/${file}`).length, file).toBeLessThanOrEqual(3_600);
@@ -259,7 +259,7 @@ describe("an addition made on the real method", () => {
     });
     expect(checked.ok).toBe(true);
     // What a session reads to create a skill: the skill, the way to create, the rules of the
-    // engine, and the engine's answer to the check (analyze.md is read for an analysis only).
+    // engine, and the engine's answer to the check (analysis is in create.md too).
     const read = (file: string) =>
       (definitions.find((d) => d.name === "workshop") as Definition) &&
       0 + readFileSync(join(methodDir, file), "utf8").length;

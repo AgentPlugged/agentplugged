@@ -190,6 +190,7 @@ describe("the creator's addition is created whole and rendered for every tool", 
       "claude-code:.claude/skills/<id>/SKILL.md",
       "codex:.codex/agents/<id>.toml",
       "cursor:.cursor/agents/<id>.md",
+      "kimi:.kimi-code/agents/<id>.md",
       "shared:.agents/skills/<id>/SKILL.md",
     ]);
     // The skill and its file of detail reach Claude Code and the tools that read shared skills.

@@ -6,6 +6,7 @@ import { METHOD_CONFIG_PATH, METHOD_DIR } from "../init/layout.js";
 import { loadMethodConfig } from "../init/method-config.js";
 import { documentProblemIsWarning } from "../journey/journey-rules.js";
 import { AGENT_DOMAINS } from "../profile/catalog.js";
+import type { BricksFound, ProfileShown } from "../project-profile/project-command.js";
 import type { CheckpointState } from "../projection/checkpoint-reducers.js";
 import { computeProjection } from "../projection/compute-projection.js";
 import {
@@ -24,12 +25,25 @@ import { approvedStoryDocuments, frozenIntents } from "./frozen-intents.js";
 import { type MergedStoryRef, mergedStoriesOf } from "./knowledge-freshness.js";
 import { parseDocumentFile } from "./parse-document.js";
 import { DECK_PAGE_PATH, DECK_PATH, deckStatus, pitchDocumentChecks } from "./pitch-documents.js";
+import type { SectionsRead } from "./read-command.js";
 import { findResearch, type ResearchFound, subjectWords } from "./research-find.js";
 import { parsePlanWords, type ResearchPlanned } from "./research-plan.js";
+import type { SheetsWritten } from "./sheet-command.js";
 import { type ApprovedStory, storiesOf, warning } from "./story-rules.js";
 import { UX_MOCKUP_PATH } from "./ux-documents.js";
 
-export const DOCS_ACTIONS = ["check", "path", "grow", "research", "slides", "costs"] as const;
+export const DOCS_ACTIONS = [
+  "check",
+  "path",
+  "grow",
+  "research",
+  "slides",
+  "costs",
+  "sheet",
+  "read",
+  "profile",
+  "bricks",
+] as const;
 export type DocsAction = (typeof DOCS_ACTIONS)[number];
 
 /** Base compared with when `--base` is not given. */
@@ -86,7 +100,7 @@ function reasonOf(error: unknown): string {
 }
 
 /** The checkpoints of the projection computed again from the journal; none without Git. */
-async function journalCheckpoints(context: CommandContext): Promise<{
+export async function journalCheckpoints(context: CommandContext): Promise<{
   checkpoints: CheckpointState[];
   merges: MergedStoryRef[];
   state: Readonly<Record<string, unknown>>;
@@ -402,6 +416,10 @@ export const docsCommand = defineCommand<
   | ResearchPlanned
   | DeckDrawn
   | CostsFound
+  | SheetsWritten
+  | SectionsRead
+  | ProfileShown
+  | BricksFound
 >({
   name: "docs",
   async run(context, input) {
@@ -420,6 +438,34 @@ export const docsCommand = defineCommand<
     // What the product costs to build, as an estimate, and when it pays for itself.
     if (action === "costs") {
       return findCosts(context, Array.isArray(input.words) ? input.words.map(String) : []);
+    }
+    // The passages asked for, never a whole document.
+    if (action === "read") {
+      const { readSections } = await import("./read-command.js");
+      const read = await readSections(
+        context,
+        Array.isArray(input.words) ? input.words.map(String) : [],
+      );
+      return read instanceof AgentPluggedError ? fail(read) : ok(read);
+    }
+    // The project profile, and the registry of bricks (does it already exist?).
+    if (action === "profile" || action === "bricks") {
+      const words = Array.isArray(input.words) ? input.words.map(String) : [];
+      const { findInRegistry, showProfile } = await import("../project-profile/project-command.js");
+      const answer =
+        action === "profile"
+          ? await showProfile(context, words)
+          : await findInRegistry(context, words);
+      return answer instanceof AgentPluggedError ? fail(answer) : ok(answer);
+    }
+    // The story sheets written again from the documents.
+    if (action === "sheet") {
+      const { writeSheets } = await import("./sheet-command.js");
+      const written = await writeSheets(
+        context,
+        Array.isArray(input.words) ? input.words.map(String) : [],
+      );
+      return written instanceof AgentPluggedError ? fail(written) : ok(written);
     }
     if (action !== "check") {
       const typed = ["docs", ...(typeof action === "string" ? [action] : [])].join(" ");

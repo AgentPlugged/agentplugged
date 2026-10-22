@@ -4,8 +4,10 @@ import {
   FilesRefSchema,
   FilesRequestSchema,
   FilesResponseSchema,
+  LIVE_CREW_MAX,
   LIVE_LINE_MAX_CHARS,
   LIVE_LINES_PER_ANSWER,
+  LiveCrewMemberSchema,
   LiveLineSchema,
 } from "./repo-files.js";
 
@@ -182,6 +184,127 @@ describe("watching what the agents do", () => {
     }));
     expect(
       FilesResponseSchema.safeParse({ ...answer, data: { ...answer.data, lines: many } }).success,
+    ).toBe(false);
+  });
+
+  it("tells what Noah is writing and that he answers, bounded like a line", () => {
+    const answer = {
+      v: 1,
+      id: ID,
+      product: PRODUCT,
+      ok: true,
+      at: "live",
+      read_at: 1,
+      data: {
+        op: "live",
+        epoch: "e",
+        reset: false,
+        dropped: 0,
+        next: 1,
+        more: false,
+        chain: "none",
+        working: null,
+        lines: [],
+        draft: { agent: "noah", text: "Le sprint avance " },
+        answering: true,
+      },
+    };
+    expect(FilesResponseSchema.safeParse(answer).success).toBe(true);
+    for (const data of [
+      { ...answer.data, draft: { agent: "noah", text: "x".repeat(2001) } },
+      { ...answer.data, draft: { agent: "noah", text: "ok", extra: 1 } },
+      { ...answer.data, answering: false },
+    ]) {
+      expect(FilesResponseSchema.safeParse({ ...answer, data }).success).toBe(false);
+    }
+  });
+
+  it("tells the sub-agents Noah launched, with a measure only when the tool gave one", () => {
+    const member = {
+      id: "task-1",
+      agent: "zoe",
+      task: "Writes the note",
+      state: "working",
+      durationMs: 4200,
+    };
+    for (const ok of [
+      member,
+      { ...member, tokens: 18420, costUsd: 0.0123 },
+      { ...member, tokenless: true },
+      { id: "task-2", state: "done", durationMs: 0 },
+    ]) {
+      expect(LiveCrewMemberSchema.safeParse(ok).success, JSON.stringify(ok)).toBe(true);
+    }
+    for (const bad of [
+      { ...member, tokens: -1 },
+      { ...member, tokens: 1.5 },
+      { ...member, tokenless: false },
+      { ...member, state: "paused" },
+      { ...member, prompt: "secret brief" },
+      { ...member, task: "x".repeat(201) },
+      { ...member, costUsd: Number.NaN },
+    ]) {
+      expect(LiveCrewMemberSchema.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
+    const answer = {
+      v: 1,
+      id: ID,
+      product: PRODUCT,
+      ok: true,
+      at: "live",
+      read_at: 1,
+      data: {
+        op: "live",
+        epoch: "e",
+        reset: false,
+        dropped: 0,
+        next: 0,
+        more: false,
+        chain: "none",
+        working: null,
+        lines: [],
+        crew: [member],
+      },
+    };
+    expect(FilesResponseSchema.safeParse(answer).success).toBe(true);
+    const many = Array.from({ length: LIVE_CREW_MAX + 1 }, (_, n) => ({ ...member, id: `t${n}` }));
+    expect(
+      FilesResponseSchema.safeParse({ ...answer, data: { ...answer.data, crew: many } }).success,
+    ).toBe(false);
+  });
+
+  it("tells where to reopen the conversation of Noah, in a bounded and strict shape", () => {
+    const handover = {
+      tool: "claude-code",
+      session: "0b9f5c1e-7a2d-4f1c-9a53-1d2c3e4f5a6b",
+      cwd: "/p/kalo",
+      command: "claude --resume 0b9f5c1e-7a2d-4f1c-9a53-1d2c3e4f5a6b",
+    };
+    const answer = (extra: unknown) => ({
+      v: 1,
+      id: ID,
+      product: PRODUCT,
+      ok: true,
+      at: "live",
+      read_at: 1,
+      data: {
+        op: "live",
+        epoch: "e",
+        reset: false,
+        dropped: 0,
+        next: 0,
+        more: false,
+        chain: "none",
+        working: null,
+        lines: [],
+        handover: extra,
+      },
+    });
+    expect(FilesResponseSchema.safeParse(answer(handover)).success).toBe(true);
+    expect(FilesResponseSchema.safeParse(answer({ ...handover, extra: 1 })).success).toBe(false);
+    expect(FilesResponseSchema.safeParse(answer({ ...handover, command: "" })).success).toBe(false);
+    expect(
+      FilesResponseSchema.safeParse(answer({ ...handover, command: "x".repeat(301) })).success,
     ).toBe(false);
   });
 });

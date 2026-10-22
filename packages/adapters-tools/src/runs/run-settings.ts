@@ -22,11 +22,15 @@ export interface RunSettingsFile {
 }
 
 /** Writes the settings of one launch and returns where, and how to remove it. */
-export function writeRunSettings(text: string, base?: string): RunSettingsFile {
+export function writeRunSettings(
+  text: string,
+  base?: string,
+  extension: "json" | "md" = "json",
+): RunSettingsFile {
   const dir = runSettingsDir(base);
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const name = Buffer.from(globalThis.crypto.getRandomValues(new Uint8Array(12))).toString("hex");
-  const path = join(dir, `${name}.json`);
+  const path = join(dir, `${name}.${extension}`);
   // `wx`: never over a file that exists; `0o600`: the user alone.
   writeFileSync(path, text, { flag: "wx", mode: 0o600 });
   return {
@@ -46,7 +50,7 @@ export function sweepRunSettings(base?: string): void {
   const dir = runSettingsDir(base);
   try {
     for (const name of readdirSync(dir)) {
-      if (/^[0-9a-f]{24}\.json$/.test(name)) rmSync(join(dir, name), { force: true });
+      if (/^[0-9a-f]{24}\.(?:json|md)$/.test(name)) rmSync(join(dir, name), { force: true });
     }
   } catch {
     // No folder, nothing to remove.

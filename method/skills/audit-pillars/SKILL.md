@@ -1,25 +1,27 @@
 ---
 name: audit-pillars
-description: Audit one pillar of the product, or all, read-only, and submit a fixed report; findings become gaps on requirements or stories to propose. Run by Quentin and Chloé.
+description: Audit one pillar of the product, or all, read-only, in one fixed report; findings become gaps or stories to propose. Run by Quentin and Chloé.
 metadata:
   agent: quentin chloe
   phase: build
 ---
 # Audit the pillars of the product
 
-On request, audit one pillar or all, read-only (never change the code or the documents), and
-submit one report the engine validates, under your own id (`agent: <your id>`). Pillars, and whose
-they are: `references/method.md`.
+## Overview
+
+- **Step:** build, on request, as Quentin or Chloé (`agent: <your id>`); read-only, never change the
+  code or the documents. One pillar or all; whose they are: `references/pillars.md`.
+- **Produces:** one report submitted with `review.audit`, which the engine validates.
+- **Reads:** `references/pillars.md` (the method, the report, then only the sections of the
+  pillars you audit), at most 40 project files per pillar.
+- **Validation point:** none; a `gap` is settled by the creator at the release point.
 
 ## Steps
 
 1. `agent.status` (`working`), then `measure.requirements`: the register and its gaps.
-2. For each pillar, read only its file `references/<pillar>.md` in
-   `.agentplugged/skills/audit-pillars/` (never the other pillars' files) and `references/method.md`
-   once; then only the files they point to, 40 at most.
-3. `review.audit` (`references/format.md`); fix what the engine says is missing.
-4. Tell the creator the verdict and the count per pillar, the gaps, the stories proposed.
-   `agent.status` (`idle`), hand back to Noah.
+2. Per pillar, read only its section of `references/pillars.md` and the files it points to.
+3. `review.audit`; fix what the engine says is missing. Tell the creator the verdict and the count
+   per pillar, the gaps, the stories proposed. `agent.status` (`idle`), hand back to Noah.
 
 ## Never
 

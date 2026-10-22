@@ -29,6 +29,8 @@ import {
   KbListDataSchema,
   KbListRequestFields,
 } from "./kb-read.js";
+import { LiveContextSchema } from "./noah-context.js";
+import { ThreadDataSchema, ThreadRequestFields } from "./noah-thread.js";
 import { LiveNoticesSchema } from "./notice.js";
 import { FoldersDataSchema, FoldersRequestFields } from "./product-browse.js";
 import { readTolerant } from "./tolerant-reader.js";
@@ -148,6 +150,8 @@ export const FilesRequestSchema = z.discriminatedUnion("op", [
   z.strictObject({ ...RequestBase, ...TranscribeRequestFields }),
   /** The places of the documents and of the knowledge base that hold the words typed. */
   z.strictObject({ ...RequestBase, ...FindRequestFields }),
+  /** The creator's single conversation with Noah, as the tool kept it. */
+  z.strictObject({ ...RequestBase, ...ThreadRequestFields }),
   /** The folders inside a place the machine allows products in, to choose where one is made. */
   z.strictObject({ ...RequestBase, ...FoldersRequestFields }),
 ]);
@@ -260,6 +264,13 @@ export const LiveLineSchema = z.strictObject({
   protected: z.literal(true).optional(),
   /** The line comes from a session the creator opened in the tool's own terminal. */
   terminal: z.literal(true).optional(),
+  /** For a refused command (`denied`): the command prefix the creator may allow in one gesture. */
+  allow: z
+    .string()
+    .regex(/^[A-Za-z0-9][A-Za-z0-9._/ -]{0,98}[A-Za-z0-9]$|^[A-Za-z0-9]$/u)
+    .optional(),
+  /** For a refused command (`denied`) with nothing to allow: why, as a code a view tells in words. */
+  why: z.enum(["runs_anything", "git_folder", "subcommand"]).optional(),
   /** For a change: where its content and its difference can be read. */
   link: z
     .strictObject({
@@ -269,6 +280,43 @@ export const LiveLineSchema = z.strictObject({
     .optional(),
 });
 export type LiveLine = z.infer<typeof LiveLineSchema>;
+
+/** The most sub-agents one answer carries (the bridge keeps the same number). */
+export const LIVE_CREW_MAX = 12;
+/** The longest task a sub-agent shows. */
+export const LIVE_CREW_TASK_MAX_CHARS = 200;
+
+/**
+ * One sub-agent Noah launched, as the tool reports it while it works. `durationMs` is the time
+ * since it started, on the bridge's clock, at the moment of the answer; a view that shows it keeps
+ * counting by itself until the next answer. `tokens` is what the tool itself measured so far
+ * (absent until its first measure); `tokenless` says the tool gives no token count for its
+ * sub-agents, so a view says so instead of a zero. `costUsd` is worked out by the bridge from the
+ * tool's own transcript at the public prices, and absent when the model has no known price.
+ * `task` is the sub-agent's own words: untrusted plain text.
+ */
+export const LiveCrewMemberSchema = z.strictObject({
+  id: z.string().min(1).max(128),
+  agent: z.string().min(1).max(64).optional(),
+  /** The agent of the team that launched this sub-agent, when a sub-agent did (a reader of an agent). */
+  parent: z.string().min(1).max(64).optional(),
+  /** The tool launched a generic sub-agent, not an agent of the team: it has no name to show. */
+  unnamed: z.literal(true).optional(),
+  /** It worked when the bridge restarted and its trace stopped: it is told as interrupted. */
+  lost: z.literal(true).optional(),
+  /**
+   * It ended while this many sub-agents it launched still work: its report came before theirs, so
+   * it holds none of their results.
+   */
+  left: z.number().int().min(1).max(LIVE_CREW_MAX).optional(),
+  task: z.string().max(LIVE_CREW_TASK_MAX_CHARS).optional(),
+  state: z.enum(["working", "done", "failed", "stopped"]),
+  durationMs: z.number().int().min(0),
+  tokens: z.number().int().min(0).optional(),
+  tokenless: z.literal(true).optional(),
+  costUsd: z.number().finite().min(0).optional(),
+});
+export type LiveCrewMember = z.infer<typeof LiveCrewMemberSchema>;
 
 /**
  * Whether the sessions the creator opens in a tool's own terminal can be followed: `listening`
@@ -298,6 +346,7 @@ export const FilesDataSchema = z.discriminatedUnion("op", [
   BriefingDataSchema,
   TranscribeDataSchema,
   FoldersDataSchema,
+  ThreadDataSchema,
   z.strictObject({
     op: z.literal("tree"),
     path: z.string().max(FILES_PATH_MAX),
@@ -355,6 +404,8 @@ export const FilesDataSchema = z.discriminatedUnion("op", [
     team: z.enum(["paused", "stopped"]).optional(),
     /** Present while notices wait for Noah (a validation he has not read yet) and why. */
     notices: LiveNoticesSchema.optional(),
+    /** How heavy Noah's conversation is (tokens the tool reported) and whether a clean one is worth proposing. */
+    context: LiveContextSchema.optional(),
     /** The agent that works now, or null. */
     working: z
       .strictObject({
@@ -364,6 +415,20 @@ export const FilesDataSchema = z.discriminatedUnion("op", [
       })
       .nullable(),
     lines: z.array(LiveLineSchema).max(LIVE_LINES_PER_ANSWER),
+    /**
+     * What Noah is writing now: the words of his unfinished message, secrets masked, cut to the
+     * length of a line. Replaced at each answer; gone once the whole message is a line.
+     */
+    draft: z
+      .strictObject({
+        agent: z.string().min(1).max(64),
+        text: z.string().max(LIVE_LINE_MAX_CHARS),
+      })
+      .optional(),
+    /** True while Noah answers a message: a view that looks closely sees his words as they come. */
+    answering: z.literal(true).optional(),
+    /** The sub-agents Noah launched that work now, and the ones that just ended. */
+    crew: z.array(LiveCrewMemberSchema).max(LIVE_CREW_MAX).optional(),
     /** For each tool, whether its sessions opened in the creator's own terminal can be followed. */
     terminal: z
       .array(
@@ -373,6 +438,18 @@ export const FilesDataSchema = z.discriminatedUnion("op", [
         }),
       )
       .max(8)
+      .optional(),
+    /**
+     * Where to go and what to type in a terminal to reopen the conversation of Noah, whose session
+     * the machine keeps: present once the machine knows that session and the tool can reopen it.
+     */
+    handover: z
+      .strictObject({
+        tool: z.string().min(1).max(32),
+        session: z.string().min(1).max(200),
+        cwd: z.string().min(1).max(FILES_PATH_MAX),
+        command: z.string().min(1).max(300),
+      })
       .optional(),
   }),
 ]);

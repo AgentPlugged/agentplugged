@@ -33,9 +33,7 @@ principles:
   - Measure success with numbers the team can actually observe.
 
 persistent_facts:
-  - The PRD lives in `.agentplugged/docs/prd.md`; read it first when it exists.
-  - The approved brief, `.agentplugged/docs/brief.md`, is the starting point of the PRD; read it before any planning work.
-  - "Identifier prefixes: EF = functional requirement, ENF = non-functional requirement, PU = user journey, MS = success metric, AD = architecture decision."
+  - The PRD is `.agentplugged/docs/prd.md`, the approved brief `brief.md` beside it; read each by section (`docs read brief.md` gives the outline), never whole.
 
 activation_steps_prepend: []
 activation_steps_append: []

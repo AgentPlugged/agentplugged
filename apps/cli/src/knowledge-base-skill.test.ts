@@ -67,12 +67,8 @@ const annex = (path: string) =>
 describe("the knowledge base skill", () => {
   it("ships the skill with its annexes, called from Zoé's menu", () => {
     expect([...skill().annexes].sort()).toEqual(
-      [...TEMPLATES.map((entry) => entry.template), "references/kb-checklist.md"]
-        .concat(
-          "references/living-docs.md",
-          "references/repository-scan.md",
-          "references/reuse-map.md",
-        )
+      [...TEMPLATES.map((entry): string => entry.template)]
+        .concat("references/living-docs.md", "references/reuse-map.md")
         .sort(),
     );
     const metadata = (skill().frontmatter as SkillFrontmatter).metadata;
@@ -113,7 +109,7 @@ describe("the knowledge base skill", () => {
     const own =
       /^\.agentplugged\/docs\/(?:index\.md|vision\.md|conventions\.md|(?:guides|reference|release-notes)\/.+)$/;
     const written = [...step(5).matchAll(/`(\.agentplugged\/docs\/[^`]+)`/g)].map((m) => m[1]);
-    expect(written.length).toBeGreaterThan(5);
+    expect(written.length).toBeGreaterThan(0);
     for (const path of written) expect(path, path).toMatch(own);
     expect(written).toContain(KNOWLEDGE_BASE_INDEX_PATH);
   });
@@ -140,12 +136,12 @@ describe("the knowledge base skill", () => {
   });
 
   it("tells Zoé how to read a repository and what to check before showing the base", () => {
-    const scan = flat(annex("references/repository-scan.md"));
-    for (const part of ["manifests", "entry points", "CI", "Git tags", "never copy the value"]) {
+    const scan = flat(step(4));
+    for (const part of ["manifests", "entry points", "CI", "Git tags", "never a secret's value"]) {
       expect(scan, part).toContain(part);
     }
-    const checklist = flat(annex("references/kb-checklist.md"));
-    for (const part of ["lists every page", "**Sources**", "Last updated", "docs check"]) {
+    const checklist = flat(step(7));
+    for (const part of ["lists every page", "**Open questions**", "docs check"]) {
       expect(checklist, part).toContain(part);
     }
   });

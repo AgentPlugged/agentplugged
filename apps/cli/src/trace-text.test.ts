@@ -212,7 +212,7 @@ describe("trace: method", () => {
   it("tells every agent the test convention and the deviations, and denies trace resolve", () => {
     const constitution = flat(renderConstitutionReference());
     for (const expected of [
-      "15. Every requirement is traced",
+      "6. Every requirement is traced",
       "`EF_18` where a name takes no dash",
       "`story.deviation`",
       "`story.lift_deviation`",

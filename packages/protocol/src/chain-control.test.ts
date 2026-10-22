@@ -110,9 +110,41 @@ describe("the creator's talk with Noah", () => {
     expect(NoahSayParamsSchema.safeParse({ text: "x", agent: "iris" }).success).toBe(false);
   });
 
+  it("takes the page the creator looks at: a kind of page and what it singles out, bounded", () => {
+    const view = { page: "sprint", item: { kind: "story", id: "4.3", title: "Webhooks" } };
+    expect(NoahSayParamsSchema.safeParse({ text: "x", view }).success).toBe(true);
+    expect(
+      NoahSayParamsSchema.safeParse({ text: "x", view: { page: "docs", section: "retros" } })
+        .success,
+    ).toBe(true);
+    // A page that does not exist, a part that is not a word, a stranger field, a long title: refused.
+    expect(NoahSayParamsSchema.safeParse({ text: "x", view: { page: "nowhere" } }).success).toBe(
+      false,
+    );
+    expect(
+      NoahSayParamsSchema.safeParse({ text: "x", view: { page: "docs", section: "../x" } }).success,
+    ).toBe(false);
+    expect(
+      NoahSayParamsSchema.safeParse({ text: "x", view: { page: "docs", content: "all of it" } })
+        .success,
+    ).toBe(false);
+    expect(
+      NoahSayParamsSchema.safeParse({
+        text: "x",
+        view: { page: "sprint", item: { kind: "story", id: "1", title: "t".repeat(121) } },
+      }).success,
+    ).toBe(false);
+    expect(
+      NoahSayParamsSchema.safeParse({
+        text: "x",
+        view: { page: "sprint", item: { kind: "story", id: "1", body: "the whole story" } },
+      }).success,
+    ).toBe(false);
+  });
+
   it("keeps the message out of the order the journal keeps", () => {
     const spec = baseOrderTypes().get(`order.${ORDER_TYPE_NOAH_SAY}/v1`);
-    expect(spec?.sealedParams).toEqual(["text"]);
+    expect(spec?.sealedParams).toEqual(["text", "view"]);
     expect(spec?.target).toBe("primary");
     expect(spec?.risk).toBe("medium");
   });

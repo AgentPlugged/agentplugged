@@ -145,8 +145,8 @@ describe("MethodConfigSchema: profile and agents", () => {
 describe("MethodConfigSchema: tools", () => {
   const base = { format_version: 2, engine_version: "1.0.0" };
 
-  it("lists the four tool identifiers", () => {
-    expect(TOOL_IDS).toEqual(["claude-code", "codex", "antigravity", "cursor"]);
+  it("lists the five tool identifiers", () => {
+    expect(TOOL_IDS).toEqual(["claude-code", "codex", "antigravity", "cursor", "kimi"]);
   });
 
   it("accepts a list of known tools, and no list at all (older files)", () => {

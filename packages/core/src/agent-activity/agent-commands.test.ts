@@ -106,6 +106,21 @@ function clock() {
   };
 }
 
+/** A decision of story 2-6 for the creator: the questions of a partial result wait on it. */
+const PRICING_POINT = {
+  agent: "iris",
+  type: "decision",
+  risk: "low",
+  title: "Pricing",
+  summary: "Which pricing do we launch with?",
+  story: "2-6",
+  options: [
+    { id: "free", label: "Free", consequence: "No revenue at launch." },
+    { id: "paid", label: "Paid", consequence: "A paywall at launch." },
+  ],
+  recommendation: "paid",
+};
+
 async function product(preset: "new-product" | "maintenance" = "new-product") {
   const files = new MemoryFiles();
   // The keychain holds the machine key and, once `init` ran, the product key.
@@ -231,6 +246,8 @@ describe("agents' commands", () => {
       ["report_cost", { agent: "iris", story: "2-6", usd: 0.1, estimated: false, tokens_in: 10 }],
       ["report_cost", { agent: "iris", story: "2-6", usd: 0.2, estimated: false }],
       ["report_cost", { agent: "iris", usd: 1.5, estimated: true, tokens_out: 5 }],
+      // The question of a partial result waits for the creator on a point of its own.
+      ["open_checkpoint", PRICING_POINT],
       [
         "submit_result",
         {
@@ -280,7 +297,11 @@ describe("agents' commands", () => {
   it("refuses an invalid result or status, writing nothing", async () => {
     const { journal, call } = await product();
     const cases: Array<[string, Record<string, unknown>, string]> = [
-      ["submit_result", { agent: "iris", status: "complete", summary: "x" }, "assumptions"],
+      [
+        "submit_result",
+        { agent: "iris", status: "complete", summary: "x", assumptions: "none" },
+        "assumptions",
+      ],
       [
         "submit_result",
         {
@@ -306,6 +327,18 @@ describe("agents' commands", () => {
       expect(result.error.details.field, name).toBe(field);
     }
     expect(journal.events).toEqual([]);
+  });
+
+  it("accepts a result without its empty lists, and records them as empty lists", async () => {
+    const { journal, call } = await product();
+    const result = await call("submit_result", {
+      agent: "iris",
+      status: "complete",
+      summary: "Notes tidied.",
+    });
+    expect(result.ok).toBe(true);
+    const recorded = journal.events.find((event) => event.type === "agent.result_recorded");
+    expect(recorded?.payload).toMatchObject({ assumptions: [], open_questions: [], conflicts: [] });
   });
 
   it("accepts the reserved id main, the tool's main session", async () => {
@@ -335,6 +368,7 @@ describe("agents' commands", () => {
       open_questions: [question],
       conflicts: [],
     });
+    expect((await call("open_checkpoint", PRICING_POINT)).ok).toBe(true);
     for (const input of [
       result("iris", "Which pricing?"),
       result("main", "Which market?"),
@@ -348,6 +382,31 @@ describe("agents' commands", () => {
       { kind: "question", text: "Which channel?", agent: "iris", story: "2-6" },
       { kind: "question", text: "Which market?", agent: "main", story: "2-6" },
     ]);
+  });
+
+  it("refuses a partial result that asks the creator with no point open, writing nothing", async () => {
+    const { call, journal } = await product();
+    const asked = {
+      agent: "iris",
+      story: "2-6",
+      status: "partial",
+      summary: "Brief drafted; the pricing is the creator's.",
+      assumptions: [],
+      open_questions: ["Which pricing?"],
+      conflicts: [],
+    };
+    const before = journal.events.length;
+    const refused = await call("submit_result", asked);
+    expect(refused.ok ? undefined : refused.error).toMatchObject({
+      code: ErrorCode.DECISION_NOT_OPEN,
+      message_key: "error.decision_not_open.waiting",
+      details: { story: "2-6", reason: "waiting" },
+    });
+    expect(journal.events.length).toBe(before);
+    // A partial with nothing to ask is fine; ending blocked opens the point for the creator.
+    expect((await call("submit_result", { ...asked, open_questions: [] })).ok).toBe(true);
+    expect((await call("submit_result", { ...asked, status: "blocked" })).ok).toBe(true);
+    expect((await call("submit_result", asked)).ok).toBe(true);
   });
 
   it("ignores a cost reported by another actor than an agent", async () => {

@@ -142,6 +142,8 @@ describe("get_state options through the commands", () => {
   it("reads an agent's whole last result, which the state cuts", async () => {
     const { recorded, read } = await product();
     const summary = `Résultat ${"très long ".repeat(70)}`.trim();
+    // The question waits for the creator on a point of its own.
+    await recorded("open_checkpoint", decision(1));
     await recorded("submit_result", {
       agent: "iris",
       status: "partial",

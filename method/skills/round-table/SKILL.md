@@ -8,20 +8,20 @@ metadata:
 # Round table
 
 On the creator's ask, a saved room's name, or `state.next` carrying `table` (the three views of a
-sensitive story: `references/three-views.md`). Noah hosts and takes no side. Work in the creator's
+sensitive story: `references/rooms.md`). Noah hosts and takes no side. Work in the creator's
 language, under your own id (`agent: noah`).
 
 1. **Cast.** Every active agent (`state.get`) can speak, with no cap. A saved room by its name:
    `references/rooms.md`. Otherwise open with the 2 or 3 agents the question touches, one line each.
 2. **Who speaks.** At each turn, the 2 or 3 most concerned by what was just said; call an agent in
    as soon as the talk enters its field, let one rest when it has nothing to add; the creator calls
-   or sends away anyone by name, at any time. `references/cast.md`.
+   or sends away anyone by name, at any time. `references/table.md`.
 3. **Conversation.** Open: it lasts until the creator ends it. The rules of a real exchange, read
-   once: `references/turns.md`.
-4. **Guests** (a specialist, or a group of customers): `references/guests.md`. **Independent
-   minds**, only when it changes the answer: `references/independence.md`.
+   once: `references/table.md`.
+4. **Guests** (a specialist, or a group of customers) and **independent minds**, only when it
+   changes the answer: `references/guests.md`.
 5. **End** when the creator says so: the best ideas, the gesture, the room's memory:
-   `references/gestures.md`.
+   `references/closing.md`.
 
 ## Never
 

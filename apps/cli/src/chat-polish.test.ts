@@ -81,32 +81,27 @@ describe("Noah, the main session's assistant", () => {
 
   it("begins every message with his icon and his name, and says each handover both ways", () => {
     const text = noah();
-    expect(text).toContain(
-      "Every message he writes to the creator begins with his icon and his name",
-    );
+    expect(text).toContain('Every message he writes begins with "🧭 Noah :"');
     expect(text).toContain("announced in both directions");
     expect(text).toContain("🔎 Iris : I give the hand back to Noah.");
   });
 
   it("waits while the work is out and works again when the hand comes back", () => {
     const text = noah();
-    expect(text).toContain("declares himself `waiting` with `agent.status` while the work is out");
-    expect(text).toContain("`working` again as soon as the hand comes back to him");
-    expect(text).toContain("declare yourself `waiting` with `agent.status`, then hand over");
-    expect(text).toContain("declare yourself `working` again");
+    expect(text).toContain("is `waiting` (`agent.status`) while the work is out");
+    expect(text).toContain("`working` when the hand comes back");
   });
 
   it("offers a fresh conversation per phase, resumes without asking again, keeps talks in the conversation", () => {
     const text = noah();
-    expect(text).toContain("One conversation per phase, to spare the creator's tokens");
-    expect(text).toContain("When a phase ends");
+    expect(text).toContain("One conversation per phase");
+    expect(text).toContain("when a `phase_end` is approved");
     expect(text).toContain("everything is saved in the documents and the journal");
-    expect(text).toContain("starting from an empty context costs less");
+    expect(text).toContain("an empty context costs less");
     expect(text).toContain("Let's pick up");
-    expect(text).toContain("without asking again what was already decided");
-    expect(text).toContain("never in the middle of a question he asked the creator");
+    expect(text).toContain("never asking again what was decided");
+    expect(text).toContain("never in the middle of a question");
     expect(text).toContain("a sub-agent cannot talk with the creator");
-    expect(text).toContain("relaying every message would cost more");
     // What depends on the AI tool lives in the generated constitution, never in his definition.
     expect(text).not.toContain("/clear");
   });
@@ -117,7 +112,7 @@ describe("Noah, the main session's assistant", () => {
     expect(text).toContain("unless one of them blocks an action");
     expect(text).toContain("in the creator's local time (`clock` in `state.get`), never in UTC");
     expect(text).toContain(
-      'never asks the creator "does it suit you?" about a document whose checkpoint is not open',
+      "the agent that owns the subject opens it first, then the creator is asked, once",
     );
   });
 });
