@@ -1,3 +1,5 @@
+<p align="center"><img src=".github/banner.png" alt="AgentPlugged — your AI team, led like a senior team." width="100%"></p>
+
 # AgentPlugged
 
 AgentPlugged is a method and an engine for running a team of AI agents on your product.
